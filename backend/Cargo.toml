@@ -1,0 +1,42 @@
+[workspace]
+members = [
+  "crates/auth",
+  "crates/config",
+  "crates/orchestrator",
+  "server"
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Vincent Hengel"]
+license = "MIT OR Apache-2.0"
+
+[workspace.dependencies]
+anyhow = "1.0"
+argon2 = { version = "0.5", features = ["std"] }
+base64 = "0.22"
+chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
+oauth2 = { version = "4.4", default-features = false, features = ["reqwest", "rustls-tls"] }
+rand = { version = "0.8", features = ["std"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+sqlx = { version = "0.7", default-features = false, features = [
+  "runtime-tokio",
+  "tls-rustls",
+  "any",
+  "sqlite",
+  "postgres",
+  "macros",
+  "migrate",
+  "chrono",
+  "uuid"
+] }
+thiserror = "1.0"
+tokio = { version = "1.37", features = ["macros", "rt-multi-thread", "signal"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
+uuid = { version = "1.8", features = ["serde", "v4"] }
+config = { version = "0.14", default-features = false, features = ["json"] }

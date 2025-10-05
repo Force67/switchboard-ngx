@@ -1,0 +1,12 @@
+[package]
+name = "switchboard-config"
+version = "0.1.0"
+edition = "2021"
+description = "Configuration loading for the Switchboard LLM backend"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+anyhow = { workspace = true }
+config = { workspace = true }
+serde = { workspace = true }
+tracing = { workspace = true }

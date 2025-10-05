@@ -1,0 +1,16 @@
+[package]
+name = "switchboard-backend"
+version = "0.1.0"
+edition = "2021"
+description = "Executable entrypoint for the Switchboard backend"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+anyhow = { workspace = true }
+switchboard-config = { path = "../crates/config" }
+switchboard-orchestrator = { path = "../crates/orchestrator" }
+switchboard-auth = { path = "../crates/auth" }
+sqlx = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+tokio = { workspace = true }

@@ -1,0 +1,20 @@
+{
+  "name": "switchboard-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bunx vite dev --host",
+    "build": "bunx vite build",
+    "preview": "bunx vite preview"
+  },
+  "dependencies": {
+    "solid-js": "^1.8.15",
+    "@solidjs/router": "^0.11.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5",
+    "vite": "^5.2.0",
+    "vite-plugin-solid": "^2.10.1"
+  }
+}

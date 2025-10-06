@@ -115,6 +115,7 @@ async fn main() -> anyhow::Result<()> {
         .allow_headers([AUTHORIZATION, CONTENT_TYPE]);
 
     let app = Router::new()
+        .route("/health", get(health_check))
         .route("/api/auth/github/login", get(github_login))
         .route("/api/auth/github/callback", post(github_callback))
         .route("/api/models", get(list_models))
@@ -286,6 +287,12 @@ struct ModelsResponse {
     models: Vec<OpenRouterModelSummary>,
 }
 
+#[derive(Debug, Serialize)]
+struct HealthResponse {
+    status: String,
+    timestamp: String,
+}
+
 #[derive(Debug)]
 struct ApiError {
     status: StatusCode,
@@ -448,6 +455,13 @@ async fn list_models(
     let _ = state.authenticate(&token).await?;
     let models = state.orchestrator.list_openrouter_models().await?;
     Ok(Json(ModelsResponse { models }))
+}
+
+async fn health_check() -> Json<HealthResponse> {
+    Json(HealthResponse {
+        status: "ok".to_string(),
+        timestamp: chrono::Utc::now().to_rfc3339(),
+    })
 }
 
 async fn github_login(

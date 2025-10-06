@@ -6,6 +6,12 @@
   --badge-bg:#241c2b; --badge-hair:rgba(255,255,255,0.10);
   --chip:#2a2230;
   --hair: rgba(255,255,255,0.08);
+  --ok: #4ade80;              /* green for online */
+  --warn: #fbbf24;            /* amber for limited */
+  --err: #f87171;             /* red for offline */
+  --status-bg: rgba(255,255,255,0.06);
+  --status-hair: rgba(255,255,255,0.10);
+  --glass: rgba(255,255,255,0.08);
   --focus:0 0 0 2px rgba(229,76,191,0.35);
   --sidebar-width: 200px;
   --content-padding: 16px;

@@ -1,3 +1,5 @@
+import OnlineIndicator from "./OnlineIndicator";
+
 export default function TopRightControls() {
   return (
     <div class="top-right">
@@ -17,6 +19,7 @@ export default function TopRightControls() {
           <path d="M7 0v2M7 12v2M0 7h2M12 7h2M1.5 1.5l1.5 1.5M11 11l1.5 1.5M1.5 12.5l1.5-1.5M11 3l1.5-1.5" />
         </svg>
       </button>
+      <OnlineIndicator />
     </div>
   );
 }

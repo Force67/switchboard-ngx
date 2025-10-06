@@ -12,6 +12,8 @@ interface ModelOption {
     input?: number;
     output?: number;
   };
+  supports_reasoning?: boolean;
+  supports_images?: boolean;
 }
 
 interface Message {
@@ -49,7 +51,10 @@ export default function MainArea(props: Props) {
     return props.models().map(model => ({
       id: model.id,
       name: model.label,
-      badges: [], // Default empty, backend can provide if needed
+      badges: [
+        ...(model.supports_reasoning ? ['reasoning' as const] : []),
+        ...(model.supports_images ? ['vision' as const] : []),
+      ],
       tier: undefined,
       disabled: false,
       group: undefined,

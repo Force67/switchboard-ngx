@@ -66,6 +66,8 @@ interface ModelOption {
     input?: number;
     output?: number;
   };
+  supports_reasoning?: boolean;
+  supports_images?: boolean;
 }
 
 const loadStoredSession = (): SessionData | null => {

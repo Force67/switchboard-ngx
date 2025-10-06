@@ -1,6 +1,6 @@
 .model-panel {
   position: fixed; left: 50%; transform: translateX(-50%);
-  top: 64px; width: 560px; min-height: 520px; max-height: 640px;
+  top: 64px; width: 640px; min-height: 520px; max-height: 640px;
   background: var(--panel); border: 1px solid var(--hair); border-radius: 12px;
   box-shadow: 0 12px 40px rgba(0,0,0,0.45); z-index: 50;
   display: flex; flex-direction: column; padding: 12px 12px 0 12px;
@@ -52,6 +52,7 @@
   background: var(--badge-bg); border: 1px solid var(--badge-hair);
 }
 .badge svg { width:14px; height:14px; stroke:#cfc3d9; stroke-width:1.6; fill:none; }
+.badge.reasoning svg { fill: #cfc3d9; stroke: none; }
 .badge.dim { opacity: .35; }
 
 .favorite-btn {

@@ -4,7 +4,7 @@ export type ModelMeta = {
   tier?: 'pro' | 'free';
   disabled?: boolean;
   group?: 'gemini'|'gpt'|'other';
-  badges: Array<'vision'|'tools'|'agent'|'image'>;
+  badges: Array<'vision'|'tools'|'agent'|'image'|'reasoning'>;
   pricing?: {
     input?: number;
     output?: number;

@@ -29,6 +29,8 @@ interface Message {
 interface Props {
   prompt: Accessor<string>;
   setPrompt: Setter<string>;
+  attachedImages: Accessor<File[]>;
+  setAttachedImages: Setter<File[]>;
   selectedModel: Accessor<string>;
   setSelectedModel: Setter<string>;
   models: Accessor<ModelOption[]>;
@@ -100,18 +102,20 @@ export default function MainArea(props: Props) {
           </div>
         )}
       </div>
-       <Composer
-         prompt={props.prompt}
-         setPrompt={props.setPrompt}
-         selectedModel={props.selectedModel}
-         setSelectedModel={props.setSelectedModel}
-         models={props.models}
-         modelsLoading={props.modelsLoading}
-         modelsError={props.modelsError}
-         loading={props.loading}
-         onSend={props.onSend}
-         onOpenModelPicker={() => props.setModelPickerOpen(true)}
-       />
+        <Composer
+          prompt={props.prompt}
+          setPrompt={props.setPrompt}
+          attachedImages={props.attachedImages}
+          setAttachedImages={props.setAttachedImages}
+          selectedModel={props.selectedModel}
+          setSelectedModel={props.setSelectedModel}
+          models={props.models}
+          modelsLoading={props.modelsLoading}
+          modelsError={props.modelsError}
+          loading={props.loading}
+          onSend={props.onSend}
+          onOpenModelPicker={() => props.setModelPickerOpen(true)}
+        />
        {props.modelPickerOpen() && (
          <div
            style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 49;"

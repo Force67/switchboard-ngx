@@ -17,6 +17,7 @@ license = "MIT OR Apache-2.0"
 anyhow = "1.0"
 argon2 = { version = "0.5", features = ["std"] }
 base64 = "0.22"
+bytes = "1.0"
 chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
 oauth2 = { version = "4.4", default-features = false, features = ["reqwest", "rustls-tls"] }
 rand = { version = "0.8", features = ["std"] }
@@ -41,5 +42,6 @@ cuid2 = "0.1"
 once_cell = "1.19"
 config = { version = "0.14", default-features = false, features = ["json", "toml"] }
 denkwerk = { git = "https://github.com/Force67/denkwerk", rev = "8962d23ebf44701839a2be2fc1e9fd6d83405c27" }
-axum = { version = "0.7", default-features = false, features = ["json", "http1", "tokio", "query"] }
+axum = { version = "0.7", default-features = false, features = ["json", "http1", "tokio", "query", "multipart"] }
+axum-extra = { version = "0.9", features = ["multipart"] }
 tower-http = { version = "0.6", features = ["cors"] }

@@ -97,6 +97,7 @@ export default function App() {
     loadStoredSession(),
   );
   const [prompt, setPrompt] = createSignal("");
+  const [attachedImages, setAttachedImages] = createSignal<File[]>([]);
   const [selectedModel, setSelectedModel] = createSignal<string>(DEFAULT_MODEL);
   const [models, setModels] = createSignal<ModelOption[]>([]);
   const [modelsLoading, setModelsLoading] = createSignal(false);
@@ -307,21 +308,41 @@ export default function App() {
         : chat
     ));
     setPrompt("");
+    setAttachedImages([]);
 
     try {
-      const payload: Record<string, string> = { prompt: trimmedPrompt };
-      const model = selectedModel().trim();
-      if (model) {
-        payload.model = model;
+      const images = attachedImages();
+      let body: string | FormData;
+      let headers: Record<string, string> = {
+        Authorization: `Bearer ${activeSession.token}`,
+      };
+
+      if (images.length > 0) {
+        const formData = new FormData();
+        formData.append('prompt', trimmedPrompt);
+        const model = selectedModel().trim();
+        if (model) {
+          formData.append('model', model);
+        }
+    images.forEach((file) => {
+        formData.append('images', file);
+    });
+        body = formData;
+        // Don't set Content-Type for FormData, let browser set it
+      } else {
+        const payload: Record<string, string> = { prompt: trimmedPrompt };
+        const model = selectedModel().trim();
+        if (model) {
+          payload.model = model;
+        }
+        body = JSON.stringify(payload);
+        headers["Content-Type"] = "application/json";
       }
 
       const response = await fetch(`${API_BASE}/api/chat`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${activeSession.token}`,
-        },
-        body: JSON.stringify(payload),
+        headers,
+        body,
       });
 
       if (response.status === 401) {
@@ -404,25 +425,27 @@ export default function App() {
         onNewChat={newChat}
         onSelectChat={selectChat}
       />
-       <MainArea
-         prompt={prompt}
-         setPrompt={setPrompt}
-         selectedModel={selectedModel}
-         setSelectedModel={setSelectedModel}
-         models={models}
-         modelsLoading={modelsLoading}
-         modelsError={modelsError}
-         loading={loading}
-         error={error}
-         modelPickerOpen={modelPickerOpen}
-         setModelPickerOpen={setModelPickerOpen}
-         currentMessages={createMemo(() => {
-           const currentId = currentChatId();
-           const currentChat = chats().find(c => c.id === currentId);
-           return currentChat ? currentChat.messages : [];
-         })}
-         onSend={handleSubmit}
-       />
+        <MainArea
+          prompt={prompt}
+          setPrompt={setPrompt}
+          attachedImages={attachedImages}
+          setAttachedImages={setAttachedImages}
+          selectedModel={selectedModel}
+          setSelectedModel={setSelectedModel}
+          models={models}
+          modelsLoading={modelsLoading}
+          modelsError={modelsError}
+          loading={loading}
+          error={error}
+          modelPickerOpen={modelPickerOpen}
+          setModelPickerOpen={setModelPickerOpen}
+          currentMessages={createMemo(() => {
+            const currentId = currentChatId();
+            const currentChat = chats().find(c => c.id === currentId);
+            return currentChat ? currentChat.messages : [];
+          })}
+          onSend={handleSubmit}
+        />
     </div>
   );
 }

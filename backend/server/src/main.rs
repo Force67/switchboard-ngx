@@ -4,8 +4,8 @@ use std::{
 
 use anyhow::Context;
 use axum::{
-    extract::{Query, State},
-    http::{header::AUTHORIZATION, HeaderMap, Method, StatusCode},
+    extract::{Multipart, Query, State},
+    http::{header::{AUTHORIZATION, CONTENT_TYPE}, HeaderMap, Method, StatusCode},
     response::{IntoResponse, Response},
     routing::{get, post},
     Json, Router,
@@ -112,7 +112,7 @@ async fn main() -> anyhow::Result<()> {
     let cors = CorsLayer::new()
         .allow_origin(Any)
         .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
-        .allow_headers(Any);
+        .allow_headers([AUTHORIZATION, CONTENT_TYPE]);
 
     let app = Router::new()
         .route("/api/auth/github/login", get(github_login))
@@ -367,22 +367,42 @@ impl From<AuthError> for ApiError {
 async fn chat_completion(
     State(state): State<AppState>,
     headers: HeaderMap,
-    Json(payload): Json<ChatRequest>,
+    mut multipart: Multipart,
 ) -> Result<Json<ChatResponse>, ApiError> {
     let token = require_bearer(&headers)?;
     let _ = state.authenticate(&token).await?;
 
-    let prompt = payload.prompt.trim();
-    if prompt.is_empty() {
-        return Err(ApiError::bad_request("prompt must not be empty"));
+    let mut prompt = None;
+    let mut model_field = None;
+    let mut images: Vec<bytes::Bytes> = Vec::new();
+
+    while let Some(field) = multipart.next_field().await.map_err(|_| ApiError::bad_request("invalid multipart"))? {
+        let name = field.name().unwrap_or("");
+        match name {
+            "prompt" => {
+                let text = field.text().await.map_err(|_| ApiError::bad_request("invalid prompt"))?;
+                prompt = Some(text);
+            }
+            "model" => {
+                let text = field.text().await.map_err(|_| ApiError::bad_request("invalid model"))?;
+                model_field = Some(text);
+            }
+            "images" => {
+                let data = field.bytes().await.map_err(|_| ApiError::bad_request("invalid image"))?;
+                images.push(data);
+            }
+            _ => {}
+        }
     }
 
-    let model = payload
-        .model
-        .as_ref()
-        .map(|value| value.trim())
-        .filter(|value| !value.is_empty())
-        .map(|value| value.to_string())
+    let prompt = prompt.ok_or_else(|| ApiError::bad_request("prompt is required"))?;
+    let prompt_trimmed = prompt.trim();
+    if prompt_trimmed.is_empty() && images.is_empty() {
+        return Err(ApiError::bad_request("prompt or images are required"));
+    }
+
+    let model = model_field
+        .filter(|s| !s.trim().is_empty())
         .or_else(|| state.orchestrator.active_model())
         .ok_or_else(|| {
             ApiError::new(
@@ -391,18 +411,20 @@ async fn chat_completion(
             )
         })?;
 
-    let provider = if payload
-        .model
-        .as_ref()
-        .map(|value| !value.trim().is_empty())
-        .unwrap_or(false)
-    {
-        state.orchestrator.provider_for_model(&model)?
+    let provider = state.orchestrator.provider_for_model(&model)?;
+
+    let message = if images.is_empty() {
+        ChatMessage::user(prompt_trimmed)
     } else {
-        state.orchestrator.default_provider()?
+        let image_parts: Vec<String> = images
+            .iter()
+            .map(|img: &bytes::Bytes| format!("data:image/png;base64,{}", base64::encode(img.as_ref())))
+            .collect();
+        let full_content = format!("{} {}", prompt_trimmed, image_parts.join(" "));
+        ChatMessage::user(full_content)
     };
 
-    let request = CompletionRequest::new(model.clone(), vec![ChatMessage::user(prompt)]);
+    let request = CompletionRequest::new(model.clone(), vec![message]);
     let completion = provider.complete(request).await?;
 
     let content = completion.message.text().unwrap_or_default().to_string();

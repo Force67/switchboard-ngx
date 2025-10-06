@@ -12,6 +12,7 @@ use oauth2::{
     AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken, RedirectUrl, Scope,
     TokenResponse, TokenUrl,
 };
+use once_cell::sync::Lazy;
 use rand::RngCore;
 use reqwest::header::ACCEPT;
 use serde::{Deserialize, Serialize};
@@ -19,9 +20,11 @@ use sqlx::{Any, AnyPool, Row, Transaction};
 use switchboard_config::{AuthConfig, GithubAuthConfig};
 use thiserror::Error;
 use tracing::{debug, info};
-use uuid::Uuid;
+use cuid2::CuidConstructor;
 
 const GITHUB_USER_API: &str = "https://api.github.com/user";
+
+static CUID: Lazy<CuidConstructor> = Lazy::new(CuidConstructor::new);
 
 #[derive(Clone)]
 pub struct Authenticator {
@@ -54,7 +57,9 @@ pub enum AuthError {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct User {
-    pub id: Uuid,
+    #[serde(skip_serializing)]
+    pub id: i64,
+    pub public_id: String,
     pub email: Option<String>,
     pub display_name: Option<String>,
 }
@@ -62,7 +67,7 @@ pub struct User {
 #[derive(Debug, Clone)]
 pub struct AuthSession {
     pub token: String,
-    pub user_id: Uuid,
+    pub user_id: i64,
     pub expires_at: DateTime<Utc>,
 }
 
@@ -120,26 +125,17 @@ impl Authenticator {
             return Err(AuthError::UserExists);
         }
 
-        let user_id = Uuid::new_v4();
         let now = Utc::now();
         let password_hash = self.hash_password(password)?;
 
-        sqlx::query(
-            "INSERT INTO users (id, email, display_name, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-        )
-        .bind(user_id.to_string())
-        .bind(email)
-        .bind(None::<String>)
-        .bind(now.to_rfc3339())
-        .bind(now.to_rfc3339())
-        .execute(&mut *tx)
-        .await?;
+        let user = self
+            .insert_user(&mut tx, Some(email.to_owned()), None)
+            .await?;
 
         sqlx::query(
-            "INSERT INTO user_identities (id, user_id, provider, provider_uid, secret, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO user_identities (user_id, provider, provider_uid, secret, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
         )
-        .bind(Uuid::new_v4().to_string())
-        .bind(user_id.to_string())
+        .bind(user.id)
         .bind("password")
         .bind(email)
         .bind(password_hash)
@@ -150,11 +146,7 @@ impl Authenticator {
 
         tx.commit().await?;
 
-        Ok(User {
-            id: user_id,
-            email: Some(email.to_owned()),
-            display_name: None,
-        })
+        Ok(user)
     }
 
     pub async fn login_with_password(
@@ -179,8 +171,7 @@ impl Authenticator {
             .verify_password(password.as_bytes(), &stored_hash)
             .map_err(|_| AuthError::InvalidCredentials)?;
 
-        let user_id: String = row.try_get("user_id")?;
-        let user_id = Uuid::parse_str(&user_id).map_err(|_| AuthError::InvalidCredentials)?;
+        let user_id: i64 = row.try_get("user_id")?;
         self.fetch_user(user_id).await?;
 
         self.issue_session(user_id).await
@@ -214,41 +205,38 @@ impl Authenticator {
         .fetch_optional(&mut *tx)
         .await?
         {
-            let user_id: String = row.try_get("user_id")?;
-            let user_id =
-                Uuid::parse_str(&user_id).context("invalid user id stored for github identity")?;
+            let user_id: i64 = row.try_get("user_id")?;
             tx.commit().await?;
             return self.issue_session(user_id).await;
         }
 
-        let (user_id, email) = if let Some(email) = profile.email.as_ref() {
+        let (user, email) = if let Some(email) = profile.email.as_ref() {
             if let Some(row) = sqlx::query("SELECT id FROM users WHERE email = ?")
                 .bind(email)
                 .fetch_optional(&mut *tx)
                 .await?
             {
-                let user_id: String = row.try_get("id")?;
-                let user_id = Uuid::parse_str(&user_id).context("invalid stored user id")?;
-                (user_id, Some(email.clone()))
+                let user_id: i64 = row.try_get("id")?;
+                let user = self.fetch_user(user_id).await?;
+                (user, Some(email.clone()))
             } else {
-                let new_id = Uuid::new_v4();
-                self.insert_user(&mut tx, new_id, Some(email.clone()), profile.name.clone())
+                let user = self
+                    .insert_user(&mut tx, Some(email.clone()), profile.name.clone())
                     .await?;
-                (new_id, Some(email.clone()))
+                (user, Some(email.clone()))
             }
         } else {
-            let new_id = Uuid::new_v4();
-            self.insert_user(&mut tx, new_id, None, profile.name.clone())
+            let user = self
+                .insert_user(&mut tx, None, profile.name.clone())
                 .await?;
-            (new_id, None)
+            (user, None)
         };
 
         let now = Utc::now().to_rfc3339();
         sqlx::query(
-            "INSERT INTO user_identities (id, user_id, provider, provider_uid, secret, created_at, updated_at) VALUES (?, ?, ?, ?, NULL, ?, ?)",
+            "INSERT INTO user_identities (user_id, provider, provider_uid, secret, created_at, updated_at) VALUES (?, ?, ?, NULL, ?, ?)",
         )
-        .bind(Uuid::new_v4().to_string())
-        .bind(user_id.to_string())
+        .bind(user.id)
         .bind("github")
         .bind(&profile.id)
         .bind(&now)
@@ -258,8 +246,8 @@ impl Authenticator {
 
         tx.commit().await?;
 
-        info!(user = %user_id, email = ?email, "linked github identity");
-        self.issue_session(user_id).await
+        info!(user = %user.public_id, email = ?email, "linked github identity");
+        self.issue_session(user.id).await
     }
 
     pub async fn authenticate_token(&self, token: &str) -> Result<(User, AuthSession), AuthError> {
@@ -272,10 +260,9 @@ impl Authenticator {
             return Err(AuthError::SessionNotFound);
         };
 
-        let user_id: String = row.try_get("user_id")?;
+        let user_id: i64 = row.try_get("user_id")?;
         let expires_at: String = row.try_get("expires_at")?;
 
-        let user_id = Uuid::parse_str(&user_id).map_err(|_| AuthError::InvalidSession)?;
         let expires_at = DateTime::parse_from_rfc3339(&expires_at)
             .map_err(|_| AuthError::InvalidSession)?
             .with_timezone(&Utc);
@@ -298,38 +285,48 @@ impl Authenticator {
         Ok((user, session))
     }
 
-    pub async fn user_profile(&self, user_id: Uuid) -> Result<User, AuthError> {
+    pub async fn user_profile(&self, user_id: i64) -> Result<User, AuthError> {
         self.fetch_user(user_id).await
     }
 
     async fn insert_user(
         &self,
         tx: &mut Transaction<'_, Any>,
-        user_id: Uuid,
         email: Option<String>,
         display_name: Option<String>,
-    ) -> Result<(), AuthError> {
+    ) -> Result<User, AuthError> {
         let now = Utc::now().to_rfc3339();
+        let public_id = new_public_id();
 
         sqlx::query(
-            "INSERT INTO users (id, email, display_name, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO users (public_id, email, display_name, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
         )
-        .bind(user_id.to_string())
-        .bind(email)
-        .bind(display_name)
+        .bind(&public_id)
+        .bind(email.as_ref().map(|value| value.as_str()))
+        .bind(display_name.as_ref().map(|value| value.as_str()))
         .bind(&now)
         .bind(&now)
         .execute(&mut **tx)
         .await?;
 
-        Ok(())
+        let row = sqlx::query("SELECT id FROM users WHERE public_id = ?")
+            .bind(&public_id)
+            .fetch_one(&mut **tx)
+            .await?;
+
+        Ok(User {
+            id: row.try_get("id")?,
+            public_id,
+            email,
+            display_name,
+        })
     }
 
-    async fn fetch_user(&self, id: Uuid) -> Result<User, AuthError> {
+    async fn fetch_user(&self, id: i64) -> Result<User, AuthError> {
         let row = sqlx::query(
-            "SELECT id, email, display_name, \n                CASE WHEN email IS NULL THEN 0 ELSE 1 END AS email_present,\n                CASE WHEN display_name IS NULL THEN 0 ELSE 1 END AS display_name_present\n             FROM users WHERE id = ?",
+            "SELECT id, public_id, email, display_name, \n                CASE WHEN email IS NULL THEN 0 ELSE 1 END AS email_present,\n                CASE WHEN display_name IS NULL THEN 0 ELSE 1 END AS display_name_present\n             FROM users WHERE id = ?",
         )
-            .bind(id.to_string())
+            .bind(id)
             .fetch_one(&self.pool)
             .await?;
 
@@ -349,21 +346,21 @@ impl Authenticator {
 
         Ok(User {
             id,
+            public_id: row.try_get("public_id")?,
             email,
             display_name,
         })
     }
 
-    async fn issue_session(&self, user_id: Uuid) -> Result<AuthSession, AuthError> {
+    async fn issue_session(&self, user_id: i64) -> Result<AuthSession, AuthError> {
         let token = self.generate_session_token();
         let now = Utc::now();
         let expires_at = now + self.session_ttl;
 
         sqlx::query(
-            "INSERT INTO sessions (id, user_id, token, created_at, expires_at) VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO sessions (user_id, token, created_at, expires_at) VALUES (?, ?, ?, ?)",
         )
-        .bind(Uuid::new_v4().to_string())
-        .bind(user_id.to_string())
+        .bind(user_id)
         .bind(&token)
         .bind(now.to_rfc3339())
         .bind(expires_at.to_rfc3339())
@@ -383,11 +380,15 @@ impl Authenticator {
         Ok(hash.to_string())
     }
 
-    fn generate_session_token(&self) -> String {
+fn generate_session_token(&self) -> String {
         let mut bytes = [0u8; 32];
         rand::thread_rng().fill_bytes(&mut bytes);
         URL_SAFE_NO_PAD.encode(bytes)
     }
+}
+
+fn new_public_id() -> String {
+    CUID.create_id()
 }
 
 #[derive(Clone)]

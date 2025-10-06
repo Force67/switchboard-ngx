@@ -18,5 +18,6 @@ serde_json = { workspace = true }
 sqlx = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
-uuid = { workspace = true }
+cuid2 = { workspace = true }
+once_cell = { workspace = true }
 switchboard-config = { path = "../config" }

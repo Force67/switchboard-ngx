@@ -274,7 +274,7 @@ struct UserResponse {
 impl From<User> for UserResponse {
     fn from(value: User) -> Self {
         Self {
-            id: value.id.to_string(),
+            id: value.public_id,
             email: value.email,
             display_name: value.display_name,
         }

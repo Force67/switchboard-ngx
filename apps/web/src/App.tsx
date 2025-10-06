@@ -41,6 +41,8 @@ interface Chat {
   title: string;
   messages: Message[];
   createdAt: Date;
+  folderId?: string;
+  updatedAt?: number;
 }
 
 interface ChatResponse {
@@ -255,13 +257,15 @@ export default function App() {
     setPrompt("");
   };
 
-  const newChat = () => {
+  const newChat = (folderId?: string) => {
     const chatId = `chat_${Date.now()}`;
     const newChatObj: Chat = {
       id: chatId,
       title: "New Chat",
       messages: [],
       createdAt: new Date(),
+      folderId,
+      updatedAt: Date.now(),
     };
     setChats(prev => [newChatObj, ...prev]);
     setCurrentChatId(chatId);

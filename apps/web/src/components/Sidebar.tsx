@@ -1,8 +1,11 @@
 import { Accessor } from "solid-js";
 import SidebarNewChat from "./SidebarNewChat";
+import SidebarNewFolder from "./SidebarNewFolder";
 import SidebarSearch from "./SidebarSearch";
-import SidebarThreads from "./SidebarThreads";
+import SidebarTree from "./SidebarTree";
 import SidebarFooter from "./SidebarFooter";
+import { sidebarState, actions } from "./sidebarStore";
+import "./sidebar-folders.css";
 
 interface SessionData {
   token: string;
@@ -39,19 +42,30 @@ interface Props {
   currentChatId: Accessor<string | null>;
   onLogin: () => void;
   onLogout: () => void;
-  onNewChat: () => void;
+  onNewChat: (folderId?: string) => void;
   onSelectChat: (chatId: string) => void;
 }
 
 export default function Sidebar(props: Props) {
+  const handleNewFolder = () => {
+    actions.createFolder();
+  };
+
   return (
     <div class="sidebar">
-      <SidebarNewChat onClick={props.onNewChat} />
+      <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+        <SidebarNewChat onClick={props.onNewChat} />
+        <SidebarNewFolder onClick={handleNewFolder} />
+      </div>
       <SidebarSearch />
-      <SidebarThreads
-        chats={props.chats}
-        currentChatId={props.currentChatId}
+      <SidebarTree
+        state={sidebarState()}
+        actions={actions}
+        chats={props.chats()}
+        currentChatId={props.currentChatId()}
         onSelectChat={props.onSelectChat}
+        onNewChat={props.onNewChat}
+        onNewFolder={handleNewFolder}
       />
       <SidebarFooter
         session={props.session}

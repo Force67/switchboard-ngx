@@ -59,6 +59,14 @@
 .newchat:hover{filter:brightness(1.1)}
 .newchat svg{width:16px;height:16px;stroke:#f2eef5;stroke-width:1.5;fill:none}
 
+.newfolder{
+  height:28px; padding:0 10px; border-radius:10px; border:1px solid var(--hair);
+  display:flex; align-items:center; gap:6px;
+  background:var(--chip); cursor:pointer;
+}
+.newfolder:hover{background:rgba(255,255,255,0.12)}
+.newfolder svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.5}
+
 .srch{
   position:relative; height:32px; border-radius:8px;
   background:var(--bg-3); border:1px solid rgba(255,255,255,0.06);

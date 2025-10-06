@@ -62,6 +62,10 @@ interface ModelOption {
   id: string;
   label: string;
   description?: string | null;
+  pricing?: {
+    input?: number;
+    output?: number;
+  };
 }
 
 const loadStoredSession = (): SessionData | null => {
@@ -103,6 +107,7 @@ export default function App() {
   const [currentChatId, setCurrentChatId] = createSignal<string | null>(null);
   const [authenticating, setAuthenticating] = createSignal(false);
   const [authError, setAuthError] = createSignal<string | null>(null);
+  const [modelPickerOpen, setModelPickerOpen] = createSignal(false);
 
   const redirectUri = () => `${window.location.origin}${GITHUB_REDIRECT_PATH}`;
 
@@ -399,23 +404,25 @@ export default function App() {
         onNewChat={newChat}
         onSelectChat={selectChat}
       />
-      <MainArea
-        prompt={prompt}
-        setPrompt={setPrompt}
-        selectedModel={selectedModel}
-        setSelectedModel={setSelectedModel}
-        models={models}
-        modelsLoading={modelsLoading}
-        modelsError={modelsError}
-        loading={loading}
-        error={error}
-        currentMessages={createMemo(() => {
-          const currentId = currentChatId();
-          const currentChat = chats().find(c => c.id === currentId);
-          return currentChat ? currentChat.messages : [];
-        })}
-        onSend={handleSubmit}
-      />
+       <MainArea
+         prompt={prompt}
+         setPrompt={setPrompt}
+         selectedModel={selectedModel}
+         setSelectedModel={setSelectedModel}
+         models={models}
+         modelsLoading={modelsLoading}
+         modelsError={modelsError}
+         loading={loading}
+         error={error}
+         modelPickerOpen={modelPickerOpen}
+         setModelPickerOpen={setModelPickerOpen}
+         currentMessages={createMemo(() => {
+           const currentId = currentChatId();
+           const currentChat = chats().find(c => c.id === currentId);
+           return currentChat ? currentChat.messages : [];
+         })}
+         onSend={handleSubmit}
+       />
     </div>
   );
 }

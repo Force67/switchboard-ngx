@@ -134,10 +134,10 @@
 .pill svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:1.5}
 
 .send{
-  position:absolute; right:-12px; top:50%; transform:translateY(-50%); width:36px; height:36px;
+  width:26px; height:26px; margin-left:auto;
   border-radius:999px; background:var(--button); display:grid; place-items:center;
   box-shadow:0 4px 20px rgba(0,0,0,0.35); cursor:pointer;
 }
 .send:hover{background:var(--button-hover)}
 .send[disabled]{opacity:.5; pointer-events:none}
-.send svg{width:16px;height:16px;stroke:#fff;stroke-width:1.8;fill:none}
+.send svg{width:12px;height:12px;stroke:#fff;stroke-width:1.8;fill:none}

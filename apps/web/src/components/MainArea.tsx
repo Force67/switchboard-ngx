@@ -1,11 +1,17 @@
-import { Accessor, Setter, For } from "solid-js";
+import { Accessor, Setter, For, createMemo } from "solid-js";
 import TopRightControls from "./TopRightControls";
 import Composer from "./Composer";
+import ModelPickerPanel from "./model-picker/ModelPickerPanel";
+import { ModelMeta } from "./model-picker/models";
 
 interface ModelOption {
   id: string;
   label: string;
   description?: string | null;
+  pricing?: {
+    input?: number;
+    output?: number;
+  };
 }
 
 interface Message {
@@ -30,11 +36,25 @@ interface Props {
   modelsError: Accessor<string | null>;
   loading: Accessor<boolean>;
   error: Accessor<string | null>;
+  modelPickerOpen: Accessor<boolean>;
+  setModelPickerOpen: Setter<boolean>;
   currentMessages: Accessor<Message[]>;
   onSend: (event: Event) => void;
 }
 
 export default function MainArea(props: Props) {
+  const convertedModels = createMemo((): ModelMeta[] => {
+    return props.models().map(model => ({
+      id: model.id,
+      name: model.label,
+      badges: [], // Default empty, backend can provide if needed
+      tier: undefined,
+      disabled: false,
+      group: undefined,
+      pricing: model.pricing,
+    }));
+  });
+
   return (
     <div class="main">
       <TopRightControls />
@@ -80,17 +100,33 @@ export default function MainArea(props: Props) {
           </div>
         )}
       </div>
-      <Composer
-        prompt={props.prompt}
-        setPrompt={props.setPrompt}
-        selectedModel={props.selectedModel}
-        setSelectedModel={props.setSelectedModel}
-        models={props.models}
-        modelsLoading={props.modelsLoading}
-        modelsError={props.modelsError}
-        loading={props.loading}
-        onSend={props.onSend}
-      />
-    </div>
-  );
-}
+       <Composer
+         prompt={props.prompt}
+         setPrompt={props.setPrompt}
+         selectedModel={props.selectedModel}
+         setSelectedModel={props.setSelectedModel}
+         models={props.models}
+         modelsLoading={props.modelsLoading}
+         modelsError={props.modelsError}
+         loading={props.loading}
+         onSend={props.onSend}
+         onOpenModelPicker={() => props.setModelPickerOpen(true)}
+       />
+       {props.modelPickerOpen() && (
+         <div
+           style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 49;"
+           onClick={() => props.setModelPickerOpen(false)}
+         >
+           <ModelPickerPanel
+             models={convertedModels()}
+             selectedId={props.selectedModel()}
+             onSelect={(id) => {
+               props.setSelectedModel(id);
+               props.setModelPickerOpen(false);
+             }}
+           />
+         </div>
+       )}
+     </div>
+   );
+ }

@@ -1,9 +1,12 @@
 :root{
   --bg-0:#0f0c10; --bg-1:#17121b; --bg-2:#1e1723; --bg-3:#241a29;
-  --text-0:#f2eef5; --text-1:#cbbad7;
-  --accent:#7a1d5a; --accent-2:#b83a7e;
-  --chip:#2a2230; --button:#771946; --button-hover:#992056;
+  --text-0:#f2eef5; --text-1:#cbbad7; --text-dim:#8c7a98;
+  --accent:#e54cbf; --brand:#b83a7e;
+  --panel:#141016; --panel-2:#1a141d; --panel-3:#211827;
+  --badge-bg:#241c2b; --badge-hair:rgba(255,255,255,0.10);
+  --chip:#2a2230;
   --hair: rgba(255,255,255,0.08);
+  --focus:0 0 0 2px rgba(229,76,191,0.35);
   --sidebar-width: 200px;
   --content-padding: 16px;
 }

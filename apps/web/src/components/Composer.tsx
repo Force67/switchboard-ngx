@@ -7,6 +7,10 @@ interface ModelOption {
   id: string;
   label: string;
   description?: string | null;
+  pricing?: {
+    input?: number;
+    output?: number;
+  };
 }
 
 interface Props {
@@ -19,6 +23,7 @@ interface Props {
   modelsError: Accessor<string | null>;
   loading: Accessor<boolean>;
   onSend: (event: Event) => void;
+  onOpenModelPicker: () => void;
 }
 
 export default function Composer(props: Props) {
@@ -43,13 +48,18 @@ export default function Composer(props: Props) {
           placeholder="Type your message..."
           value={props.prompt()}
           onInput={(e) => props.setPrompt(e.currentTarget.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && e.shiftKey) {
+              e.preventDefault();
+              props.onSend(e);
+            }
+          }}
         />
       </div>
       <div class="foot">
         <ModelSelector
           label={props.models().find(m => m.id === props.selectedModel())?.label || "Select Model"}
-          onChange={props.setSelectedModel}
-          models={props.models()}
+          onOpen={props.onOpenModelPicker}
           loading={props.modelsLoading()}
         />
         <Chip label="Search" icon={<svg viewBox="0 0 12 12"><circle cx="4.5" cy="4.5" r="3.5" stroke-width="1.5" fill="none" /><path d="M7.5 7.5L10.5 10.5" stroke-width="1.5" stroke-linecap="round" /></svg>} />

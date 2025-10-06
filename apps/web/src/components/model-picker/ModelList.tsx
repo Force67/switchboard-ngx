@@ -4,8 +4,10 @@ import ModelItem from "./ModelItem";
 
 interface Props {
   models: ModelMeta[];
-  selectedId?: string;
+  highlightedId?: string;
   onSelect: (id: string) => void;
+  onToggleFavorite: (id: string) => void;
+  isFavorite: (id: string) => boolean;
   expanded: boolean;
 }
 
@@ -17,8 +19,10 @@ const ModelList: Component<Props> = (props) => {
       {displayedModels().map(model => (
         <ModelItem
           model={model}
-          selectedId={props.selectedId}
+          highlightedId={props.highlightedId}
           onSelect={props.onSelect}
+          onToggleFavorite={props.onToggleFavorite}
+          isFavorite={props.isFavorite(model.id)}
         />
       ))}
     </div>

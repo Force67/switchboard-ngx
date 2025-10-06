@@ -4,12 +4,14 @@ import CapabilityBadge from "./CapabilityBadge";
 
 interface Props {
   model: ModelMeta;
-  selectedId?: string;
+  highlightedId?: string;
   onSelect: (id: string) => void;
+  onToggleFavorite: (id: string) => void;
+  isFavorite: boolean;
 }
 
 const ModelItem: Component<Props> = (props) => {
-  const isSelected = () => props.selectedId === props.model.id;
+  const isSelected = () => props.highlightedId === props.model.id;
   const isDisabled = () => props.model.disabled;
 
   const handleClick = () => {
@@ -39,19 +41,31 @@ const ModelItem: Component<Props> = (props) => {
       <div class="name">
         {props.model.name}
         {props.model.tier === 'pro' && <span class="diamond">🔹</span>}
-        {props.model.pricing && (
-          <span class="pricing">
-            {props.model.pricing.input !== undefined && ` $${props.model.pricing.input.toFixed(4)}`}
-            {props.model.pricing.output !== undefined && ` / $${props.model.pricing.output.toFixed(4)}`}
-          </span>
-        )}
+         {props.model.pricing && (
+           <span class="pricing">
+             {props.model.pricing.input !== undefined && ` $${(props.model.pricing.input * 1000000).toFixed(2)}/M`}
+             {props.model.pricing.output !== undefined && ` / $${(props.model.pricing.output * 1000000).toFixed(2)}/M`}
+           </span>
+         )}
       </div>
       <div class="flexfill"></div>
-      <div class="badges">
-        {props.model.badges.map(badge => (
-          <CapabilityBadge type={badge} disabled={isDisabled()} />
-        ))}
-      </div>
+       <div class="badges">
+         {props.model.badges.map(badge => (
+           <CapabilityBadge type={badge} disabled={isDisabled()} />
+         ))}
+       </div>
+       <span
+         class="favorite-btn"
+         onClick={(e) => {
+           e.stopPropagation();
+           props.onToggleFavorite(props.model.id);
+         }}
+         title={props.isFavorite ? "Remove from favorites" : "Add to favorites"}
+       >
+         <svg viewBox="0 0 24 24" class={props.isFavorite ? 'filled' : ''}>
+           <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+         </svg>
+       </span>
     </button>
   );
 };

@@ -54,6 +54,14 @@
 .badge svg { width:14px; height:14px; stroke:#cfc3d9; stroke-width:1.6; fill:none; }
 .badge.dim { opacity: .35; }
 
+.favorite-btn {
+  width: 24px; height: 24px; border: none; background: transparent; cursor: pointer;
+  display: grid; place-items: center; border-radius: 4px;
+}
+.favorite-btn:hover { background: var(--panel-3); }
+.favorite-btn svg { width: 16px; height: 16px; stroke: var(--text-1); stroke-width: 1.5; fill: none; }
+.favorite-btn svg.filled { fill: #ffd700; stroke: #ffd700; }
+
 .footer {
   height: 44px; display:flex; align-items:center; justify-content:space-between;
   padding: 0 16px; border-top: 1px solid var(--hair);

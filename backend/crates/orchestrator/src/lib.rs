@@ -193,10 +193,22 @@ impl Orchestrator {
         let models = parsed
             .data
             .into_iter()
-            .map(|model| OpenRouterModelSummary {
-                id: model.id.clone(),
-                label: model.name.unwrap_or_else(|| model.id.clone()),
-                description: model.description,
+            .map(|model| {
+                let pricing = model.pricing.as_ref().map(|p| {
+                    let input = p.get("prompt").and_then(|s| s.parse::<f64>().ok());
+                    let output = p.get("completion").and_then(|s| s.parse::<f64>().ok());
+                    ModelPricing { input, output }
+                });
+                let supports_images = model.modality.as_ref().map(|m| m.contains("image")).unwrap_or(false);
+                let supports_reasoning = model.id.contains("deepseek") || model.id.contains("o1") || model.id.contains("reasoning");
+                OpenRouterModelSummary {
+                    id: model.id.clone(),
+                    label: model.name.unwrap_or_else(|| model.id.clone()),
+                    description: model.description,
+                    pricing,
+                    supports_reasoning,
+                    supports_images,
+                }
             })
             .collect();
 
@@ -318,11 +330,23 @@ fn provider_identifier_from_model(model: &str) -> String {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModelPricing {
+    pub input: Option<f64>,
+    pub output: Option<f64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OpenRouterModelSummary {
     pub id: String,
     pub label: String,
     #[serde(default)]
     pub description: Option<String>,
+    #[serde(default)]
+    pub pricing: Option<ModelPricing>,
+    #[serde(default)]
+    pub supports_reasoning: bool,
+    #[serde(default)]
+    pub supports_images: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -337,4 +361,8 @@ struct OpenRouterModelEntry {
     name: Option<String>,
     #[serde(default)]
     description: Option<String>,
+    #[serde(default)]
+    pricing: Option<std::collections::HashMap<String, String>>,
+    #[serde(default)]
+    modality: Option<String>,
 }

@@ -1,0 +1,10 @@
+:root{
+  --bg-0:#0f0c10; --bg-1:#17121b; --bg-2:#1e1723; --bg-3:#241a29;
+  --text-0:#f2eef5; --text-1:#cbbad7;
+  --accent:#7a1d5a; --accent-2:#b83a7e;
+  --chip:#2a2230; --button:#771946; --button-hover:#992056;
+  --hair: rgba(255,255,255,0.08);
+}
+*{box-sizing:border-box}
+html,body,#root{height:100%}
+body{margin:0;background:var(--bg-0);color:var(--text-0);font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}

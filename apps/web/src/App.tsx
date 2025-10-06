@@ -1,11 +1,8 @@
-import type { Component } from "solid-js";
-import {
-  For,
-  Show,
-  createEffect,
-  createSignal,
-  onMount,
-} from "solid-js";
+import { createSignal, createEffect, onMount, createMemo } from "solid-js";
+import "./theme.css";
+import "./app.css";
+import Sidebar from "./components/Sidebar";
+import MainArea from "./components/MainArea";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:7070";
 const DEFAULT_MODEL = import.meta.env.VITE_DEFAULT_MODEL ?? "";
@@ -29,6 +26,21 @@ interface TokenUsage {
   prompt_tokens: number;
   completion_tokens: number;
   total_tokens: number;
+}
+
+interface Message {
+  role: "user" | "assistant";
+  content: string;
+  model?: string;
+  usage?: TokenUsage;
+  reasoning?: string[];
+}
+
+interface Chat {
+  id: string;
+  title: string;
+  messages: Message[];
+  createdAt: Date;
 }
 
 interface ChatResponse {
@@ -76,7 +88,7 @@ const loadStoredSession = (): SessionData | null => {
   }
 };
 
-const App: Component = () => {
+export default function App() {
   const [session, setSession] = createSignal<SessionData | null>(
     loadStoredSession(),
   );
@@ -87,7 +99,8 @@ const App: Component = () => {
   const [modelsError, setModelsError] = createSignal<string | null>(null);
   const [loading, setLoading] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
-  const [response, setResponse] = createSignal<ChatResponse | null>(null);
+  const [chats, setChats] = createSignal<Chat[]>([]);
+  const [currentChatId, setCurrentChatId] = createSignal<string | null>(null);
   const [authenticating, setAuthenticating] = createSignal(false);
   const [authError, setAuthError] = createSignal<string | null>(null);
 
@@ -229,8 +242,29 @@ const App: Component = () => {
     persistSession(null);
     setModels([]);
     setSelectedModel("");
-    setResponse(null);
+    setChats([]);
+    setCurrentChatId(null);
     setPrompt("");
+  };
+
+  const newChat = () => {
+    const chatId = `chat_${Date.now()}`;
+    const newChatObj: Chat = {
+      id: chatId,
+      title: "New Chat",
+      messages: [],
+      createdAt: new Date(),
+    };
+    setChats(prev => [newChatObj, ...prev]);
+    setCurrentChatId(chatId);
+    setPrompt("");
+    setError(null);
+  };
+
+  const selectChat = (chatId: string) => {
+    setCurrentChatId(chatId);
+    setPrompt("");
+    setError(null);
   };
 
   const handleSubmit = async (event: Event) => {
@@ -248,8 +282,26 @@ const App: Component = () => {
       return;
     }
 
+    const currentId = currentChatId();
+    if (!currentId) {
+      newChat(); // Create new chat if none selected
+      return handleSubmit(event); // Retry
+    }
+
     setLoading(true);
     setError(null);
+
+    // Add user message to current chat
+    setChats(prev => prev.map(chat =>
+      chat.id === currentId
+        ? {
+            ...chat,
+            messages: [...chat.messages, { role: "user", content: trimmedPrompt }],
+            title: chat.messages.length === 0 ? trimmedPrompt.slice(0, 30) + (trimmedPrompt.length > 30 ? "..." : "") : chat.title
+          }
+        : chat
+    ));
+    setPrompt("");
 
     try {
       const payload: Record<string, string> = { prompt: trimmedPrompt };
@@ -280,10 +332,22 @@ const App: Component = () => {
       }
 
       const data = (await response.json()) as ChatResponse;
-      setResponse(data);
-      setPrompt("");
+      // Add assistant message to current chat
+      setChats(prev => prev.map(chat =>
+        chat.id === currentId
+          ? {
+              ...chat,
+              messages: [...chat.messages, {
+                role: "assistant",
+                content: data.content,
+                model: data.model,
+                usage: data.usage,
+                reasoning: data.reasoning
+              }]
+            }
+          : chat
+      ));
     } catch (err) {
-      setResponse(null);
       setError(err instanceof Error ? err.message : "Unexpected error");
     } finally {
       setLoading(false);
@@ -297,6 +361,12 @@ const App: Component = () => {
     } else {
       setModels([]);
       setSelectedModel("");
+    }
+  });
+
+  createEffect(() => {
+    if (session() && chats().length === 0) {
+      newChat();
     }
   });
 
@@ -319,147 +389,33 @@ const App: Component = () => {
   });
 
   return (
-    <main class="app">
-      <header>
-        <h1>Switchboard NGX Playground</h1>
-        <p>
-          Sign in with GitHub to send prompts through OpenRouter. Configure
-          <code> VITE_API_BASE</code> if the backend runs on a different host.
-        </p>
-      </header>
-
-      <Show
-        when={session()}
-        fallback={
-          <section class="card login">
-            <h2>GitHub Required</h2>
-            <p>Authenticate with GitHub SSO before accessing the playground.</p>
-            <button
-              type="button"
-              disabled={authenticating()}
-              onClick={beginGithubLogin}
-            >
-              {authenticating() ? "Completing login..." : "Continue with GitHub"}
-            </button>
-            <Show when={authError()}>
-              {(message) => <div class="error">{message()}</div>}
-            </Show>
-          </section>
-        }
-      >
-        {(activeSession) => (
-          <>
-            <section class="card session">
-              <div class="session-heading">
-                <div>
-                  <h2>Signed in</h2>
-                  <p>
-                    {activeSession().user.display_name ?? "GitHub user"}
-                    <Show when={activeSession().user.email}>
-                      {(email) => <span class="muted"> ({email()})</span>}
-                    </Show>
-                  </p>
-                </div>
-                <button type="button" class="outline" onClick={logout}>
-                  Log out
-                </button>
-              </div>
-              <p class="session-meta">
-                Token expires {new Date(activeSession().expires_at).toLocaleString()}
-              </p>
-            </section>
-
-            <form class="card" onSubmit={handleSubmit}>
-              <div class="field">
-                <span>Model</span>
-                <select
-                  value={selectedModel()}
-                  onChange={(event) => setSelectedModel(event.currentTarget.value)}
-                  disabled={modelsLoading() || models().length === 0}
-                >
-                  <For each={models()}>
-                    {(model) => (
-                      <option value={model.id}>
-                        {model.label}
-                        {model.description ? ` — ${model.description}` : ""}
-                      </option>
-                    )}
-                  </For>
-                </select>
-                <Show when={modelsLoading()}>
-                  <span class="hint-text">Fetching models...</span>
-                </Show>
-                <Show when={modelsError()}>
-                  {(message) => <div class="error">{message()}</div>}
-                </Show>
-              </div>
-
-              <label class="field">
-                <span>Prompt</span>
-                <textarea
-                  placeholder="Ask the LLM something..."
-                  rows={6}
-                  value={prompt()}
-                  onInput={(event) => setPrompt(event.currentTarget.value)}
-                />
-              </label>
-
-              <div class="actions">
-                <button type="submit" disabled={loading()}>
-                  {loading() ? "Sending..." : "Send"}
-                </button>
-              </div>
-            </form>
-
-            <Show when={error()}>
-              {(message) => <div class="error">{message()}</div>}
-            </Show>
-
-            <Show when={response()}>
-              {(result) => (
-                <section class="card output">
-                  <header>
-                    <h2>Response</h2>
-                    <small>
-                      Model: <code>{result().model}</code>
-                    </small>
-                  </header>
-                  <pre>{result().content}</pre>
-
-                  <Show when={result().reasoning && result().reasoning!.length > 0}>
-                    <div class="reasoning">
-                      <h3>Reasoning</h3>
-                      <ol>
-                        {result()
-                          .reasoning!.map((step) => (
-                            <li>{step}</li>
-                          ))}
-                      </ol>
-                    </div>
-                  </Show>
-
-                  <Show when={result().usage}>
-                    {(usage) => (
-                      <footer class="meta">
-                        <span>{usage().prompt_tokens} prompt tokens</span>
-                        <span>{usage().completion_tokens} completion tokens</span>
-                        <span>{usage().total_tokens} total tokens</span>
-                      </footer>
-                    )}
-                  </Show>
-                </section>
-              )}
-            </Show>
-          </>
-        )}
-      </Show>
-
-      <footer class="hint">
-        <span>Backend:</span>
-        <code>{API_BASE}</code>
-      </footer>
-    </main>
+    <div class="app">
+      <Sidebar
+        session={session}
+        chats={chats}
+        currentChatId={currentChatId}
+        onLogin={beginGithubLogin}
+        onLogout={logout}
+        onNewChat={newChat}
+        onSelectChat={selectChat}
+      />
+      <MainArea
+        prompt={prompt}
+        setPrompt={setPrompt}
+        selectedModel={selectedModel}
+        setSelectedModel={setSelectedModel}
+        models={models}
+        modelsLoading={modelsLoading}
+        modelsError={modelsError}
+        loading={loading}
+        error={error}
+        currentMessages={createMemo(() => {
+          const currentId = currentChatId();
+          const currentChat = chats().find(c => c.id === currentId);
+          return currentChat ? currentChat.messages : [];
+        })}
+        onSend={handleSubmit}
+      />
+    </div>
   );
-};
-
-export default App;
+}

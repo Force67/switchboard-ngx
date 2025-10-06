@@ -318,32 +318,20 @@ export default function App() {
 
     try {
       const images = attachedImages();
-      let body: string | FormData;
-      let headers: Record<string, string> = {
+      const formData = new FormData();
+      formData.append('prompt', trimmedPrompt);
+      const model = selectedModel().trim();
+      if (model) {
+        formData.append('model', model);
+      }
+      images.forEach((file) => {
+        formData.append('images', file);
+      });
+      const body = formData;
+      const headers: Record<string, string> = {
         Authorization: `Bearer ${activeSession.token}`,
       };
-
-      if (images.length > 0) {
-        const formData = new FormData();
-        formData.append('prompt', trimmedPrompt);
-        const model = selectedModel().trim();
-        if (model) {
-          formData.append('model', model);
-        }
-    images.forEach((file) => {
-        formData.append('images', file);
-    });
-        body = formData;
-        // Don't set Content-Type for FormData, let browser set it
-      } else {
-        const payload: Record<string, string> = { prompt: trimmedPrompt };
-        const model = selectedModel().trim();
-        if (model) {
-          payload.model = model;
-        }
-        body = JSON.stringify(payload);
-        headers["Content-Type"] = "application/json";
-      }
+      // Don't set Content-Type for FormData, let browser set it
 
       const response = await fetch(`${API_BASE}/api/chat`, {
         method: "POST",

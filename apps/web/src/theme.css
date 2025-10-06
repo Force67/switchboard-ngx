@@ -4,6 +4,8 @@
   --accent:#7a1d5a; --accent-2:#b83a7e;
   --chip:#2a2230; --button:#771946; --button-hover:#992056;
   --hair: rgba(255,255,255,0.08);
+  --sidebar-width: 200px;
+  --content-padding: 16px;
 }
 *{box-sizing:border-box}
 html,body,#root{height:100%}

@@ -1,15 +1,20 @@
 use anyhow::Context;
-use argon2::password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString};
+use argon2::password_hash::{
+    rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString,
+};
 use argon2::Argon2;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine as _;
 use chrono::{DateTime, Duration, Utc};
 use oauth2::basic::BasicClient;
 use oauth2::reqwest::async_http_client;
-use oauth2::{AuthorizationCode, AuthUrl, ClientId, ClientSecret, RedirectUrl, TokenResponse, TokenUrl};
+use oauth2::{
+    AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken, RedirectUrl, Scope,
+    TokenResponse, TokenUrl,
+};
 use rand::RngCore;
 use reqwest::header::ACCEPT;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use sqlx::{Any, AnyPool, Row, Transaction};
 use switchboard_config::{AuthConfig, GithubAuthConfig};
 use thiserror::Error;
@@ -39,9 +44,15 @@ pub enum AuthError {
     Database(#[from] sqlx::Error),
     #[error("password hashing failed: {0}")]
     PasswordHash(#[from] argon2::password_hash::Error),
+    #[error("session not found")]
+    SessionNotFound,
+    #[error("session expired")]
+    SessionExpired,
+    #[error("invalid session token")]
+    InvalidSession,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct User {
     pub id: Uuid,
     pub email: Option<String>,
@@ -80,6 +91,17 @@ impl Authenticator {
 
     pub fn github_enabled(&self) -> bool {
         self.github.is_some()
+    }
+
+    pub fn github_authorization_url(
+        &self,
+        state: &str,
+        redirect_uri: &str,
+    ) -> Result<String, AuthError> {
+        let github = self.github.as_ref().ok_or(AuthError::GithubOauthDisabled)?;
+        github
+            .authorize_url(state, redirect_uri)
+            .map_err(AuthError::GithubOauth)
     }
 
     pub async fn register_with_password(
@@ -169,10 +191,7 @@ impl Authenticator {
         code: &str,
         redirect_uri: &str,
     ) -> Result<AuthSession, AuthError> {
-        let github = self
-            .github
-            .as_ref()
-            .ok_or(AuthError::GithubOauthDisabled)?;
+        let github = self.github.as_ref().ok_or(AuthError::GithubOauthDisabled)?;
 
         let profile = github
             .exchange_code(code, redirect_uri)
@@ -193,9 +212,11 @@ impl Authenticator {
         )
         .bind(&profile.id)
         .fetch_optional(&mut *tx)
-        .await? {
+        .await?
+        {
             let user_id: String = row.try_get("user_id")?;
-            let user_id = Uuid::parse_str(&user_id).context("invalid user id stored for github identity")?;
+            let user_id =
+                Uuid::parse_str(&user_id).context("invalid user id stored for github identity")?;
             tx.commit().await?;
             return self.issue_session(user_id).await;
         }
@@ -204,7 +225,8 @@ impl Authenticator {
             if let Some(row) = sqlx::query("SELECT id FROM users WHERE email = ?")
                 .bind(email)
                 .fetch_optional(&mut *tx)
-                .await? {
+                .await?
+            {
                 let user_id: String = row.try_get("id")?;
                 let user_id = Uuid::parse_str(&user_id).context("invalid stored user id")?;
                 (user_id, Some(email.clone()))
@@ -216,7 +238,8 @@ impl Authenticator {
             }
         } else {
             let new_id = Uuid::new_v4();
-            self.insert_user(&mut tx, new_id, None, profile.name.clone()).await?;
+            self.insert_user(&mut tx, new_id, None, profile.name.clone())
+                .await?;
             (new_id, None)
         };
 
@@ -237,6 +260,46 @@ impl Authenticator {
 
         info!(user = %user_id, email = ?email, "linked github identity");
         self.issue_session(user_id).await
+    }
+
+    pub async fn authenticate_token(&self, token: &str) -> Result<(User, AuthSession), AuthError> {
+        let row = sqlx::query("SELECT user_id, expires_at FROM sessions WHERE token = ?")
+            .bind(token)
+            .fetch_optional(&self.pool)
+            .await?;
+
+        let Some(row) = row else {
+            return Err(AuthError::SessionNotFound);
+        };
+
+        let user_id: String = row.try_get("user_id")?;
+        let expires_at: String = row.try_get("expires_at")?;
+
+        let user_id = Uuid::parse_str(&user_id).map_err(|_| AuthError::InvalidSession)?;
+        let expires_at = DateTime::parse_from_rfc3339(&expires_at)
+            .map_err(|_| AuthError::InvalidSession)?
+            .with_timezone(&Utc);
+
+        if expires_at <= Utc::now() {
+            sqlx::query("DELETE FROM sessions WHERE token = ?")
+                .bind(token)
+                .execute(&self.pool)
+                .await?;
+            return Err(AuthError::SessionExpired);
+        }
+
+        let user = self.fetch_user(user_id).await?;
+        let session = AuthSession {
+            token: token.to_owned(),
+            user_id,
+            expires_at,
+        };
+
+        Ok((user, session))
+    }
+
+    pub async fn user_profile(&self, user_id: Uuid) -> Result<User, AuthError> {
+        self.fetch_user(user_id).await
     }
 
     async fn insert_user(
@@ -263,15 +326,31 @@ impl Authenticator {
     }
 
     async fn fetch_user(&self, id: Uuid) -> Result<User, AuthError> {
-        let row = sqlx::query("SELECT id, email, display_name FROM users WHERE id = ?")
+        let row = sqlx::query(
+            "SELECT id, email, display_name, \n                CASE WHEN email IS NULL THEN 0 ELSE 1 END AS email_present,\n                CASE WHEN display_name IS NULL THEN 0 ELSE 1 END AS display_name_present\n             FROM users WHERE id = ?",
+        )
             .bind(id.to_string())
             .fetch_one(&self.pool)
             .await?;
 
+        let email_present: i64 = row.try_get("email_present")?;
+        let email = if email_present != 0 {
+            Some(row.try_get::<String, _>("email")?)
+        } else {
+            None
+        };
+
+        let display_name_present: i64 = row.try_get("display_name_present")?;
+        let display_name = if display_name_present != 0 {
+            Some(row.try_get::<String, _>("display_name")?)
+        } else {
+            None
+        };
+
         Ok(User {
             id,
-            email: row.try_get::<Option<String>, _>("email")?,
-            display_name: row.try_get::<Option<String>, _>("display_name")?,
+            email,
+            display_name,
         })
     }
 
@@ -343,6 +422,22 @@ impl GithubOAuth {
             .expect("failed to build github http client");
 
         Self { client, http }
+    }
+
+    fn authorize_url(&self, state: &str, redirect_uri: &str) -> anyhow::Result<String> {
+        let redirect = RedirectUrl::new(redirect_uri.to_owned())
+            .context("invalid redirect uri for github oauth")?;
+
+        let (url, _) = self
+            .client
+            .clone()
+            .set_redirect_uri(redirect)
+            .authorize_url(|| CsrfToken::new(state.to_owned()))
+            .add_scope(Scope::new("read:user".to_string()))
+            .add_scope(Scope::new("user:email".to_string()))
+            .url();
+
+        Ok(url.to_string())
     }
 
     async fn exchange_code(&self, code: &str, redirect_uri: &str) -> anyhow::Result<GithubProfile> {

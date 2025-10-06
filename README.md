@@ -21,6 +21,8 @@ bun install
 bun run dev
 ```
 
+The development UI now includes a minimal playground for sending prompts to the backend orchestrator. It targets `http://localhost:7070` by default; override with `VITE_API_BASE` when running `bun run dev` if the backend lives elsewhere (e.g. `VITE_API_BASE=https://staging.example bun run dev`). Set `VITE_GITHUB_REDIRECT_PATH` when your GitHub OAuth callback differs from the default `/auth/callback`.
+
 ### Backend
 
 ```bash
@@ -30,7 +32,44 @@ cargo run --bin switchboard-backend
 
 The backend currently initialises configuration and the orchestration layer, then waits for a shutdown signal. Real request handling and provider integrations can be layered on top of the provided crates.
 
+The HTTP surface includes a basic chat endpoint for exercising the OpenRouter integration:
+
+```http
+POST /api/chat
+Authorization: Bearer <session-token>
+Content-Type: application/json
+
+{
+  "prompt": "Hello world",
+  "model": "optional-model-identifier"
+}
+```
+
+Responses contain the generated message, optional reasoning traces, and token usage metadata. Additional endpoints power the UI:
+
+| Endpoint | Method | Purpose |
+| --- | --- | --- |
+| `/api/auth/github/login` | `GET` | Returns the GitHub authorize URL (includes CSRF state). |
+| `/api/auth/github/callback` | `POST` | Exchanges the OAuth code for a Switchboard session token. |
+| `/api/models` | `GET` | Lists available OpenRouter models for the dropdown selector. |
+
+All authenticated endpoints expect the session token issued during GitHub login in the `Authorization: Bearer` header.
+
+### GitHub SSO
+
+Create a GitHub OAuth application and configure its callback URL (e.g. `http://localhost:3000/auth/callback`). Populate `SWITCHBOARD__AUTH__GITHUB__CLIENT_ID` and `SWITCHBOARD__AUTH__GITHUB__CLIENT_SECRET`, then copy `backend/crates/config/switchboard.example.toml` to your working config and fill the GitHub credentials. The frontend automatically redirects to the GitHub flow and completes the exchange via the callback endpoint.
+
 By default the backend connects to an in-project SQLite database at `sqlite://switchboard.db`. Supply `SWITCHBOARD__DATABASE__URL` to target PostgreSQL instead, e.g. `postgres://user:pass@localhost/switchboard`.
+
+### OpenRouter Provider
+
+Switchboard NGX ships with an initial OpenRouter integration powered by the [`denkwerk`](https://github.com/Force67/denkwerk) library.
+
+1. Copy `backend/crates/config/switchboard.example.toml` to `backend/crates/config/switchboard.toml` (the latter is ignored by git) or create a `switchboard.toml` next to the backend binary.
+2. Set `orchestrator.openrouter.api_key` to your OpenRouter key and tweak any other settings you need.
+3. Run the backend; the loader now discovers the config automatically, or you can point to a custom file via `SWITCHBOARD_CONFIG`.
+
+Environment overrides such as `OPENROUTER_API_KEY` and `SWITCHBOARD__ORCHESTRATOR__OPENROUTER__*` remain available for per-machine customisation.
 
 ### Authentication
 

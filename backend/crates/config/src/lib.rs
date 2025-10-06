@@ -1,6 +1,15 @@
 use anyhow::Context;
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 use tracing::debug;
+
+const DEFAULT_CONFIG_FILES: &[&str] = &[
+    "switchboard.toml",
+    "config/switchboard.toml",
+    "crates/config/switchboard.toml",
+    "../switchboard.toml",
+    "../config/switchboard.toml",
+];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
@@ -40,6 +49,8 @@ impl Default for HttpConfig {
 pub struct OrchestratorConfig {
     pub default_model: String,
     pub provider_search_path: Vec<String>,
+    #[serde(default)]
+    pub openrouter: OpenRouterProviderConfig,
 }
 
 impl Default for OrchestratorConfig {
@@ -47,6 +58,47 @@ impl Default for OrchestratorConfig {
         Self {
             default_model: "gpt-4.1".to_string(),
             provider_search_path: vec!["providers".to_string()],
+            openrouter: OpenRouterProviderConfig::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OpenRouterProviderConfig {
+    #[serde(default)]
+    pub api_key: Option<String>,
+    #[serde(default = "OpenRouterProviderConfig::default_base_url")]
+    pub base_url: String,
+    #[serde(default = "OpenRouterProviderConfig::default_request_timeout")]
+    pub request_timeout_seconds: u64,
+    #[serde(default)]
+    pub referer: Option<String>,
+    #[serde(default = "OpenRouterProviderConfig::default_title")]
+    pub title: Option<String>,
+}
+
+impl OpenRouterProviderConfig {
+    fn default_base_url() -> String {
+        "https://openrouter.ai/api/v1".to_string()
+    }
+
+    const fn default_request_timeout() -> u64 {
+        30
+    }
+
+    fn default_title() -> Option<String> {
+        Some("Switchboard NGX".to_string())
+    }
+}
+
+impl Default for OpenRouterProviderConfig {
+    fn default() -> Self {
+        Self {
+            api_key: None,
+            base_url: Self::default_base_url(),
+            request_timeout_seconds: Self::default_request_timeout(),
+            referer: None,
+            title: Self::default_title(),
         }
     }
 }
@@ -106,38 +158,73 @@ pub fn load() -> anyhow::Result<AppConfig> {
         session_ttl as i64
     };
 
-    let builder = config::Config::builder()
+    let mut builder = config::Config::builder();
+    builder = builder
         .set_default("http.address", defaults.http.address.clone())
         .unwrap()
         .set_default("http.port", i64::from(defaults.http.port))
         .unwrap()
-        .set_default("orchestrator.default_model", defaults.orchestrator.default_model.clone())
+        .set_default(
+            "orchestrator.default_model",
+            defaults.orchestrator.default_model.clone(),
+        )
         .unwrap()
         .set_default(
             "orchestrator.provider_search_path",
             defaults.orchestrator.provider_search_path.clone(),
         )
         .unwrap()
+        .set_default(
+            "orchestrator.openrouter.base_url",
+            defaults.orchestrator.openrouter.base_url.clone(),
+        )
+        .unwrap()
+        .set_default(
+            "orchestrator.openrouter.request_timeout_seconds",
+            i64::try_from(defaults.orchestrator.openrouter.request_timeout_seconds)
+                .unwrap_or(i64::MAX),
+        )
+        .unwrap();
+
+    if let Some(title) = defaults.orchestrator.openrouter.title.clone() {
+        builder = builder
+            .set_default("orchestrator.openrouter.title", title)
+            .unwrap();
+    }
+
+    builder = builder
         .set_default("database.url", defaults.database.url.clone())
         .unwrap()
         .set_default("database.max_connections", db_max)
         .unwrap()
-        .set_default(
-            "auth.session_ttl_seconds",
-            session_ttl_i64,
-        )
+        .set_default("auth.session_ttl_seconds", session_ttl_i64)
         .unwrap()
         .add_source(config::Environment::with_prefix("SWITCHBOARD").separator("__"));
 
-    let builder = if let Ok(path) = std::env::var("SWITCHBOARD_CONFIG") {
-        builder.add_source(config::File::with_name(&path).required(false))
-    } else {
-        builder
-    };
+    let mut config_file_attached = false;
 
-    let cfg = builder
-        .build()
-        .context("unable to build configuration")?;
+    if let Ok(path) = std::env::var("SWITCHBOARD_CONFIG") {
+        builder = builder.add_source(config::File::from(PathBuf::from(&path)));
+        config_file_attached = true;
+        debug!(path, "loading configuration via SWITCHBOARD_CONFIG");
+    } else if let Ok(cwd) = std::env::current_dir() {
+        let fallback = DEFAULT_CONFIG_FILES
+            .iter()
+            .map(|candidate| cwd.join(candidate))
+            .find(|path| path.exists());
+
+        if let Some(path) = fallback {
+            debug!(path = %path.display(), "loading configuration file");
+            builder = builder.add_source(config::File::from(path));
+            config_file_attached = true;
+        }
+    }
+
+    if !config_file_attached {
+        debug!("no configuration file found, relying on defaults and environment overrides");
+    }
+
+    let cfg = builder.build().context("unable to build configuration")?;
 
     let config = cfg
         .try_deserialize::<AppConfig>()

@@ -12,3 +12,5 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 switchboard-config = { path = "../config" }
+denkwerk = { workspace = true }
+reqwest = { workspace = true }

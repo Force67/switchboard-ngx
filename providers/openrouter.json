@@ -1,0 +1,10 @@
+{
+  "identifier": "openrouter",
+  "family": "openrouter",
+  "capabilities": [
+    "chat-completions",
+    "streaming",
+    "reasoning",
+    "image-uploads"
+  ]
+}

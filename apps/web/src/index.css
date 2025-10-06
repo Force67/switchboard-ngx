@@ -1,21 +1,267 @@
 :root {
-  color-scheme: light dark;
-  font-family: system-ui, sans-serif;
+  font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  color: #0f172a;
+  background-color: #f8fafc;
+}
+
+* {
+  box-sizing: border-box;
 }
 
 body {
   margin: 0;
   min-height: 100vh;
+  background: linear-gradient(135deg, #f1f5f9, #e0f2fe);
+}
+
+main.app {
+  width: min(960px, 92vw);
+  margin: 3rem auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+header > h1 {
+  margin: 0 0 0.25rem;
+  font-size: clamp(1.8rem, 3vw, 2.6rem);
+}
+
+header > p {
+  margin: 0;
+  color: #475569;
+  line-height: 1.5;
+}
+
+.card {
+  background: #fff;
+  border-radius: 16px;
+  padding: 1.5rem;
+  box-shadow: 0 18px 40px -24px rgba(15, 23, 42, 0.35);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  font-size: 0.95rem;
+  color: #334155;
+}
+
+.field input,
+.field textarea,
+.field select {
+  border: 1px solid #cbd5f5;
+  border-radius: 12px;
+  padding: 0.75rem 1rem;
+  font: inherit;
+  resize: vertical;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.field input:focus,
+.field textarea:focus,
+.field select:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
+  outline: none;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.actions button {
+  cursor: pointer;
+  border: none;
+  border-radius: 999px;
+  padding: 0.65rem 1.5rem;
+  font-weight: 600;
+  color: #fff;
+  background: linear-gradient(135deg, #2563eb, #7c3aed);
+  transition: transform 150ms ease, box-shadow 150ms ease;
+}
+
+.actions button[disabled] {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.actions button:not([disabled]):hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 25px -15px rgba(59, 130, 246, 0.9);
+}
+
+.error {
+  background: #fee2e2;
+  color: #b91c1c;
+  border-radius: 12px;
+  padding: 0.75rem 1rem;
+  border: 1px solid #fecaca;
+}
+
+.hint-text {
+  color: #475569;
+  font-size: 0.85rem;
+}
+
+.output pre {
+  background: #0f172a;
+  color: #e2e8f0;
+  padding: 1rem;
+  border-radius: 12px;
+  overflow-x: auto;
+  margin: 0;
+  line-height: 1.6;
+  font-size: 0.95rem;
+}
+
+.output header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.output header h2 {
+  margin: 0;
+}
+
+.output header small {
+  color: #475569;
+}
+
+.output code {
+  font-family: "JetBrains Mono", "Fira Code", ui-monospace, SFMono-Regular,
+    Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+.reasoning {
+  border-top: 1px solid #e2e8f0;
+  padding-top: 1rem;
+}
+
+.reasoning h3 {
+  margin: 0 0 0.5rem;
+}
+
+.reasoning ol {
+  margin: 0;
+  padding-left: 1.4rem;
+  color: #1e293b;
   display: grid;
-  place-items: center;
-  background: #faff;
-  color: #0f172a;
+  gap: 0.35rem;
 }
 
-.hello {
+.meta {
+  border-top: 1px solid #e2e8f0;
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  color: #475569;
+  font-size: 0.85rem;
+}
+
+.login {
   text-align: center;
+  gap: 1.25rem;
 }
 
-.hello h1 {
-  margin-bottom: 0.5rem;
+.login button {
+  align-self: center;
+  border: none;
+  border-radius: 999px;
+  padding: 0.65rem 2rem;
+  font-weight: 600;
+  color: #fff;
+  background: linear-gradient(135deg, #2563eb, #7c3aed);
+  cursor: pointer;
+  transition: transform 150ms ease, box-shadow 150ms ease;
+}
+
+.login button[disabled] {
+  opacity: 0.7;
+  cursor: progress;
+}
+
+.login button:not([disabled]):hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 25px -15px rgba(59, 130, 246, 0.9);
+}
+
+.session {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.session-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+
+.session-heading h2 {
+  margin: 0 0 0.35rem;
+}
+
+.session-heading p {
+  margin: 0;
+  color: #1e293b;
+}
+
+.session-meta {
+  margin: 0;
+  color: #475569;
+  font-size: 0.85rem;
+}
+
+.muted {
+  color: #64748b;
+}
+
+.outline {
+  border: 1px solid rgba(37, 99, 235, 0.4);
+  background: transparent;
+  color: #1d4ed8;
+  padding: 0.45rem 1rem;
+  border-radius: 999px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.outline:hover {
+  background: rgba(37, 99, 235, 0.08);
+}
+
+.hint {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #475569;
+}
+
+.hint code {
+  padding: 0.25rem 0.5rem;
+  background: rgba(15, 23, 42, 0.08);
+  border-radius: 8px;
+}
+
+@media (max-width: 720px) {
+  main.app {
+    margin: 2rem auto;
+  }
+
+  .card {
+    padding: 1.25rem;
+  }
 }

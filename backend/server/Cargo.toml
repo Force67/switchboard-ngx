@@ -14,3 +14,9 @@ sqlx = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 tokio = { workspace = true }
+axum = { workspace = true }
+tower-http = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+denkwerk = { workspace = true }
+rand = { workspace = true }

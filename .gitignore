@@ -1,2 +1,4 @@
 
 *.db
+switchboard.toml
+backend/crates/config/switchboard.toml

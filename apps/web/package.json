@@ -10,7 +10,8 @@
   },
   "dependencies": {
     "solid-js": "^1.8.15",
-    "@solidjs/router": "^0.11.0"
+    "@solidjs/router": "^0.11.0",
+    "katex": "^0.16.23"
   },
   "devDependencies": {
     "typescript": "^5.4.5",

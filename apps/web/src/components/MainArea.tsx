@@ -3,6 +3,7 @@ import TopRightControls from "./TopRightControls";
 import Composer from "./Composer";
 import ModelPickerPanel from "./model-picker/ModelPickerPanel";
 import { ModelMeta } from "./model-picker/models";
+import LatexRenderer from "./LatexRenderer";
 
 interface ModelOption {
   id: string;
@@ -82,7 +83,7 @@ export default function MainArea(props: Props) {
               <div style="font-weight: bold; margin-bottom: 8px;">
                 {message.role === 'user' ? 'You' : `Assistant${message.model ? ` (${message.model})` : ''}`}
               </div>
-              <div style="white-space: pre-wrap;">{message.content}</div>
+               <LatexRenderer content={message.content} />
               {message.usage && (
                 <small style="color: var(--text-1); margin-top: 8px; display: block;">
                   Tokens: {message.usage.prompt_tokens} prompt, {message.usage.completion_tokens} completion

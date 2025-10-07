@@ -1,0 +1,14 @@
+name: Frontend CI
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: oven-sh/setup-bun@v2
+    - name: Install dependencies
+      run: cd apps/web && bun install
+    - name: Build
+      run: cd apps/web && bun run build

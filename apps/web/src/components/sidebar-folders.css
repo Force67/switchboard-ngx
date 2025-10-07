@@ -145,20 +145,48 @@
 
 /* SIDEBAR BUTTONS */
 .newchat, .newfolder {
-  display:flex; align-items:center; gap:6px;
-  padding: 6px 10px; border-radius:6px;
-  background: rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.08);
+  display:flex; align-items:center; justify-content:center; gap:6px;
+  padding: 8px 12px; border-radius:8px;
+  background: linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.05) 100%);
+  border:1px solid rgba(255,255,255,0.12);
   color: var(--text-1); font-size:12px; font-weight:500;
-  cursor:pointer; transition: all 0.15s ease;
+  cursor:pointer; transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.1);
+  position: relative;
+  overflow: hidden;
+  flex: 1;
+  height: 32px;
+}
+.newchat::before, .newfolder::before {
+  content: '';
+  position: absolute;
+  top: 0; left: -100%;
+  width: 100%; height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+  transition: left 0.5s ease;
+}
+.newchat:hover::before, .newfolder:hover::before {
+  left: 100%;
 }
 .newchat:hover, .newfolder:hover {
-  background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.15);
+  background: linear-gradient(135deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.08) 100%);
+  border-color: rgba(255,255,255,0.2);
   color: var(--text-0);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.15);
+}
+.newchat:active, .newfolder:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.1);
 }
 .newchat svg, .newfolder svg {
-  width:14px; height:14px; stroke: #cbbad7; transition: stroke 0.15s ease;
+  width:14px; height:14px; stroke: #cbbad7; transition: all 0.2s ease;
+  flex-shrink: 0;
 }
-.newchat:hover svg, .newfolder:hover svg { stroke: #e54cbf; }
+.newchat:hover svg, .newfolder:hover svg {
+  stroke: #e54cbf;
+  transform: scale(1.05);
+}
 
 /* DISABLED TARGET cursor */
 .no-drop { cursor: not-allowed !important; }

@@ -20,6 +20,12 @@ interface Props {
 export default function TopRightControls(props: Props) {
   return (
     <div class="top-bar">
+      <div class="top-left">
+        {/* Left side - can be used for additional controls */}
+      </div>
+      <div class="top-center">
+        <h1 class="app-title">Switchboard NGX</h1>
+      </div>
       <div class="top-right">
         <button class="icircle">
           <svg viewBox="0 0 14 14">

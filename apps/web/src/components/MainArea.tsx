@@ -1,4 +1,5 @@
 import { Accessor, Setter, For, createMemo } from "solid-js";
+import { onMount, onCleanup } from "solid-js";
 import TopRightControls from "./TopRightControls";
 import Composer from "./Composer";
 import ModelPickerPanel from "./model-picker/ModelPickerPanel";
@@ -73,6 +74,21 @@ export default function MainArea(props: Props) {
       group: undefined,
       pricing: model.pricing,
     }));
+  });
+
+  onMount(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.shiftKey && e.key === 'P') {
+        e.preventDefault();
+        props.setModelPickerOpen(true);
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+
+    onCleanup(() => {
+      document.removeEventListener('keydown', handleKeyDown);
+    });
   });
 
   return (

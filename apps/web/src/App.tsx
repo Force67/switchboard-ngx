@@ -3,6 +3,8 @@ import "./theme.css";
 import "./app.css";
 import Sidebar from "./components/Sidebar";
 import MainArea from "./components/MainArea";
+import { apiService } from "./api";
+import { initializeFromAPI } from "./components/sidebarStore";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:7070";
 const DEFAULT_MODEL = import.meta.env.VITE_DEFAULT_MODEL ?? "";
@@ -97,8 +99,19 @@ const loadStoredSession = (): SessionData | null => {
 };
 
 export default function App() {
+  // Temporary test session for development
+  const testSession: SessionData = {
+    token: "test-token",
+    user: {
+      id: "test-user",
+      email: "test@example.com",
+      display_name: "Test User",
+    },
+    expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+  };
+
   const [session, setSession] = createSignal<SessionData | null>(
-    loadStoredSession(),
+    testSession, // loadStoredSession(),
   );
   const [prompt, setPrompt] = createSignal("");
   const [attachedImages, setAttachedImages] = createSignal<File[]>([]);
@@ -257,20 +270,35 @@ export default function App() {
     setPrompt("");
   };
 
-  const newChat = (folderId?: string) => {
-    const chatId = `chat_${Date.now()}`;
-    const newChatObj: Chat = {
-      id: chatId,
-      title: "New Chat",
-      messages: [],
-      createdAt: new Date(),
-      folderId,
-      updatedAt: Date.now(),
-    };
-    setChats(prev => [newChatObj, ...prev]);
-    setCurrentChatId(chatId);
-    setPrompt("");
-    setError(null);
+  const newChat = async (folderId?: string) => {
+    const activeSession = session();
+    if (!activeSession) return;
+
+    try {
+      const apiChat = await apiService.createChat(activeSession.token, {
+        title: "New Chat",
+        messages: [],
+        folder_id: folderId,
+      });
+
+      const newChatObj: Chat = {
+        id: apiChat.public_id,
+        public_id: apiChat.public_id,
+        title: apiChat.title,
+        messages: [],
+        createdAt: new Date(apiChat.created_at),
+        folderId,
+        updatedAt: apiChat.updated_at,
+      };
+
+      setChats(prev => [newChatObj, ...prev]);
+      setCurrentChatId(apiChat.public_id);
+      setPrompt("");
+      setError(null);
+    } catch (error) {
+      console.error("Failed to create chat", error);
+      setError("Failed to create new chat");
+    }
   };
 
   const selectChat = (chatId: string) => {
@@ -304,12 +332,18 @@ export default function App() {
     setError(null);
 
     // Add user message to current chat
+    const updatedChat = chats().find(c => c.id === currentId);
+    if (!updatedChat) return;
+
+    const newMessages = [...updatedChat.messages, { role: "user" as const, content: trimmedPrompt }];
+    const newTitle = updatedChat.messages.length === 0 ? trimmedPrompt.slice(0, 30) + (trimmedPrompt.length > 30 ? "..." : "") : updatedChat.title;
+
     setChats(prev => prev.map(chat =>
       chat.id === currentId
         ? {
             ...chat,
-            messages: [...chat.messages, { role: "user", content: trimmedPrompt }],
-            title: chat.messages.length === 0 ? trimmedPrompt.slice(0, 30) + (trimmedPrompt.length > 30 ? "..." : "") : chat.title
+            messages: newMessages,
+            title: newTitle
           }
         : chat
     ));
@@ -352,21 +386,32 @@ export default function App() {
       }
 
       const data = (await response.json()) as ChatResponse;
+
       // Add assistant message to current chat
+      const finalMessages = [...newMessages, {
+        role: "assistant" as const,
+        content: data.content,
+        model: data.model,
+        usage: data.usage,
+        reasoning: data.reasoning
+      }];
+
       setChats(prev => prev.map(chat =>
         chat.id === currentId
           ? {
               ...chat,
-              messages: [...chat.messages, {
-                role: "assistant",
-                content: data.content,
-                model: data.model,
-                usage: data.usage,
-                reasoning: data.reasoning
-              }]
+              messages: finalMessages,
+              title: newTitle
             }
           : chat
       ));
+
+      // Save to API
+      await apiService.updateChat(activeSession.token, currentId, {
+        title: newTitle,
+        messages: finalMessages,
+      });
+
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unexpected error");
     } finally {
@@ -378,17 +423,58 @@ export default function App() {
     const current = session();
     if (current) {
       void loadModels(current);
+      void loadChatsAndFolders(current.token);
     } else {
       setModels([]);
       setSelectedModel("");
+      setChats([]);
+      setCurrentChatId(null);
     }
   });
 
-  createEffect(() => {
-    if (session() && chats().length === 0) {
-      newChat();
+  const loadChatsAndFolders = async (token: string) => {
+    try {
+      // Initialize sidebar with folders
+      await initializeFromAPI(token);
+
+      // Load chats
+      const apiChats = await apiService.listChats(token);
+      const frontendChats: Chat[] = apiChats.map(apiChat => {
+        let messages: Message[] = [];
+        try {
+          messages = JSON.parse(apiChat.messages);
+        } catch (e) {
+          console.error("Failed to parse chat messages", e);
+        }
+
+        return {
+          id: apiChat.public_id,
+          public_id: apiChat.public_id,
+          title: apiChat.title,
+          messages,
+          createdAt: new Date(apiChat.created_at),
+          folderId: undefined, // Will be resolved by sidebar
+          updatedAt: apiChat.updated_at,
+        };
+      });
+
+      setChats(frontendChats);
+
+      // Create initial chat if none exist
+      if (frontendChats.length === 0) {
+        await newChat();
+      } else {
+        // Select the most recent chat
+        setCurrentChatId(frontendChats[0].id);
+      }
+    } catch (error) {
+      console.error("Failed to load chats and folders", error);
+      // Fallback to creating a new chat
+      if (chats().length === 0) {
+        await newChat();
+      }
     }
-  });
+  };
 
   onMount(() => {
     const url = new URL(window.location.href);

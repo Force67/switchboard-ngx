@@ -2,7 +2,9 @@ export type ID = string;
 
 export type Folder = {
   id: ID;
+  public_id: string;
   name: string;
+  color?: string;
   parentId?: ID;            // undefined => top-level
   // derived: depth = parentId ? 2 : 1
   collapsed?: boolean;      // UI state
@@ -10,11 +12,12 @@ export type Folder = {
 
 export type Chat = {
   id: string;
+  public_id: string;
   title: string;
   messages: Message[];
   createdAt: Date;
   folderId?: ID;            // undefined => root
-  updatedAt?: number;
+  updatedAt?: string;
 };
 
 export type Message = {
@@ -48,8 +51,9 @@ export type DragState = {
 };
 
 export type Actions = {
-  createFolder(parentId?: ID): void;
+  createFolder(parentId?: ID, name?: string): void;
   renameFolder(id: ID, name: string): void;
+  setFolderColor(id: ID, color: string): void;
   deleteFolder(id: ID, mode: "move-up"|"delete-all"): void;
   moveChat(id: ID, target: { folderId?: ID; index?: number }): void;
   moveFolder(id: ID, target: { parentId?: ID; index?: number }): void;

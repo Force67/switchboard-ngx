@@ -53,20 +53,24 @@ export default function Sidebar(props: Props) {
 
   return (
     <div class="sidebar">
-      <div style="display: flex; gap: 8px; margin-bottom: 12px;">
-        <SidebarNewChat onClick={props.onNewChat} />
-        <SidebarNewFolder onClick={handleNewFolder} />
+      <div class="sidebar-header">
+        <div class="sidebar-actions">
+          <SidebarNewChat onClick={props.onNewChat} />
+          <SidebarNewFolder onClick={handleNewFolder} />
+        </div>
+        <SidebarSearch />
       </div>
-      <SidebarSearch />
-      <SidebarTree
-        state={sidebarState()}
-        actions={actions}
-        chats={props.chats()}
-        currentChatId={props.currentChatId()}
-        onSelectChat={props.onSelectChat}
-        onNewChat={props.onNewChat}
-        onNewFolder={handleNewFolder}
-      />
+      <div class="sidebar-content">
+        <SidebarTree
+          state={sidebarState()}
+          actions={actions}
+          chats={props.chats()}
+          currentChatId={props.currentChatId()}
+          onSelectChat={props.onSelectChat}
+          onNewChat={props.onNewChat}
+          onNewFolder={handleNewFolder}
+        />
+      </div>
       <SidebarFooter
         session={props.session}
         onLogin={props.onLogin}

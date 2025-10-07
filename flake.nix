@@ -48,6 +48,7 @@
               pkgs.clippy
               pkgs.pkg-config
               pkgs.openssl
+              pkgs.sqlx-cli
             ];
             shellHook = ''
               export RUST_LOG="info"

@@ -3,6 +3,7 @@ import type { Folder, Chat, Actions, ID } from "./sidebarTypes";
 import ChatRow from "./ChatRow";
 import ContextMenu from "./ContextMenu";
 import MoveToPopover from "./MoveToPopover";
+import ColorPicker from "./ColorPicker";
 
 interface Props {
   folder: Folder;
@@ -25,6 +26,7 @@ interface Props {
 export default function FolderNode(props: Props) {
   const [contextMenu, setContextMenu] = createSignal<{ x: number; y: number } | null>(null);
   const [movePopover, setMovePopover] = createSignal<{ x: number; y: number } | null>(null);
+  const [colorPicker, setColorPicker] = createSignal<{ x: number; y: number } | null>(null);
   const [isEditing, setIsEditing] = createSignal(false);
   const [editValue, setEditValue] = createSignal(props.folder.name);
   let rowRef: HTMLDivElement | undefined;
@@ -59,15 +61,13 @@ export default function FolderNode(props: Props) {
       icon: "M6 3.5A5.5 5.5 0 0 1 14.5 8h-3.673A2.18 2.18 0 0 0 6.22 6.096L4.16 8.16a.75.75 0 0 1-1.061-1.061l2.064-2.064A2.18 2.18 0 0 0 3.673 5.5H.5A5.5 5.5 0 0 1 6 3.5zM1.5 8a5.5 5.5 0 0 1 8.5-4.673V.5a.75.75 0 0 1 1.5 0v3.827A5.5 5.5 0 0 1 1.5 8zm0 0h3.673a2.18 2.18 0 0 0 1.947 1.404l2.064-2.064a.75.75 0 0 1 1.061 1.061l-2.064 2.064A2.18 2.18 0 0 0 9.827 13.5H13.5a.75.75 0 0 1 0 1.5h-3.827A5.5 5.5 0 0 1 1.5 8z"
     });
 
-    if (props.depth === 1) {
-      items.push({
-        label: "New folder here",
-        action: () => {
-          props.actions.createFolder(props.folder.id);
-        },
-        icon: "M2 3.5A2.5 2.5 0 0 1 4.5 1h7A2.5 2.5 0 0 1 14 3.5v9a2.5 2.5 0 0 1-2.5 2.5h-7A2.5 2.5 0 0 1 2 12.5v-9zM4.5 2A1.5 1.5 0 0 0 3 3.5v9A1.5 1.5 0 0 0 4.5 14h7a1.5 1.5 0 0 0 1.5-1.5v-9A1.5 1.5 0 0 0 11.5 2h-7zM8 5a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 5z"
-      });
-    }
+    items.push({
+      label: "New folder here",
+      action: () => {
+        props.actions.createFolder(props.folder.id);
+      },
+      icon: "M2 3.5A2.5 2.5 0 0 1 4.5 1h7A2.5 2.5 0 0 1 14 3.5v9a2.5 2.5 0 0 1-2.5 2.5h-7A2.5 2.5 0 0 1 2 12.5v-9zM4.5 2A1.5 1.5 0 0 0 3 3.5v9A1.5 1.5 0 0 0 4.5 14h7a1.5 1.5 0 0 0 1.5-1.5v-9A1.5 1.5 0 0 0 11.5 2h-7zM8 5a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 5z"
+    });
 
     items.push({
       label: "Rename",
@@ -76,6 +76,17 @@ export default function FolderNode(props: Props) {
         setTimeout(() => inputRef?.focus(), 0);
       },
       icon: "M12.146.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1 0 .708l-10 10a.5.5 0 0 1-.168.11l-5 2a.5.5 0 0 1-.65-.65l2-5a.5.5 0 0 1 .11-.168l10-10zM11.207 2.5 13.5 4.793 14.793 3.5 12.5 1.207 11.207 2.5zm1.586 3L10.5 3.207 4 9.707V10h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5H9v-.293l6.293-6.293zm-9.761 5.175-.106.106-1.528 3.821 3.821-1.528.106-.106A.5.5 0 0 1 5 12.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.468-.325z"
+    });
+
+    items.push({
+      label: "Change color",
+      action: () => {
+        const rect = rowRef?.getBoundingClientRect();
+        if (rect) {
+          setColorPicker({ x: rect.right + 8, y: rect.top });
+        }
+      },
+      icon: "M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0zM2.04 4.326c.325 1.329 2.532 2.54 3.717 3.19.48.263.793.434.743.484-.08.08-.162.158-.242.234-.416.396-.787.749-.758 1.266.035.634.618.824 1.214 1.017.577.188 1.168.38 1.286.983.082.417-.075.988-.22 1.52-.215.782-.406 1.48.22 1.48.51 0 .759-.354.964-.713.3-.54.517-1.2.54-1.2.647.24 1.957.712 1.957.712.847 0 1.267-.634 1.267-.634.622-.363.596-.982.343-1.428-.25-.446-.491-.663-.491-.663s.265-.976.265-.976c.76-.339 1.508-.735 1.508-.735.472-.283.57-.506.57-.506s.377-.372.566-.506c.19-.135.43-.31.43-.31s.493-.176.693-.31c.2-.135.373-.306.373-.306s.378-.188.451-.377c.074-.188.074-.431 0-.431-.074-.188-.268-.334-.268-.334s-.198-.188-.397-.334c-.2-.147-.397-.334-.397-.334s-.531-.2-.73-.334c-.2-.135-.397-.334-.397-.334s-.397-.2-.531-.334c-.135-.135-.265-.2-.265-.2s-.265-.135-.397-.2c-.135-.066-.265-.135-.265-.135s-.265-.066-.397-.135c-.135-.066-.265-.135-.265-.135z"
     });
 
     if (props.depth === 1) {
@@ -165,6 +176,7 @@ export default function FolderNode(props: Props) {
         aria-expanded={!isCollapsed()}
         aria-selected={props.isSelected}
         data-id={props.folder.id}
+        data-folder-id={props.folder.parentId || ""}
       >
         <div class="caret" onClick={toggleCollapsed}>
           <svg viewBox="0 0 16 16">
@@ -205,25 +217,30 @@ export default function FolderNode(props: Props) {
         <div class="children">
           <div>
             <For each={props.subfolders}>
-              {(subfolder) => (
-                <FolderNode
-                  folder={subfolder}
-                  depth={2}
-                  subfolders={[]} // Subfolders can't have subfolders per spec
-                  chats={props.allChats.filter(chat => chat.folderId === subfolder.id)}
-                  isSelected={false} // TODO: Implement proper selection
-                  currentChatId={props.currentChatId}
-                  onSelect={() => {}}
-                  onSelectChat={props.onSelectChat}
-                  onNewChat={props.onNewChat}
-                  actions={props.actions}
-                  folders={props.folders}
-                  folderOrder={props.folderOrder}
-                  subfolderOrder={props.subfolderOrder}
-                  chatOrderByFolder={props.chatOrderByFolder}
-                  allChats={props.allChats}
-                />
-              )}
+              {(subfolder) => {
+                const subSubfolders = props.subfolderOrder[subfolder.id] || [];
+                return (
+                  <FolderNode
+                    folder={subfolder}
+                    depth={2}
+                    subfolders={subSubfolders
+                      .map(id => props.folders[id])
+                      .filter(Boolean)}
+                    chats={props.allChats.filter(chat => chat.folderId === subfolder.id)}
+                    isSelected={false} // TODO: Implement proper selection
+                    currentChatId={props.currentChatId}
+                    onSelect={() => {}}
+                    onSelectChat={props.onSelectChat}
+                    onNewChat={props.onNewChat}
+                    actions={props.actions}
+                    folders={props.folders}
+                    folderOrder={props.folderOrder}
+                    subfolderOrder={props.subfolderOrder}
+                    chatOrderByFolder={props.chatOrderByFolder}
+                    allChats={props.allChats}
+                  />
+                );
+              }}
             </For>
             <For each={props.chats}>
               {(chat) => (
@@ -263,6 +280,26 @@ export default function FolderNode(props: Props) {
           }}
           onClose={() => setMovePopover(null)}
         />
+      )}
+
+      {colorPicker() && (
+        <div
+          style={{
+            position: "fixed",
+            left: `${colorPicker()!.x}px`,
+            top: `${colorPicker()!.y}px`,
+            zIndex: "1000",
+          }}
+        >
+          <ColorPicker
+            value={props.folder.color}
+            onChange={(color) => {
+              props.actions.setFolderColor(props.folder.id, color);
+              setColorPicker(null);
+            }}
+            onClose={() => setColorPicker(null)}
+          />
+        </div>
       )}
     </>
   );

@@ -1,10 +1,11 @@
-import { For, createSignal, Show, onMount, createMemo } from "solid-js";
+import { For, createSignal, Show, onMount, createMemo, createEffect } from "solid-js";
 import type { SidebarState, Actions, ID, Chat } from "./sidebarTypes";
 import FolderNode from "./FolderNode";
 import ChatRow from "./ChatRow";
 import CreateInline from "./CreateInline";
 import ContextMenu from "./ContextMenu";
 import { DragManager } from "./dnd";
+import { sidebarState, setSidebarState, isLoading, error, setError } from "./sidebarStore";
 
 interface Props {
   state: SidebarState;
@@ -19,18 +20,41 @@ interface Props {
 export default function SidebarTree(props: Props) {
   const [contextMenu, setContextMenu] = createSignal<{ x: number; y: number } | null>(null);
   const [createInline, setCreateInline] = createSignal<{ parentId?: ID; index: number } | null>(null);
-  const [dragManager] = createSignal(() => new DragManager({
+  const [dragManager] = createSignal(new DragManager({
     onDragStart: (kind, id, fromFolderId) => {
-      // TODO: Update state.drag
-      console.log("Drag start", kind, id, fromFolderId);
+      // Update state.drag
+      setSidebarState(prev => ({
+        ...prev,
+        drag: { kind, id, fromFolderId }
+      }));
     },
     onDragMove: (over) => {
-      // TODO: Update state.drag.over
-      console.log("Drag move", over);
+      // Update state.drag.over
+      setSidebarState(prev => ({
+        ...prev,
+        drag: prev.drag ? { ...prev.drag, over } : null
+      }));
     },
     onDragEnd: (target) => {
-      // TODO: Apply the move
-      console.log("Drag end", target);
+      // Apply the move
+      if (target && sidebarState().drag) {
+        const { kind, id } = sidebarState().drag;
+        if (kind === 'chat') {
+          if (target.type === 'folder') {
+            props.actions.moveChat(id, { folderId: target.id });
+          } else if (target.type === 'root') {
+            props.actions.moveChat(id, {});
+          }
+        } else if (kind === 'folder') {
+          if (target.type === 'folder') {
+            props.actions.moveFolder(id, { parentId: target.id });
+          } else if (target.type === 'root') {
+            props.actions.moveFolder(id, {});
+          }
+        }
+      }
+      // Clear drag state
+      setSidebarState(prev => ({ ...prev, drag: null }));
     },
     onAutoExpand: (folderId) => {
       props.actions.setCollapsed(folderId, false);
@@ -39,8 +63,25 @@ export default function SidebarTree(props: Props) {
 
   let treeRef: HTMLDivElement | undefined;
 
-  onMount(() => {
-    // TODO: Register drag handlers for all rows
+  createEffect(() => {
+    // Register drag handlers for all rows when the tree changes
+    // Trigger on state changes that affect the tree structure
+    props.state.folderOrder.length;
+    props.chats.length;
+
+    // Small delay to ensure DOM is updated
+    setTimeout(() => {
+      const rows = treeRef?.querySelectorAll('.row');
+      rows?.forEach(row => {
+        const id = row.getAttribute('data-id');
+        const kind = row.classList.contains('folder') ? 'folder' : 'chat';
+        const folderId = row.getAttribute('data-folder-id') || undefined;
+        if (id && !row.hasAttribute('data-drag-registered')) {
+          dragManager().startDrag(row as HTMLElement, kind, id, folderId);
+          row.setAttribute('data-drag-registered', 'true');
+        }
+      });
+    }, 0);
   });
 
   const handleContextMenu = (e: MouseEvent) => {
@@ -75,8 +116,7 @@ export default function SidebarTree(props: Props) {
 
   const handleCreateConfirm = (name: string) => {
     if (createInline()) {
-      props.actions.createFolder(createInline()!.parentId);
-      // TODO: Actually create with name
+      props.actions.createFolder(createInline()!.parentId, name);
     }
     setCreateInline(null);
   };
@@ -96,6 +136,14 @@ export default function SidebarTree(props: Props) {
 
   return (
     <div ref={treeRef} class="tree" onContextMenu={handleContextMenu}>
+      <Show when={error()}>
+        <div class="error-banner" onClick={() => setError(null)}>
+          <svg viewBox="0 0 16 16" width="14" height="14">
+            <path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0zM7 4a1 1 0 0 0-1 1v4a1 1 0 1 0 2 0V5a1 1 0 0 0-1-1zm0 8a1 1 0 1 0 0-2 1 1 0 0 0 0 2z"/>
+          </svg>
+          {error()}
+        </div>
+      </Show>
       <For each={getOrderedFolders()}>
         {(folder) => {
           const subfolderIds = props.state.subfolderOrder[folder.id] || [];
@@ -130,6 +178,7 @@ export default function SidebarTree(props: Props) {
         <CreateInline
           onConfirm={handleCreateConfirm}
           onCancel={handleCreateCancel}
+          isLoading={isLoading()}
         />
       </Show>
 

@@ -1,7 +1,7 @@
 use std::{path::Path, sync::Arc};
 
 use anyhow::{Context, Result};
-use sqlx::{any::AnyPoolOptions, AnyPool};
+use sqlx::{sqlite::SqlitePoolOptions, SqlitePool};
 use switchboard_auth::Authenticator;
 use switchboard_config::{AppConfig, DatabaseConfig};
 use switchboard_orchestrator::Orchestrator;
@@ -33,7 +33,7 @@ pub mod telemetry {
 
 #[derive(Clone)]
 pub struct BackendServices {
-    pub db_pool: AnyPool,
+    pub db_pool: SqlitePool,
     pub authenticator: Authenticator,
     pub orchestrator: Arc<Orchestrator>,
 }
@@ -60,22 +60,19 @@ impl BackendServices {
     }
 }
 
-async fn prepare_database(config: &DatabaseConfig) -> Result<AnyPool> {
-    sqlx::any::install_default_drivers();
+async fn prepare_database(config: &DatabaseConfig) -> Result<SqlitePool> {
     ensure_sqlite_path(&config.url).await?;
 
-    let pool = AnyPoolOptions::new()
-        .max_connections(config.max_connections)
+    let pool = SqlitePoolOptions::new()
+        .max_connections(config.max_connections as u32)
         .connect(&config.url)
         .await
         .with_context(|| format!("failed to connect to database {}", config.url))?;
 
-    if config.url.starts_with("sqlite://") {
-        sqlx::query("PRAGMA foreign_keys = ON")
-            .execute(&pool)
-            .await
-            .context("failed to enable foreign keys for sqlite")?;
-    }
+    sqlx::query("PRAGMA foreign_keys = ON")
+        .execute(&pool)
+        .await
+        .context("failed to enable foreign keys for sqlite")?;
 
     info!(url = %config.url, "database connection established");
     Ok(pool)
@@ -116,7 +113,7 @@ async fn ensure_sqlite_path(url: &str) -> Result<()> {
     Ok(())
 }
 
-async fn run_migrations(pool: &AnyPool) -> Result<()> {
+async fn run_migrations(pool: &SqlitePool) -> Result<()> {
     migrations::MIGRATOR
         .run(pool)
         .await

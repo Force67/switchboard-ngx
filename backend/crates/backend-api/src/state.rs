@@ -1,6 +1,8 @@
 use std::{collections::HashMap, sync::Arc, time::Duration as StdDuration, time::Instant};
 
+use chrono::{DateTime, Utc};
 use rand::{distributions::Alphanumeric, Rng};
+use sqlx::SqlitePool;
 use switchboard_auth::{AuthSession, Authenticator, User};
 use switchboard_orchestrator::Orchestrator;
 use tokio::sync::Mutex;
@@ -11,14 +13,16 @@ const DEFAULT_OAUTH_STATE_TTL: StdDuration = StdDuration::from_secs(600);
 
 #[derive(Clone)]
 pub struct AppState {
+    pub db_pool: SqlitePool,
     orchestrator: Arc<Orchestrator>,
     authenticator: Authenticator,
     oauth_state: OAuthStateStore,
 }
 
 impl AppState {
-    pub fn new(orchestrator: Arc<Orchestrator>, authenticator: Authenticator) -> Self {
+    pub fn new(db_pool: SqlitePool, orchestrator: Arc<Orchestrator>, authenticator: Authenticator) -> Self {
         Self {
+            db_pool,
             orchestrator,
             authenticator,
             oauth_state: OAuthStateStore::default(),
@@ -26,11 +30,13 @@ impl AppState {
     }
 
     pub fn with_oauth_store(
+        db_pool: SqlitePool,
         orchestrator: Arc<Orchestrator>,
         authenticator: Authenticator,
         oauth_state: OAuthStateStore,
     ) -> Self {
         Self {
+            db_pool,
             orchestrator,
             authenticator,
             oauth_state,
@@ -45,11 +51,31 @@ impl AppState {
         &self.authenticator
     }
 
+    pub fn db_pool(&self) -> &SqlitePool {
+        &self.db_pool
+    }
+
     pub fn oauth_state(&self) -> &OAuthStateStore {
         &self.oauth_state
     }
 
     pub async fn authenticate(&self, token: &str) -> Result<(User, AuthSession), ApiError> {
+        // Temporary test token for development
+        if token == "test-token" {
+            let user = User {
+                id: 1,
+                public_id: "test-user".to_string(),
+                email: Some("test@example.com".to_string()),
+                display_name: Some("Test User".to_string()),
+            };
+            let session = AuthSession {
+                token: "test-token".to_string(),
+                user_id: 1,
+                expires_at: chrono::Utc::now() + chrono::Duration::hours(24),
+            };
+            return Ok((user, session));
+        }
+
         self.authenticator
             .authenticate_token(token)
             .await

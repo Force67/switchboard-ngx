@@ -126,6 +126,7 @@ export default function ChatRow(props: Props) {
         role="treeitem"
         aria-selected={props.isSelected}
         data-id={props.chat.id}
+        data-folder-id={props.chat.folderId || ""}
       >
         <div class="icon">
           <svg viewBox="0 0 16 16">

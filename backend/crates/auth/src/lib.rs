@@ -16,7 +16,7 @@ use once_cell::sync::Lazy;
 use rand::RngCore;
 use reqwest::header::ACCEPT;
 use serde::{Deserialize, Serialize};
-use sqlx::{Any, AnyPool, Row, Transaction};
+use sqlx::{Row, SqlitePool, Transaction};
 use switchboard_config::{AuthConfig, GithubAuthConfig};
 use thiserror::Error;
 use tracing::{debug, info};
@@ -28,7 +28,7 @@ static CUID: Lazy<CuidConstructor> = Lazy::new(CuidConstructor::new);
 
 #[derive(Clone)]
 pub struct Authenticator {
-    pool: AnyPool,
+    pool: SqlitePool,
     session_ttl: Duration,
     github: Option<GithubOAuth>,
 }
@@ -79,7 +79,7 @@ pub struct GithubProfile {
 }
 
 impl Authenticator {
-    pub fn new(pool: AnyPool, config: AuthConfig) -> Self {
+    pub fn new(pool: SqlitePool, config: AuthConfig) -> Self {
         let session_ttl = Duration::seconds(config.session_ttl_seconds as i64);
         let github = GithubOAuth::from_config(&config.github);
 
@@ -90,7 +90,7 @@ impl Authenticator {
         }
     }
 
-    pub fn pool(&self) -> AnyPool {
+    pub fn pool(&self) -> SqlitePool {
         self.pool.clone()
     }
 
@@ -291,7 +291,7 @@ impl Authenticator {
 
     async fn insert_user(
         &self,
-        tx: &mut Transaction<'_, Any>,
+        tx: &mut Transaction<'_, sqlx::Sqlite>,
         email: Option<String>,
         display_name: Option<String>,
     ) -> Result<User, AuthError> {

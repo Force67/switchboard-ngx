@@ -7,7 +7,7 @@ pub mod routes;
 pub use error::ApiError;
 pub use state::{AppState, OAuthStateStore};
 
-use axum::{http::header::{AUTHORIZATION, CONTENT_TYPE}, routing::{get, post}, Router};
+use axum::{http::header::{AUTHORIZATION, CONTENT_TYPE}, routing::{delete, get, patch, post, put}, Router};
 use tower_http::cors::{Any, CorsLayer};
 
 pub fn build_router(state: AppState) -> Router {
@@ -17,6 +17,18 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/auth/github/callback", post(routes::auth::github_callback))
         .route("/api/models", get(routes::models::list_models))
         .route("/api/chat", post(routes::chat::chat_completion))
+        // Folder routes
+        .route("/api/folders", get(routes::folders::list_folders))
+        .route("/api/folders", post(routes::folders::create_folder))
+        .route("/api/folders/:folder_id", get(routes::folders::get_folder))
+        .route("/api/folders/:folder_id", put(routes::folders::update_folder))
+        .route("/api/folders/:folder_id", delete(routes::folders::delete_folder))
+        // Chat routes
+        .route("/api/chats", get(routes::chats::list_chats))
+        .route("/api/chats", post(routes::chats::create_chat))
+        .route("/api/chats/:chat_id", get(routes::chats::get_chat))
+        .route("/api/chats/:chat_id", put(routes::chats::update_chat))
+        .route("/api/chats/:chat_id", delete(routes::chats::delete_chat))
         .with_state(state)
         .layer(cors_layer())
 }
@@ -24,6 +36,13 @@ pub fn build_router(state: AppState) -> Router {
 fn cors_layer() -> CorsLayer {
     CorsLayer::new()
         .allow_origin(Any)
-        .allow_methods([axum::http::Method::GET, axum::http::Method::POST, axum::http::Method::OPTIONS])
+        .allow_methods([
+            axum::http::Method::GET,
+            axum::http::Method::POST,
+            axum::http::Method::PUT,
+            axum::http::Method::PATCH,
+            axum::http::Method::DELETE,
+            axum::http::Method::OPTIONS,
+        ])
         .allow_headers([AUTHORIZATION, CONTENT_TYPE])
 }

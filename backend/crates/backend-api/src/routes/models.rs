@@ -30,6 +30,7 @@ pub struct Chat {
     pub user_id: i64,
     pub folder_id: Option<i64>,
     pub title: String,
+    pub is_group: bool,
     pub messages: String,
     pub created_at: String,
     pub updated_at: String,
@@ -54,6 +55,8 @@ pub struct CreateChatRequest {
     pub title: String,
     pub messages: Vec<ChatMessage>,
     pub folder_id: Option<String>, // public_id
+    #[serde(default)]
+    pub is_group: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -77,6 +80,32 @@ pub struct TokenUsage {
     pub prompt_tokens: u32,
     pub completion_tokens: u32,
     pub total_tokens: u32,
+}
+
+#[derive(Debug, Serialize, FromRow)]
+pub struct ChatInvite {
+    pub id: i64,
+    pub chat_id: i64,
+    pub inviter_id: i64,
+    pub invitee_email: String,
+    pub status: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CreateInviteRequest {
+    pub email: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct InvitesResponse {
+    pub invites: Vec<ChatInvite>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct InviteResponse {
+    pub invite: ChatInvite,
 }
 
 pub async fn list_models(State(state): State<AppState>) -> Result<Json<ModelsResponse>, ApiError> {

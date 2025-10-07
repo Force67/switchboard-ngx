@@ -1,0 +1,57 @@
+warning: unused import: `std::io::Write`
+ --> server/src/main.rs:6:5
+  |
+6 | use std::io::Write;
+  |     ^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+warning: unused variable: `public_id`
+   --> server/src/main.rs:455:29
+    |
+455 |                         let public_id: String = folder.get("public_id");
+    |                             ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_public_id`
+    |
+    = note: `#[warn(unused_variables)]` on by default
+
+warning: `switchboard-backend` (bin "switchboard-backend") generated 2 warnings (run `cargo fix --bin "switchboard-backend"` to apply 1 suggestion)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.18s
+warning: the following packages contain code that will be rejected by a future version of Rust: nom v1.2.4, redis v0.25.4, sqlx-postgres v0.7.4
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 2`
+     Running `target/debug/switchboard-backend serve`
+[2m2025-10-07T22:10:50.990334Z[0m [32m INFO[0m [2mswitchboard_backend[0m[2m:[0m starting Switchboard backend
+[2m2025-10-07T22:10:50.991863Z[0m [32m INFO[0m [2mswitchboard_backend_runtime[0m[2m:[0m database connection established [3murl[0m[2m=[0msqlite://switchboard.db
+[2m2025-10-07T22:10:50.992874Z[0m [32m INFO[0m [2mswitchboard_backend_runtime[0m[2m:[0m database migrations applied
+[2m2025-10-07T22:10:50.993146Z[0m [33m WARN[0m [2mswitchboard_orchestrator[0m[2m:[0m skipping missing provider directory [3mpath[0m[2m=[0mproviders
+[2m2025-10-07T22:10:50.993446Z[0m [32m INFO[0m [2mswitchboard_orchestrator[0m[2m:[0m provider catalogue initialised [3mcount[0m[2m=[0m1
+[2m2025-10-07T22:10:55.796315Z[0m [33m WARN[0m [2mswitchboard_backend_runtime[0m[2m:[0m failed to connect to redis, proceeding without redis: Connection refused (os error 111)
+[2m2025-10-07T22:10:55.796370Z[0m [32m INFO[0m [2mswitchboard_backend_runtime[0m[2m:[0m orchestrator ready [3mmodel[0m[2m=[0mSome("gpt-4")
+[2m2025-10-07T22:10:55.796392Z[0m [32m INFO[0m [2mswitchboard_backend_runtime[0m[2m:[0m redis connection established
+[2m2025-10-07T22:10:55.796831Z[0m [32m INFO[0m [2mswitchboard_backend[0m[2m:[0m http server listening [3maddress[0m[2m=[0m127.0.0.1:7070
+[2m2025-10-07T22:13:25.165248Z[0m [31mERROR[0m [2mswitchboard_backend_api::routes::chats[0m[2m:[0m Failed to fetch chats: error returned from database: (code: 1) no such column: messages
+[2m2025-10-07T22:13:25.170617Z[0m [31mERROR[0m [2mswitchboard_backend_api::routes::chats[0m[2m:[0m Failed to fetch chats: error returned from database: (code: 1) no such column: messages
+[2m2025-10-07T22:13:25.176181Z[0m [31mERROR[0m [2mswitchboard_backend_api::routes::chats[0m[2m:[0m Failed to create chat: error returned from database: (code: 1) table chats has no column named messages
+[2m2025-10-07T22:13:30.046627Z[0m [31mERROR[0m [2mswitchboard_backend_api::routes::chats[0m[2m:[0m Failed to fetch chats: error returned from database: (code: 1) no such column: messages
+[2m2025-10-07T22:13:30.088651Z[0m [31mERROR[0m [2mswitchboard_backend_api::routes::chats[0m[2m:[0m Failed to fetch chats: error returned from database: (code: 1) no such column: messages
+[2m2025-10-07T22:13:30.113723Z[0m [31mERROR[0m [2mswitchboard_backend_api::routes::chats[0m[2m:[0m Failed to create chat: error returned from database: (code: 1) table chats has no column named messages
+[2m2025-10-07T22:13:35.403843Z[0m [31mERROR[0m [2mswitchboard_backend_api::routes::chats[0m[2m:[0m Failed to fetch chats: error returned from database: (code: 1) no such column: messages
+[2m2025-10-07T22:13:35.410110Z[0m [31mERROR[0m [2mswitchboard_backend_api::routes::chats[0m[2m:[0m Failed to fetch chats: error returned from database: (code: 1) no such column: messages
+[2m2025-10-07T22:13:35.414859Z[0m [31mERROR[0m [2mswitchboard_backend_api::routes::chats[0m[2m:[0m Failed to create chat: error returned from database: (code: 1) table chats has no column named messages
+[2m2025-10-07T22:13:41.026794Z[0m [31mERROR[0m [2mswitchboard_backend_api::routes::chats[0m[2m:[0m Failed to fetch chats: error returned from database: (code: 1) no such column: messages
+[2m2025-10-07T22:13:41.038180Z[0m [31mERROR[0m [2mswitchboard_backend_api::routes::chats[0m[2m:[0m Failed to fetch chats: error returned from database: (code: 1) no such column: messages
+[2m2025-10-07T22:13:41.044977Z[0m [31mERROR[0m [2mswitchboard_backend_api::routes::chats[0m[2m:[0m Failed to create chat: error returned from database: (code: 1) table chats has no column named messages
+[2m2025-10-07T22:13:49.052172Z[0m [31mERROR[0m [2mswitchboard_backend_api::routes::chats[0m[2m:[0m Failed to fetch chats: error returned from database: (code: 1) no such column: messages
+[2m2025-10-07T22:13:49.059400Z[0m [31mERROR[0m [2mswitchboard_backend_api::routes::chats[0m[2m:[0m Failed to fetch chats: error returned from database: (code: 1) no such column: messages
+[2m2025-10-07T22:13:49.068438Z[0m [31mERROR[0m [2mswitchboard_backend_api::routes::chats[0m[2m:[0m Failed to create chat: error returned from database: (code: 1) table chats has no column named messages
+[2m2025-10-07T22:14:17.713466Z[0m [31mERROR[0m [2mswitchboard_backend_api::routes::chats[0m[2m:[0m Failed to fetch chats: error returned from database: (code: 1) no such column: messages
+[2m2025-10-07T22:14:17.719373Z[0m [31mERROR[0m [2mswitchboard_backend_api::routes::chats[0m[2m:[0m Failed to fetch chats: error returned from database: (code: 1) no such column: messages
+[2m2025-10-07T22:14:17.723832Z[0m [31mERROR[0m [2mswitchboard_backend_api::routes::chats[0m[2m:[0m Failed to create chat: error returned from database: (code: 1) table chats has no column named messages
+[2m2025-10-07T22:14:22.357657Z[0m [31mERROR[0m [2mswitchboard_backend_api::routes::chats[0m[2m:[0m Failed to fetch chats: error returned from database: (code: 1) no such column: messages
+[2m2025-10-07T22:14:22.363468Z[0m [31mERROR[0m [2mswitchboard_backend_api::routes::chats[0m[2m:[0m Failed to fetch chats: error returned from database: (code: 1) no such column: messages
+[2m2025-10-07T22:14:22.366278Z[0m [31mERROR[0m [2mswitchboard_backend_api::routes::chats[0m[2m:[0m Failed to create chat: error returned from database: (code: 1) table chats has no column named messages
+[2m2025-10-07T22:15:02.358923Z[0m [31mERROR[0m [2mswitchboard_backend_api::routes::chats[0m[2m:[0m Failed to fetch chats: error returned from database: (code: 1) no such column: messages
+[2m2025-10-07T22:15:02.401366Z[0m [31mERROR[0m [2mswitchboard_backend_api::routes::chats[0m[2m:[0m Failed to fetch chats: error returned from database: (code: 1) no such column: messages
+[2m2025-10-07T22:15:02.404474Z[0m [31mERROR[0m [2mswitchboard_backend_api::routes::chats[0m[2m:[0m Failed to create chat: error returned from database: (code: 1) table chats has no column named messages
+[2m2025-10-07T22:15:03.998879Z[0m [31mERROR[0m [2mswitchboard_backend_api::routes::chats[0m[2m:[0m Failed to fetch chats: error returned from database: (code: 1) no such column: messages
+[2m2025-10-07T22:15:04.031736Z[0m [31mERROR[0m [2mswitchboard_backend_api::routes::chats[0m[2m:[0m Failed to fetch chats: error returned from database: (code: 1) no such column: messages
+[2m2025-10-07T22:15:04.037899Z[0m [31mERROR[0m [2mswitchboard_backend_api::routes::chats[0m[2m:[0m Failed to create chat: error returned from database: (code: 1) table chats has no column named messages

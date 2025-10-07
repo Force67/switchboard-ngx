@@ -7,7 +7,7 @@ pub mod routes;
 pub use error::ApiError;
 pub use state::{AppState, OAuthStateStore};
 
-use axum::{http::header::{AUTHORIZATION, CONTENT_TYPE}, routing::{delete, get, patch, post, put}, Router};
+use axum::{http::header::{AUTHORIZATION, CONTENT_TYPE}, routing::{delete, get, post, put}, Router};
 use tower_http::cors::{Any, CorsLayer};
 
 pub fn build_router(state: AppState) -> Router {
@@ -29,6 +29,13 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/chats/:chat_id", get(routes::chats::get_chat))
         .route("/api/chats/:chat_id", put(routes::chats::update_chat))
         .route("/api/chats/:chat_id", delete(routes::chats::delete_chat))
+        // Invite routes
+        .route("/api/chats/:chat_id/invites", get(routes::chats::list_invites))
+        .route("/api/chats/:chat_id/invites", post(routes::chats::create_invite))
+        .route("/api/invites/:invite_id/accept", post(routes::chats::accept_invite))
+        .route("/api/invites/:invite_id/reject", post(routes::chats::reject_invite))
+        // WebSocket route
+        .route("/ws", get(routes::websocket::websocket_handler))
         .with_state(state)
         .layer(cors_layer())
 }

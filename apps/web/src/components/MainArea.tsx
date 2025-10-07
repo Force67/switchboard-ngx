@@ -19,7 +19,10 @@ interface ModelOption {
 }
 
 interface Message {
-  role: "user" | "assistant";
+  id?: string;
+  chat_id?: string;
+  user_id?: number;
+  role: "user" | "assistant" | "system";
   content: string;
   model?: string;
   usage?: {
@@ -28,6 +31,8 @@ interface Message {
     total_tokens: number;
   };
   reasoning?: string[];
+  timestamp?: string;
+  message_type?: string;
 }
 
 interface SessionData {
@@ -48,6 +53,7 @@ interface Props {
   selectedModel: Accessor<string>;
   setSelectedModel: Setter<string>;
   models: Accessor<ModelOption[]>;
+  connectionStatus?: Accessor<{ status: string; error?: string }>;
   modelsLoading: Accessor<boolean>;
   modelsError: Accessor<string | null>;
   loading: Accessor<boolean>;
@@ -105,30 +111,57 @@ export default function MainArea(props: Props) {
             Models error: {props.modelsError()}
           </div>
         )}
-        <For each={props.currentMessages()}>
-          {(message) => (
-            <div style={`padding: 20px; margin: 10px 20px; border-radius: 12px; background: ${message.role === 'user' ? 'var(--bg-3)' : 'var(--bg-2)'}; color: var(--text-0);`}>
-              <div style="font-weight: bold; margin-bottom: 8px;">
-                {message.role === 'user' ? 'You' : `Assistant${message.model ? ` (${message.model})` : ''}`}
-              </div>
-               <LatexRenderer content={message.content} />
-              {message.usage && (
-                <small style="color: var(--text-1); margin-top: 8px; display: block;">
-                  Tokens: {message.usage.prompt_tokens} prompt, {message.usage.completion_tokens} completion
-                </small>
-              )}
-              {message.reasoning && message.reasoning.length > 0 && (
-                <details style="margin-top: 8px;">
-                  <summary style="cursor: pointer; color: var(--text-1);">Reasoning</summary>
-                  <ol style="margin-top: 4px;">
-                    <For each={message.reasoning}>
-                      {(step) => <li style="color: var(--text-1);">{step}</li>}
-                    </For>
-                  </ol>
-                </details>
-              )}
+        {props.connectionStatus && (() => {
+          const status = props.connectionStatus!().status;
+          const error = props.connectionStatus!().error;
+          if (status === 'connected') return null;
+          return (
+            <div style={`padding: 10px 20px; border-radius: 8px; margin: 20px; background: ${status === 'error' ? 'rgba(255,107,107,0.1)' : 'rgba(255,193,7,0.1)'}; color: ${status === 'error' ? '#ff6b6b' : '#ffc107'};`}>
+              {status === 'error' ? `Connection Error: ${error || 'Unknown error'}` :
+               status === 'connecting' ? 'Connecting...' :
+               status === 'disconnected' ? 'Disconnected - messages may not be delivered' :
+               `Connection: ${status}`}
             </div>
-          )}
+          );
+        })()}
+        <For each={props.currentMessages()}>
+          {(message) => {
+            const isCurrentUser = message.user_id === 1; // Assuming user_id 1 is current user
+            const displayName = message.role === 'user'
+              ? (isCurrentUser ? 'You' : `User ${message.user_id}`)
+              : `Assistant${message.model ? ` (${message.model})` : ''}`;
+
+            return (
+              <div style={`padding: 20px; margin: 10px 20px; border-radius: 12px; background: ${message.role === 'user' ? 'var(--bg-3)' : 'var(--bg-2)'}; color: var(--text-0);`}>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                  <div style="font-weight: bold;">
+                    {displayName}
+                  </div>
+                  {message.timestamp && (
+                    <small style="color: var(--text-1);">
+                      {new Date(message.timestamp).toLocaleTimeString()}
+                    </small>
+                  )}
+                </div>
+                <LatexRenderer content={message.content} />
+                {message.usage && (
+                  <small style="color: var(--text-1); margin-top: 8px; display: block;">
+                    Tokens: {message.usage.prompt_tokens} prompt, {message.usage.completion_tokens} completion
+                  </small>
+                )}
+                {message.reasoning && message.reasoning.length > 0 && (
+                  <details style="margin-top: 8px;">
+                    <summary style="cursor: pointer; color: var(--text-1);">Reasoning</summary>
+                    <ol style="margin-top: 4px;">
+                      <For each={message.reasoning}>
+                        {(step) => <li style="color: var(--text-1);">{step}</li>}
+                      </For>
+                    </ol>
+                  </details>
+                )}
+              </div>
+            );
+          }}
         </For>
         {props.loading() && (
           <div style="padding: 20px; margin: 10px 20px; color: var(--text-1);">

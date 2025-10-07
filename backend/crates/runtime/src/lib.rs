@@ -1,6 +1,7 @@
 use std::{path::Path, sync::Arc};
 
 use anyhow::{Context, Result};
+use redis::aio::ConnectionManager;
 use sqlx::{sqlite::SqlitePoolOptions, SqlitePool};
 use switchboard_auth::Authenticator;
 use switchboard_config::{AppConfig, DatabaseConfig};
@@ -36,6 +37,7 @@ pub struct BackendServices {
     pub db_pool: SqlitePool,
     pub authenticator: Authenticator,
     pub orchestrator: Arc<Orchestrator>,
+    pub     redis_conn: Option<ConnectionManager>,
 }
 
 impl BackendServices {
@@ -50,12 +52,32 @@ impl BackendServices {
                 .context("failed to bootstrap orchestrator")?,
         );
 
+        // Initialize Redis connection (optional for development)
+        let redis_conn = match redis::Client::open("redis://127.0.0.1:6379") {
+            Ok(client) => match ConnectionManager::new(client).await {
+                Ok(conn) => {
+                    info!("redis connection established");
+                    Some(conn)
+                }
+                Err(e) => {
+                    tracing::warn!("failed to connect to redis, proceeding without redis: {}", e);
+                    None
+                }
+            },
+            Err(e) => {
+                tracing::warn!("failed to create redis client, proceeding without redis: {}", e);
+                None
+            }
+        };
+
         info!(model = ?orchestrator.active_model(), "orchestrator ready");
+        info!("redis connection established");
 
         Ok(Self {
             db_pool,
             authenticator,
             orchestrator,
+            redis_conn,
         })
     }
 }

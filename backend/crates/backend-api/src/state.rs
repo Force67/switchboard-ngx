@@ -1,13 +1,41 @@
 use std::{collections::HashMap, sync::Arc, time::Duration as StdDuration, time::Instant};
 
-use chrono::{DateTime, Utc};
 use rand::{distributions::Alphanumeric, Rng};
+use redis::aio::ConnectionManager;
+use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 use switchboard_auth::{AuthSession, Authenticator, User};
 use switchboard_orchestrator::Orchestrator;
-use tokio::sync::Mutex;
+use tokio::sync::{broadcast, Mutex};
 
 use crate::ApiError;
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ClientEvent {
+    Subscribe { chat_id: String },
+    Unsubscribe { chat_id: String },
+    Message { chat_id: String, content: String },
+    Typing { chat_id: String, is_typing: bool },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ServerEvent {
+    Hello { version: String, user_id: i64 },
+    Subscribed { chat_id: String },
+    Unsubscribed { chat_id: String },
+    Message {
+        chat_id: String,
+        message_id: String,
+        user_id: i64,
+        content: String,
+        timestamp: String,
+        message_type: String,
+    },
+    Typing { chat_id: String, user_id: i64, is_typing: bool },
+    Error { message: String },
+}
 
 const DEFAULT_OAUTH_STATE_TTL: StdDuration = StdDuration::from_secs(600);
 
@@ -17,15 +45,19 @@ pub struct AppState {
     orchestrator: Arc<Orchestrator>,
     authenticator: Authenticator,
     oauth_state: OAuthStateStore,
+    redis_conn: Option<ConnectionManager>,
+    pub chat_broadcasters: Arc<Mutex<HashMap<String, broadcast::Sender<ServerEvent>>>>,
 }
 
 impl AppState {
-    pub fn new(db_pool: SqlitePool, orchestrator: Arc<Orchestrator>, authenticator: Authenticator) -> Self {
+    pub fn new(db_pool: SqlitePool, orchestrator: Arc<Orchestrator>, authenticator: Authenticator, redis_conn: Option<ConnectionManager>) -> Self {
         Self {
             db_pool,
             orchestrator,
             authenticator,
             oauth_state: OAuthStateStore::default(),
+            redis_conn,
+            chat_broadcasters: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -34,12 +66,15 @@ impl AppState {
         orchestrator: Arc<Orchestrator>,
         authenticator: Authenticator,
         oauth_state: OAuthStateStore,
+        redis_conn: Option<ConnectionManager>,
     ) -> Self {
         Self {
             db_pool,
             orchestrator,
             authenticator,
             oauth_state,
+            redis_conn,
+            chat_broadcasters: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -57,6 +92,10 @@ impl AppState {
 
     pub fn oauth_state(&self) -> &OAuthStateStore {
         &self.oauth_state
+    }
+
+    pub fn redis_conn(&self) -> Option<&ConnectionManager> {
+        self.redis_conn.as_ref()
     }
 
     pub async fn authenticate(&self, token: &str) -> Result<(User, AuthSession), ApiError> {

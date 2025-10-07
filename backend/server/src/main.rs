@@ -55,7 +55,7 @@ async fn run_server() -> anyhow::Result<()> {
         .await
         .context("failed to initialise backend services")?;
 
-    let state = AppState::new(services.db_pool.clone(), services.orchestrator.clone(), services.authenticator.clone());
+    let state = AppState::new(services.db_pool.clone(), services.orchestrator.clone(), services.authenticator.clone(), services.redis_conn.clone());
     let app = build_router(state);
 
     let address = format!("{}:{}", config.http.address, config.http.port);
@@ -136,7 +136,7 @@ async fn dump_data() -> anyhow::Result<()> {
     // Dump chats
     let chats = sqlx::query(
         r#"
-        SELECT id, public_id, user_id, folder_id, title, messages, created_at, updated_at
+        SELECT id, public_id, user_id, folder_id, title, is_group, created_at, updated_at
         FROM chats
         ORDER BY created_at ASC
         "#
@@ -149,9 +149,9 @@ async fn dump_data() -> anyhow::Result<()> {
         println!("No chats found in database");
     } else {
         println!("Found {} chats:", chats.len());
-        println!("{:<5} {:<20} {:<10} {:<10} {:<30} {:<50} {:<25} {:<25}",
-                 "ID", "Public ID", "User ID", "Folder ID", "Title", "Messages (truncated)", "Created At", "Updated At");
-        println!("{}", "-".repeat(180));
+        println!("{:<5} {:<20} {:<10} {:<10} {:<30} {:<10} {:<25} {:<25}",
+                 "ID", "Public ID", "User ID", "Folder ID", "Title", "Is Group", "Created At", "Updated At");
+        println!("{}", "-".repeat(160));
 
         for chat in chats {
             let id: i64 = chat.get("id");
@@ -159,24 +159,101 @@ async fn dump_data() -> anyhow::Result<()> {
             let user_id: i64 = chat.get("user_id");
             let folder_id: Option<i64> = chat.get("folder_id");
             let title: String = chat.get("title");
-            let messages: String = chat.get("messages");
+            let is_group: bool = chat.get("is_group");
             let created_at: String = chat.get("created_at");
             let updated_at: String = chat.get("updated_at");
 
-            // Truncate messages for display
-            let messages_display = if messages.len() > 47 {
-                format!("{}...", &messages[..44])
-            } else {
-                messages
-            };
-
-            println!("{:<5} {:<20} {:<10} {:<10} {:<30} {:<50} {:<25} {:<25}",
+            println!("{:<5} {:<20} {:<10} {:<10} {:<30} {:<10} {:<25} {:<25}",
                      id,
                      public_id,
                      user_id,
                      folder_id.map(|id| id.to_string()).unwrap_or("NULL".to_string()),
                      title,
-                     messages_display,
+                     is_group,
+                     created_at,
+                     updated_at);
+        }
+    }
+
+    // Dump chat members
+    println!("\n=== CHAT MEMBERS ===");
+    let chat_members = sqlx::query(
+        r#"
+        SELECT id, chat_id, user_id, role, joined_at
+        FROM chat_members
+        ORDER BY joined_at ASC
+        "#
+    )
+    .fetch_all(&services.db_pool)
+    .await
+    .context("failed to fetch chat members")?;
+
+    if chat_members.is_empty() {
+        println!("No chat members found in database");
+    } else {
+        println!("Found {} chat members:", chat_members.len());
+        println!("{:<5} {:<10} {:<10} {:<15} {:<25}",
+                 "ID", "Chat ID", "User ID", "Role", "Joined At");
+        println!("{}", "-".repeat(70));
+
+        for member in chat_members {
+            let id: i64 = member.get("id");
+            let chat_id: i64 = member.get("chat_id");
+            let user_id: i64 = member.get("user_id");
+            let role: String = member.get("role");
+            let joined_at: String = member.get("joined_at");
+
+            println!("{:<5} {:<10} {:<10} {:<15} {:<25}",
+                     id, chat_id, user_id, role, joined_at);
+        }
+    }
+
+    // Dump messages
+    println!("\n=== MESSAGES ===");
+    let messages = sqlx::query(
+        r#"
+        SELECT id, public_id, chat_id, user_id, content, message_type, reply_to_id, created_at, updated_at
+        FROM messages
+        ORDER BY created_at ASC
+        "#
+    )
+    .fetch_all(&services.db_pool)
+    .await
+    .context("failed to fetch messages")?;
+
+    if messages.is_empty() {
+        println!("No messages found in database");
+    } else {
+        println!("Found {} messages:", messages.len());
+        println!("{:<5} {:<20} {:<10} {:<10} {:<50} {:<15} {:<12} {:<25} {:<25}",
+                 "ID", "Public ID", "Chat ID", "User ID", "Content (truncated)", "Type", "Reply To", "Created At", "Updated At");
+        println!("{}", "-".repeat(200));
+
+        for message in messages {
+            let id: i64 = message.get("id");
+            let public_id: String = message.get("public_id");
+            let chat_id: i64 = message.get("chat_id");
+            let user_id: i64 = message.get("user_id");
+            let content: String = message.get("content");
+            let message_type: String = message.get("message_type");
+            let reply_to_id: Option<i64> = message.get("reply_to_id");
+            let created_at: String = message.get("created_at");
+            let updated_at: String = message.get("updated_at");
+
+            let content_display = if content.len() > 47 {
+                format!("{}...", &content[..44])
+            } else {
+                content
+            };
+
+            println!("{:<5} {:<20} {:<10} {:<10} {:<50} {:<15} {:<12} {:<25} {:<25}",
+                     id,
+                     public_id,
+                     chat_id,
+                     user_id,
+                     content_display,
+                     message_type,
+                     reply_to_id.map(|id| id.to_string()).unwrap_or("NULL".to_string()),
                      created_at,
                      updated_at);
         }

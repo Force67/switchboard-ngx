@@ -5,6 +5,7 @@ import Sidebar from "./components/Sidebar";
 import MainArea from "./components/MainArea";
 import { apiService } from "./api";
 import { initializeFromAPI } from "./components/sidebarStore";
+import { useSocket } from "./hooks/useSocket";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:7070";
 const DEFAULT_MODEL = import.meta.env.VITE_DEFAULT_MODEL ?? "";
@@ -31,11 +32,16 @@ interface TokenUsage {
 }
 
 interface Message {
-  role: "user" | "assistant";
+  id?: string;
+  chat_id?: string;
+  user_id?: number;
+  role: "user" | "assistant" | "system";
   content: string;
   model?: string;
   usage?: TokenUsage;
   reasoning?: string[];
+  timestamp?: string;
+  message_type?: string;
 }
 
 interface Chat {
@@ -126,6 +132,9 @@ export default function App() {
   const [authenticating, setAuthenticating] = createSignal(false);
   const [authError, setAuthError] = createSignal<string | null>(null);
   const [modelPickerOpen, setModelPickerOpen] = createSignal(false);
+
+  // WebSocket integration
+  const socket = useSocket();
 
   const redirectUri = () => `${window.location.origin}${GITHUB_REDIRECT_PATH}`;
 
@@ -328,14 +337,27 @@ export default function App() {
       return handleSubmit(event); // Retry
     }
 
+    // Check WebSocket connection
+    if (socket.state.status !== 'connected') {
+      setError("Real-time connection not available. Please check your connection.");
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
-    // Add user message to current chat
+    // Add user message to current chat immediately for UI responsiveness
     const updatedChat = chats().find(c => c.id === currentId);
     if (!updatedChat) return;
 
-    const newMessages = [...updatedChat.messages, { role: "user" as const, content: trimmedPrompt }];
+    const userMessage: Message = {
+      role: "user",
+      content: trimmedPrompt,
+      user_id: 1, // Current user
+      timestamp: new Date().toISOString(),
+    };
+
+    const newMessages = [...updatedChat.messages, userMessage];
     const newTitle = updatedChat.messages.length === 0 ? trimmedPrompt.slice(0, 30) + (trimmedPrompt.length > 30 ? "..." : "") : updatedChat.title;
 
     setChats(prev => prev.map(chat =>
@@ -351,84 +373,63 @@ export default function App() {
     setAttachedImages([]);
 
     try {
-      const images = attachedImages();
-      const formData = new FormData();
-      formData.append('prompt', trimmedPrompt);
-      const model = selectedModel().trim();
-      if (model) {
-        formData.append('model', model);
-      }
-      images.forEach((file) => {
-        formData.append('images', file);
-      });
-      const body = formData;
-      const headers: Record<string, string> = {
-        Authorization: `Bearer ${activeSession.token}`,
+      // Send message via WebSocket
+      socket.sendMessage(currentId, trimmedPrompt);
+
+      // Note: Assistant response will come via WebSocket and be handled by the effect above
+
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to send message");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // WebSocket event handling
+  createEffect(() => {
+    const message = socket.state.lastMessage;
+    if (!message) return;
+
+    const currentId = currentChatId();
+    if (!currentId) return;
+
+    if (message.type === 'message' && message.chat_id === currentId) {
+      // Add new message to current chat
+      const newMessage: Message = {
+        id: message.message_id,
+        chat_id: message.chat_id,
+        user_id: message.user_id,
+        role: message.user_id === 1 ? 'user' : 'assistant', // Assuming user_id 1 is current user
+        content: message.content,
+        timestamp: message.timestamp,
+        message_type: message.message_type,
       };
-      // Don't set Content-Type for FormData, let browser set it
-
-      const response = await fetch(`${API_BASE}/api/chat`, {
-        method: "POST",
-        headers,
-        body,
-      });
-
-      if (response.status === 401) {
-        logout();
-        throw new Error("Session expired. Please sign in again.");
-      }
-
-      if (!response.ok) {
-        const body = (await response.json().catch(() => null)) as
-          | ErrorResponse
-          | null;
-        throw new Error(body?.error ?? response.statusText);
-      }
-
-      const data = (await response.json()) as ChatResponse;
-
-      // Add assistant message to current chat
-      const finalMessages = [...newMessages, {
-        role: "assistant" as const,
-        content: data.content,
-        model: data.model,
-        usage: data.usage,
-        reasoning: data.reasoning
-      }];
 
       setChats(prev => prev.map(chat =>
         chat.id === currentId
           ? {
               ...chat,
-              messages: finalMessages,
-              title: newTitle
+              messages: [...chat.messages, newMessage]
             }
           : chat
       ));
-
-      // Save to API
-      await apiService.updateChat(activeSession.token, currentId, {
-        title: newTitle,
-        messages: finalMessages,
-      });
-
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unexpected error");
-    } finally {
-      setLoading(false);
     }
-  };
+  });
 
   createEffect(() => {
     const current = session();
     if (current) {
       void loadModels(current);
       void loadChatsAndFolders(current.token);
+      // Connect WebSocket with auth token
+      socket.connect();
     } else {
       setModels([]);
       setSelectedModel("");
       setChats([]);
       setCurrentChatId(null);
+      // Disconnect WebSocket
+      socket.disconnect();
     }
   });
 
@@ -520,6 +521,10 @@ export default function App() {
           modelPickerOpen={modelPickerOpen}
           setModelPickerOpen={setModelPickerOpen}
           session={session}
+          connectionStatus={createMemo(() => ({
+            status: socket.state.status,
+            error: socket.state.error || undefined
+          }))}
           currentMessages={createMemo(() => {
             const currentId = currentChatId();
             const currentChat = chats().find(c => c.id === currentId);

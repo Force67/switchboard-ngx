@@ -3,6 +3,8 @@ members = [
   "crates/auth",
   "crates/config",
   "crates/orchestrator",
+  "crates/backend-api",
+  "crates/runtime",
   "server"
 ]
 resolver = "2"
@@ -45,3 +47,4 @@ denkwerk = { git = "https://github.com/Force67/denkwerk", rev = "8962d23ebf44701
 axum = { version = "0.7", default-features = false, features = ["json", "http1", "tokio", "query", "multipart"] }
 axum-extra = { version = "0.9", features = ["multipart"] }
 tower-http = { version = "0.6", features = ["cors"] }
+

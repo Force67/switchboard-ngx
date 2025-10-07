@@ -8,19 +8,8 @@ license = "MIT OR Apache-2.0"
 [dependencies]
 anyhow = { workspace = true }
 switchboard-config = { path = "../crates/config" }
-switchboard-orchestrator = { path = "../crates/orchestrator" }
-switchboard-auth = { path = "../crates/auth" }
-sqlx = { workspace = true }
-tracing = { workspace = true }
-tracing-subscriber = { workspace = true }
+switchboard-backend-runtime = { path = "../crates/runtime" }
+switchboard-backend-api = { path = "../crates/backend-api" }
 tokio = { workspace = true }
+tracing = { workspace = true }
 axum = { workspace = true }
-axum-extra = { version = "0.9", features = ["multipart"] }
-tower-http = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
-denkwerk = { workspace = true }
-rand = { workspace = true }
-base64 = { workspace = true }
-bytes = { workspace = true }
-chrono = { workspace = true }

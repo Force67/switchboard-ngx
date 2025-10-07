@@ -4,6 +4,7 @@ interface Props {
   value?: string;
   onChange: (color: string) => void;
   onClose: () => void;
+  position?: { x: number; y: number };
 }
 
 const PRESET_COLORS = [
@@ -46,9 +47,9 @@ export default function ColorPicker(props: Props) {
       ref={containerRef}
       class="color-picker"
       style={{
-        position: "absolute",
-        top: "100%",
-        left: "0",
+        position: props.position ? "fixed" : "absolute",
+        top: props.position ? `${props.position.y}px` : "100%",
+        left: props.position ? `${props.position.x}px` : "0",
         "z-index": "1000",
         background: "var(--bg-2)",
         border: "1px solid rgba(255, 255, 255, 0.12)",

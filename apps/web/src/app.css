@@ -6,7 +6,7 @@
 
 @media (max-width: 1200px) {
   :root {
-    --sidebar-width: 180px;
+     --sidebar-width: 220px;
   }
   .sidebar {
     padding: 8px 12px 8px 12px;

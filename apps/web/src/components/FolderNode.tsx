@@ -36,6 +36,7 @@ export default function FolderNode(props: Props) {
 
   const handleContextMenu = (e: MouseEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     setContextMenu({ x: e.clientX, y: e.clientY });
   };
 
@@ -192,7 +193,10 @@ export default function FolderNode(props: Props) {
       <div
         ref={rowRef}
         class={`row folder depth${props.depth} ${isCollapsed() ? "collapsed" : ""} ${props.isSelected ? "selected" : ""}`}
-        style={{ "padding-left": props.depth === 1 ? "8px" : "24px" }}
+        style={{
+          "padding-left": props.depth === 1 ? "8px" : "24px",
+          "--folder-color": props.folder.color || (props.depth === 1 ? "#e54cbf" : "#d7c4e6")
+        }}
         onClick={toggleCollapsed}
         onContextMenu={handleContextMenu}
         onKeyDown={handleKeyDown}
@@ -309,23 +313,15 @@ export default function FolderNode(props: Props) {
       )}
 
       {colorPicker() && (
-        <div
-          style={{
-            position: "fixed",
-            left: `${colorPicker()!.x}px`,
-            top: `${colorPicker()!.y}px`,
-            zIndex: "1000",
+        <ColorPicker
+          value={props.folder.color}
+          position={colorPicker()!}
+          onChange={(color) => {
+            props.actions.setFolderColor(props.folder.id, color);
+            setColorPicker(null);
           }}
-        >
-          <ColorPicker
-            value={props.folder.color}
-            onChange={(color) => {
-              props.actions.setFolderColor(props.folder.id, color);
-              setColorPicker(null);
-            }}
-            onClose={() => setColorPicker(null)}
-          />
-        </div>
+          onClose={() => setColorPicker(null)}
+        />
       )}
     </>
   );

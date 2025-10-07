@@ -13,7 +13,7 @@
   --status-hair: rgba(255,255,255,0.10);
   --glass: rgba(255,255,255,0.08);
   --focus:0 0 0 2px rgba(229,76,191,0.35);
-  --sidebar-width: 200px;
+   --sidebar-width: 240px;
   --content-padding: 16px;
 }
 *{box-sizing:border-box}

@@ -36,13 +36,9 @@
 .row.chat .title { font-size:12px; font-weight:400; }
 
 /* HIERARCHY VISUAL INDICATORS */
-.row.folder.depth1 { border-left: 3px solid transparent; }
-.row.folder.depth1:hover { border-left-color: rgba(229, 76, 191, 0.3); }
-.row.folder.depth1.selected { border-left-color: rgba(184, 58, 126, 0.6); }
-
-.row.folder.depth2 { border-left: 3px solid transparent; }
-.row.folder.depth2:hover { border-left-color: rgba(215, 196, 230, 0.3); }
-.row.folder.depth2.selected { border-left-color: rgba(184, 58, 126, 0.6); }
+.row.folder { border-left: 3px solid var(--folder-color); }
+.row.folder:hover { border-left-color: var(--folder-color); opacity: 0.3; }
+.row.folder.selected { border-left-color: #b83a7e; opacity: 0.6; }
 
 .children {
   position: relative;

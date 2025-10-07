@@ -29,6 +29,16 @@ interface Message {
   reasoning?: string[];
 }
 
+interface SessionData {
+  token: string;
+  user: {
+    id: string;
+    email?: string | null;
+    display_name?: string | null;
+  };
+  expires_at: string;
+}
+
 interface Props {
   prompt: Accessor<string>;
   setPrompt: Setter<string>;
@@ -44,7 +54,9 @@ interface Props {
   modelPickerOpen: Accessor<boolean>;
   setModelPickerOpen: Setter<boolean>;
   currentMessages: Accessor<Message[]>;
+  session: Accessor<SessionData | null>;
   onSend: (event: Event) => void;
+  onLogout: () => void;
 }
 
 export default function MainArea(props: Props) {
@@ -65,7 +77,7 @@ export default function MainArea(props: Props) {
 
   return (
     <div class="main">
-      <TopRightControls />
+      <TopRightControls session={props.session} onLogout={props.onLogout} />
       <div class="content-well">
         {props.error() && (
           <div style="padding: 20px; color: #ff6b6b; background: rgba(255,107,107,0.1); border-radius: 8px; margin: 20px;">

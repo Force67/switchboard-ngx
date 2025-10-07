@@ -88,6 +88,7 @@
 
 .main{
   position:relative; overflow:hidden;
+  padding-top:48px; /* space for top bar */
   padding-bottom:120px; /* space for composer */
 }
 .main::before{
@@ -98,13 +99,36 @@
 }
 
 .content-well{
-  position:fixed; top:24px; left:50%; transform:translateX(-50%); z-index:1;
-  width:calc(100vw - var(--sidebar-width) - 2 * var(--content-padding)); max-width:1030px; height:calc(100vh - 200px);
+  position:fixed; top:72px; left:50%; transform:translateX(-50%); z-index:1;
+  width:calc(100vw - var(--sidebar-width) - 2 * var(--content-padding)); max-width:1030px; height:calc(100vh - 200px - 48px);
   background:var(--bg-1); border-radius:20px; overflow-y:auto;
 }
 
+.top-bar {
+  position: fixed;
+  top: 0;
+  left: var(--sidebar-width);
+  right: 0;
+  height: 48px;
+  background: var(--bg-1);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 18px;
+  gap: 8px;
+  z-index: 10;
+  backdrop-filter: blur(10px);
+}
+
+@media (max-width: 768px) {
+  .top-bar {
+    left: 0;
+  }
+}
+
 .top-right{
-  position:absolute; top:12px; right:18px; z-index:2; display:flex; gap:8px;
+  display:flex; gap:8px;
 }
 .icircle{
   width:28px; height:28px; border-radius:999px; display:grid; place-items:center;
@@ -237,3 +261,65 @@
 .send:hover{background:var(--button-hover)}
 .send[disabled]{opacity:.5; pointer-events:none}
 .send svg{width:12px;height:12px;stroke:#fff;stroke-width:1.8;fill:none}
+
+.user-pill {
+  height: 28px;
+  max-width: 160px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  background: var(--bg-2);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 14px;
+  color: var(--text-1);
+  font-size: 12.5px;
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.2s ease;
+}
+
+.user-pill:hover {
+  background: rgba(255,255,255,0.08);
+}
+
+.user-pill .user-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+}
+
+.user-pill-menu {
+  background: var(--bg-2);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+  min-width: 120px;
+  overflow: hidden;
+}
+
+.user-pill-menu .menu-item {
+  width: 100%;
+  padding: 8px 12px;
+  background: none;
+  border: none;
+  color: var(--text-1);
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+  transition: background-color 0.2s ease;
+}
+
+.user-pill-menu .menu-item:hover {
+  background: rgba(255,255,255,0.08);
+}
+
+.user-pill-menu .menu-item svg {
+  stroke: currentColor;
+  stroke-width: 1.5;
+  fill: none;
+}

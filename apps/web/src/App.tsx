@@ -433,12 +433,14 @@ export default function App() {
           error={error}
           modelPickerOpen={modelPickerOpen}
           setModelPickerOpen={setModelPickerOpen}
+          session={session}
           currentMessages={createMemo(() => {
             const currentId = currentChatId();
             const currentChat = chats().find(c => c.id === currentId);
             return currentChat ? currentChat.messages : [];
           })}
           onSend={handleSubmit}
+          onLogout={logout}
         />
     </div>
   );

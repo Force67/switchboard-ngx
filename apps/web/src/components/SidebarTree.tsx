@@ -65,12 +65,22 @@ export default function SidebarTree(props: Props) {
 
   createEffect(() => {
     // Register drag handlers for all rows when the tree changes
-    // Trigger on state changes that affect the tree structure
+    // Trigger on comprehensive state changes that affect the tree structure
     props.state.folderOrder.length;
     props.chats.length;
+    Object.keys(props.state.folders).length;
+    Object.values(props.state.folders).map(f => f.collapsed).join(',');
+    Object.values(props.state.subfolderOrder).map(arr => arr.length).join(',');
 
-    // Small delay to ensure DOM is updated
-    setTimeout(() => {
+    // Use requestAnimationFrame for more reliable DOM update timing
+    requestAnimationFrame(() => {
+      // Clean up old drag registrations first
+      const allRows = treeRef?.querySelectorAll('.row');
+      allRows?.forEach(row => {
+        row.removeAttribute('data-drag-registered');
+      });
+
+      // Register new drag handlers
       const rows = treeRef?.querySelectorAll('.row');
       rows?.forEach(row => {
         const id = row.getAttribute('data-id');
@@ -81,7 +91,7 @@ export default function SidebarTree(props: Props) {
           row.setAttribute('data-drag-registered', 'true');
         }
       });
-    }, 0);
+    });
   });
 
   const handleContextMenu = (e: MouseEvent) => {

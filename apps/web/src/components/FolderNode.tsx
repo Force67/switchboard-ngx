@@ -45,8 +45,8 @@ export default function FolderNode(props: Props) {
     setContextMenu({ x: rect.left, y: rect.bottom + 4 });
   };
 
-  const toggleCollapsed = (e: MouseEvent) => {
-    e.stopPropagation();
+  const toggleCollapsed = (e?: Event) => {
+    if (e) e.stopPropagation();
     props.actions.setCollapsed(props.folder.id, !isCollapsed());
   };
 
@@ -104,8 +104,23 @@ export default function FolderNode(props: Props) {
       items.push({
         label: isCollapsed() ? "Expand all" : "Collapse all",
         action: () => {
-          // TODO: Implement expand/collapse all
-          console.log(isCollapsed() ? "Expand all" : "Collapse all", props.folder.id);
+          const expandAll = (folderId: string) => {
+            props.actions.setCollapsed(folderId, false);
+            const subfolders = props.subfolderOrder[folderId] || [];
+            subfolders.forEach(subId => expandAll(subId));
+          };
+
+          const collapseAll = (folderId: string) => {
+            props.actions.setCollapsed(folderId, true);
+            const subfolders = props.subfolderOrder[folderId] || [];
+            subfolders.forEach(subId => collapseAll(subId));
+          };
+
+          if (isCollapsed()) {
+            expandAll(props.folder.id);
+          } else {
+            collapseAll(props.folder.id);
+          }
         },
         icon: isCollapsed() ? "M3 8a5 5 0 0 1 2.687-4.354L3.5 3.5 4.5 2.5l3 3A5 5 0 1 1 3 13.5L2 12.5A4 4 0 1 0 3 8z" : "M3 8a5 5 0 0 0 2.687 4.354L3.5 12.5 4.5 13.5l3-3A5 5 0 1 0 3 2.5L2 3.5A4 4 0 1 1 3 8z"
       });
@@ -116,8 +131,18 @@ export default function FolderNode(props: Props) {
     items.push({
       label: "Delete…",
       action: () => {
-        // TODO: Implement delete with confirmation
-        console.log("Delete folder", props.folder.id);
+        const subfolderCount = (props.subfolderOrder[props.folder.id] || []).length;
+        const chatCount = props.chats.length;
+        const totalItems = subfolderCount + chatCount;
+
+        let message = `Delete "${props.folder.name}"?`;
+        if (totalItems > 0) {
+          message += ` This will also delete ${totalItems} item${totalItems === 1 ? '' : 's'} inside.`;
+        }
+
+        if (confirm(message)) {
+          props.actions.deleteFolder(props.folder.id, "delete-all");
+        }
       },
       icon: "M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"
     });
@@ -146,7 +171,7 @@ export default function FolderNode(props: Props) {
   const handleKeyDown = (e: KeyboardEvent) => {
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
-      props.onSelect();
+      toggleCollapsed(e);
     } else if (e.key === "ArrowRight") {
       if (isCollapsed()) {
         props.actions.setCollapsed(props.folder.id, false);
@@ -168,7 +193,7 @@ export default function FolderNode(props: Props) {
         ref={rowRef}
         class={`row folder depth${props.depth} ${isCollapsed() ? "collapsed" : ""} ${props.isSelected ? "selected" : ""}`}
         style={{ "padding-left": props.depth === 1 ? "8px" : "24px" }}
-        onClick={props.onSelect}
+        onClick={toggleCollapsed}
         onContextMenu={handleContextMenu}
         onKeyDown={handleKeyDown}
         tabIndex={0}
@@ -184,10 +209,11 @@ export default function FolderNode(props: Props) {
           </svg>
         </div>
         <div class="icon">
-          <svg viewBox="0 0 16 16">
-            <path d="M2 3.5A2.5 2.5 0 0 1 4.5 1h7A2.5 2.5 0 0 1 14 3.5v9a2.5 2.5 0 0 1-2.5 2.5h-7A2.5 2.5 0 0 1 2 12.5v-9zM4.5 2A1.5 1.5 0 0 0 3 3.5v9A1.5 1.5 0 0 0 4.5 14h7a1.5 1.5 0 0 0 1.5-1.5v-9A1.5 1.5 0 0 0 11.5 2h-7z"/>
-          </svg>
-        </div>
+           <svg viewBox="0 0 16 16">
+             <path d="M1.5 3.5A1.5 1.5 0 0 1 3 2h10a1.5 1.5 0 0 1 1.5 1.5v9A1.5 1.5 0 0 1 13 14H3a1.5 1.5 0 0 1-1.5-1.5v-9zM3 3a.5.5 0 0 0-.5.5v9a.5.5 0 0 0 .5.5h10a.5.5 0 0 0 .5-.5v-9A.5.5 0 0 0 13 3H3z"/>
+             <path d="M5 4.5a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5z"/>
+           </svg>
+         </div>
         {isEditing() ? (
           <input
             ref={inputRef}

@@ -34,6 +34,10 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/chats/:chat_id/invites", post(routes::chats::create_invite))
         .route("/api/invites/:invite_id/accept", post(routes::chats::accept_invite))
         .route("/api/invites/:invite_id/reject", post(routes::chats::reject_invite))
+        // Member routes
+        .route("/api/chats/:chat_id/members", get(routes::chats::list_members))
+        .route("/api/chats/:chat_id/members/:member_user_id", put(routes::chats::update_member_role))
+        .route("/api/chats/:chat_id/members/:member_user_id", delete(routes::chats::remove_member))
         // WebSocket route
         .route("/ws", get(routes::websocket::websocket_handler))
         .with_state(state)

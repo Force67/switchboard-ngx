@@ -51,6 +51,7 @@ interface Chat {
   createdAt: Date;
   folderId?: string;
   updatedAt?: number;
+  isGroup?: boolean;
 }
 
 interface ChatResponse {
@@ -279,15 +280,16 @@ export default function App() {
     setPrompt("");
   };
 
-  const newChat = async (folderId?: string) => {
+  const newChat = async (folderId?: string, isGroup: boolean = false) => {
     const activeSession = session();
     if (!activeSession) return;
 
     try {
       const apiChat = await apiService.createChat(activeSession.token, {
-        title: "New Chat",
+        title: isGroup ? "New Group Chat" : "New Chat",
         messages: [],
         folder_id: folderId,
+        is_group: isGroup,
       });
 
       const newChatObj: Chat = {
@@ -298,6 +300,7 @@ export default function App() {
         createdAt: new Date(apiChat.created_at),
         folderId,
         updatedAt: apiChat.updated_at,
+        isGroup: apiChat.is_group,
       };
 
       setChats(prev => [newChatObj, ...prev]);
@@ -308,6 +311,10 @@ export default function App() {
       console.error("Failed to create chat", error);
       setError("Failed to create new chat");
     }
+  };
+
+  const newGroupChat = async (folderId?: string) => {
+    await newChat(folderId, true);
   };
 
   const selectChat = (chatId: string) => {
@@ -456,6 +463,7 @@ export default function App() {
           createdAt: new Date(apiChat.created_at),
           folderId: undefined, // Will be resolved by sidebar
           updatedAt: apiChat.updated_at,
+          isGroup: apiChat.is_group,
         };
       });
 
@@ -504,6 +512,7 @@ export default function App() {
         onLogin={beginGithubLogin}
         onLogout={logout}
         onNewChat={newChat}
+        onNewGroupChat={newGroupChat}
         onSelectChat={selectChat}
       />
         <MainArea
@@ -529,6 +538,10 @@ export default function App() {
             const currentId = currentChatId();
             const currentChat = chats().find(c => c.id === currentId);
             return currentChat ? currentChat.messages : [];
+          })}
+          currentChat={createMemo(() => {
+            const currentId = currentChatId();
+            return chats().find(c => c.id === currentId) || null;
           })}
           onSend={handleSubmit}
           onLogout={logout}

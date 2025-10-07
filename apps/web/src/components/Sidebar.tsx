@@ -43,6 +43,7 @@ interface Props {
   onLogin: () => void;
   onLogout: () => void;
   onNewChat: (folderId?: string) => void;
+  onNewGroupChat?: (folderId?: string) => void;
   onSelectChat: (chatId: string) => void;
 }
 
@@ -54,10 +55,10 @@ export default function Sidebar(props: Props) {
   return (
     <div class="sidebar">
       <div class="sidebar-header">
-        <div class="sidebar-actions">
-          <SidebarNewChat onClick={props.onNewChat} />
-          <SidebarNewFolder onClick={handleNewFolder} />
-        </div>
+         <div class="sidebar-actions">
+           <SidebarNewChat onClick={props.onNewChat} onNewGroupChat={props.onNewGroupChat} />
+           <SidebarNewFolder onClick={handleNewFolder} />
+         </div>
         <SidebarSearch />
       </div>
       <div class="sidebar-content">

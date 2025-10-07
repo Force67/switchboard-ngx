@@ -18,6 +18,7 @@ export interface ApiChat {
   user_id: number;
   folder_id?: number;
   title: string;
+  is_group: boolean;
   messages: string; // JSON string
   created_at: string;
   updated_at: string;
@@ -51,12 +52,39 @@ export interface CreateChatRequest {
   title: string;
   messages: ChatMessage[];
   folder_id?: string;
+  is_group?: boolean;
 }
 
 export interface UpdateChatRequest {
   title?: string;
   messages?: ChatMessage[];
   folder_id?: string;
+}
+
+export interface ChatMember {
+  id: number;
+  chat_id: number;
+  user_id: number;
+  role: string;
+  joined_at: string;
+}
+
+export interface ChatInvite {
+  id: number;
+  chat_id: number;
+  inviter_id: number;
+  invitee_email: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateInviteRequest {
+  email: string;
+}
+
+export interface UpdateMemberRoleRequest {
+  role: string;
 }
 
 class ApiService {
@@ -174,6 +202,97 @@ class ApiService {
 
     if (!response.ok) {
       throw new Error(`Failed to delete chat: ${response.statusText}`);
+    }
+  }
+
+  // Member API methods
+  async listMembers(token: string, chatId: string): Promise<ChatMember[]> {
+    const response = await fetch(`${API_BASE}/api/chats/${chatId}/members`, {
+      headers: this.getAuthHeaders(token),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch members: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    return data.members;
+  }
+
+  async updateMemberRole(token: string, chatId: string, memberUserId: number, req: UpdateMemberRoleRequest): Promise<ChatMember> {
+    const response = await fetch(`${API_BASE}/api/chats/${chatId}/members/${memberUserId}`, {
+      method: "PUT",
+      headers: this.getAuthHeaders(token),
+      body: JSON.stringify(req),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to update member role: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    return data.member;
+  }
+
+  async removeMember(token: string, chatId: string, memberUserId: number): Promise<void> {
+    const response = await fetch(`${API_BASE}/api/chats/${chatId}/members/${memberUserId}`, {
+      method: "DELETE",
+      headers: this.getAuthHeaders(token),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to remove member: ${response.statusText}`);
+    }
+  }
+
+  // Invite API methods
+  async listInvites(token: string, chatId: string): Promise<ChatInvite[]> {
+    const response = await fetch(`${API_BASE}/api/chats/${chatId}/invites`, {
+      headers: this.getAuthHeaders(token),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch invites: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    return data.invites;
+  }
+
+  async createInvite(token: string, chatId: string, req: CreateInviteRequest): Promise<ChatInvite> {
+    const response = await fetch(`${API_BASE}/api/chats/${chatId}/invites`, {
+      method: "POST",
+      headers: this.getAuthHeaders(token),
+      body: JSON.stringify(req),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to create invite: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    return data.invite;
+  }
+
+  async acceptInvite(token: string, inviteId: number): Promise<void> {
+    const response = await fetch(`${API_BASE}/api/invites/${inviteId}/accept`, {
+      method: "POST",
+      headers: this.getAuthHeaders(token),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to accept invite: ${response.statusText}`);
+    }
+  }
+
+  async rejectInvite(token: string, inviteId: number): Promise<void> {
+    const response = await fetch(`${API_BASE}/api/invites/${inviteId}/reject`, {
+      method: "POST",
+      headers: this.getAuthHeaders(token),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to reject invite: ${response.statusText}`);
     }
   }
 }

@@ -108,6 +108,30 @@ pub struct InviteResponse {
     pub invite: ChatInvite,
 }
 
+#[derive(Debug, Serialize, FromRow)]
+pub struct ChatMember {
+    pub id: i64,
+    pub chat_id: i64,
+    pub user_id: i64,
+    pub role: String,
+    pub joined_at: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateMemberRoleRequest {
+    pub role: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct MembersResponse {
+    pub members: Vec<ChatMember>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct MemberResponse {
+    pub member: ChatMember,
+}
+
 pub async fn list_models(State(state): State<AppState>) -> Result<Json<ModelsResponse>, ApiError> {
     let models = state.orchestrator().list_openrouter_models().await?;
     Ok(Json(ModelsResponse { models }))

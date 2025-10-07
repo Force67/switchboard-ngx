@@ -1,10 +1,11 @@
-import { Accessor, Setter, For, createMemo } from "solid-js";
+import { Accessor, Setter, For, createMemo, createSignal, Show } from "solid-js";
 import { onMount, onCleanup } from "solid-js";
 import TopRightControls from "./TopRightControls";
 import Composer from "./Composer";
 import ModelPickerPanel from "./model-picker/ModelPickerPanel";
 import { ModelMeta } from "./model-picker/models";
 import LatexRenderer from "./LatexRenderer";
+import GroupChatManager from "./GroupChatManager";
 
 interface ModelOption {
   id: string;
@@ -45,6 +46,12 @@ interface SessionData {
   expires_at: string;
 }
 
+interface Chat {
+  id: string;
+  title: string;
+  isGroup?: boolean;
+}
+
 interface Props {
   prompt: Accessor<string>;
   setPrompt: Setter<string>;
@@ -61,12 +68,15 @@ interface Props {
   modelPickerOpen: Accessor<boolean>;
   setModelPickerOpen: Setter<boolean>;
   currentMessages: Accessor<Message[]>;
+  currentChat?: Accessor<Chat | null>;
   session: Accessor<SessionData | null>;
   onSend: (event: Event) => void;
   onLogout: () => void;
 }
 
 export default function MainArea(props: Props) {
+  const [showGroupManager, setShowGroupManager] = createSignal(false);
+
   const convertedModels = createMemo((): ModelMeta[] => {
     return props.models().map(model => ({
       id: model.id,
@@ -100,6 +110,28 @@ export default function MainArea(props: Props) {
   return (
     <div class="main">
       <TopRightControls session={props.session} onLogout={props.onLogout} />
+      {props.currentChat?.()?.isGroup && (
+        <div style={{
+          padding: "8px 20px",
+          background: "var(--bg-2)",
+          borderBottom: "1px solid rgba(255,255,255,0.05)"
+        }}>
+          <button
+            onClick={() => setShowGroupManager(true)}
+            style={{
+              padding: "6px 12px",
+              borderRadius: "6px",
+              border: "1px solid rgba(255,255,255,0.2)",
+              background: "var(--bg-3)",
+              color: "var(--text-0)",
+              cursor: "pointer",
+              fontSize: "12px"
+            }}
+          >
+            👥 Manage Group
+          </button>
+        </div>
+      )}
       <div class="content-well">
         {props.error() && (
           <div style="padding: 20px; color: #ff6b6b; background: rgba(255,107,107,0.1); border-radius: 8px; margin: 20px;">
@@ -183,21 +215,29 @@ export default function MainArea(props: Props) {
           onSend={props.onSend}
           onOpenModelPicker={() => props.setModelPickerOpen(true)}
         />
-       {props.modelPickerOpen() && (
-         <div
-           style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 49;"
-           onClick={() => props.setModelPickerOpen(false)}
-         >
-           <ModelPickerPanel
-             models={convertedModels()}
-             selectedId={props.selectedModel()}
-             onSelect={(id) => {
-               props.setSelectedModel(id);
-               props.setModelPickerOpen(false);
-             }}
-           />
-         </div>
-       )}
-     </div>
-   );
- }
+        {props.modelPickerOpen() && (
+          <div
+            style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 49;"
+            onClick={() => props.setModelPickerOpen(false)}
+          >
+            <ModelPickerPanel
+              models={convertedModels()}
+              selectedId={props.selectedModel()}
+              onSelect={(id) => {
+                props.setSelectedModel(id);
+                props.setModelPickerOpen(false);
+              }}
+            />
+          </div>
+        )}
+
+        {showGroupManager() && props.currentChat?.() && props.session() && (
+          <GroupChatManager
+            chatId={props.currentChat()!.id}
+            session={props.session()!}
+            onClose={() => setShowGroupManager(false)}
+          />
+        )}
+      </div>
+  );
+}

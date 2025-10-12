@@ -105,21 +105,30 @@ const loadStoredSession = (): SessionData | null => {
   }
 };
 
-export default function App() {
-  // Temporary test session for development
-  const testSession: SessionData = {
-    token: "test-token",
-    user: {
-      id: "test-user",
-      email: "test@example.com",
-      display_name: "Test User",
-    },
-    expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-  };
+// Auto-fetch dev token for development
+const fetchDevSession = async (): Promise<SessionData | null> => {
+  try {
+    const response = await fetch(`${API_BASE}/api/auth/dev/token`);
+    if (!response.ok) return null;
 
-  const [session, setSession] = createSignal<SessionData | null>(
-    testSession, // loadStoredSession(),
-  );
+    const data = await response.json();
+    return {
+      token: data.token,
+      user: {
+        id: data.user.id,
+        email: data.user.email,
+        display_name: data.user.display_name,
+      },
+      expires_at: data.expires_at,
+    };
+  } catch (error) {
+    console.error("Failed to fetch dev token:", error);
+    return null;
+  }
+};
+
+export default function App() {
+  const [session, setSession] = createSignal<SessionData | null>(null);
   const [prompt, setPrompt] = createSignal("");
   const [attachedImages, setAttachedImages] = createSignal<File[]>([]);
   const [selectedModel, setSelectedModel] = createSignal<string>(DEFAULT_MODEL);
@@ -135,7 +144,7 @@ export default function App() {
   const [modelPickerOpen, setModelPickerOpen] = createSignal(false);
 
   // WebSocket integration
-  const socket = useSocket();
+  const socket = useSocket(() => session()?.token || null);
 
   const redirectUri = () => `${window.location.origin}${GITHUB_REDIRECT_PATH}`;
 
@@ -284,11 +293,14 @@ export default function App() {
     const activeSession = session();
     if (!activeSession) return;
 
+    // Handle case where folderId might be a click event object
+    const validFolderId = (folderId && typeof folderId === 'string') ? folderId : undefined;
+
     try {
       const apiChat = await apiService.createChat(activeSession.token, {
         title: isGroup ? "New Group Chat" : "New Chat",
         messages: [],
-        folder_id: folderId,
+        folder_id: validFolderId,
         is_group: isGroup,
       });
 
@@ -344,9 +356,24 @@ export default function App() {
       return handleSubmit(event); // Retry
     }
 
-    // Check WebSocket connection
-    if (socket.state.status !== 'connected') {
+    // Check WebSocket connection and subscription
+    const connectionStatus = socket.state().status;
+    const subscribedId = currentSubscription();
+
+    console.log("🔍 Pre-send check:", {
+      connectionStatus,
+      currentId,
+      subscribedId,
+      isSubscribed: currentId === subscribedId
+    });
+
+    if (connectionStatus !== 'connected') {
       setError("Real-time connection not available. Please check your connection.");
+      return;
+    }
+
+    if (currentId !== subscribedId) {
+      setError("Not subscribed to this chat yet. Please wait a moment and try again.");
       return;
     }
 
@@ -394,32 +421,100 @@ export default function App() {
 
   // WebSocket event handling
   createEffect(() => {
-    const message = socket.state.lastMessage;
-    if (!message) return;
+    const socketState = socket.state();
+    console.log("🔥 WebSocket effect triggered, socketState:", socketState);
+    const message = socketState.lastMessage;
+    if (!message) {
+      console.log("❌ No message to process");
+      return;
+    }
 
+    console.log("🔍 Processing WebSocket message:", message);
     const currentId = currentChatId();
-    if (!currentId) return;
+    console.log("📱 Current chat ID:", currentId);
+    console.log("🔗 Message chat ID:", message.chat_id);
+    console.log("✅ Chat IDs match:", message.chat_id === currentId);
+    console.log("📊 Current chats count:", chats().length);
 
-    if (message.type === 'message' && message.chat_id === currentId) {
-      // Add new message to current chat
+    if (!currentId) {
+      console.log("❌ No current chat ID, skipping message");
+      return;
+    }
+
+    if (message.type === 'message') {
+      console.log("📨 Message type is 'message'");
+      if (message.chat_id === currentId) {
+        console.log("✅ Message chat ID matches current chat ID - processing message");
+      // Check if this message already exists in the chat (user messages are added immediately)
+      const currentChat = chats().find(c => c.id === currentId);
+      console.log("🔍 Current chat found:", !!currentChat);
+      console.log("📊 Current chat messages count:", currentChat?.messages.length || 0);
+
+      const messageExists = currentChat?.messages.some(m => m.id === message.message_id);
+      console.log("🔍 Message exists in chat:", messageExists);
+      console.log("🔍 Looking for message ID:", message.message_id);
+      console.log("🔍 Current chat message IDs:", currentChat?.messages.map(m => m.id));
+
+      if (messageExists) {
+        // This is a user message that was already added to UI, skip
+        console.log("⏭️ Message already exists, skipping (user message echo)");
+        return;
+      }
+
+      // Check if this looks like a user message by comparing with the last user message
+      const lastUserMessage = currentChat?.messages
+        .filter(m => m.role === 'user')
+        .pop();
+
+      if (lastUserMessage && lastUserMessage.content === message.content) {
+        console.log("⏭️ Skipping user message echo (content matches last user message)");
+        return;
+      }
+
+      console.log("🤖 New message detected, adding to chat...");
+      // All messages received via WebSocket that aren't already in the chat should be assistant responses
+      // User messages are added immediately to UI when sent, so WebSocket messages are always assistant responses
+
       const newMessage: Message = {
         id: message.message_id,
         chat_id: message.chat_id,
         user_id: message.user_id,
-        role: message.user_id === 1 ? 'user' : 'assistant', // Assuming user_id 1 is current user
+        role: 'assistant',
         content: message.content,
         timestamp: message.timestamp,
         message_type: message.message_type,
       };
 
-      setChats(prev => prev.map(chat =>
-        chat.id === currentId
-          ? {
-              ...chat,
-              messages: [...chat.messages, newMessage]
-            }
-          : chat
-      ));
+      console.log("📝 New message to add:", newMessage);
+
+      setChats(prev => {
+        const updated = prev.map(chat =>
+          chat.id === currentId
+            ? {
+                ...chat,
+                messages: [...chat.messages, newMessage]
+              }
+            : chat
+        );
+        console.log("🔄 Updated chats:", updated);
+        console.log("📊 Chat with new message:", updated.find(c => c.id === currentId)?.messages);
+        return updated;
+      });
+      } else {
+        console.log("❌ Message chat ID does NOT match current chat ID:", {
+          messageChatId: message.chat_id,
+          currentId,
+          chatIdsMatch: message.chat_id === currentId
+        });
+      }
+    } else {
+      console.log("❌ Message type is not 'message':", {
+        messageType: message.type,
+        messageChatId: message.chat_id,
+        currentId,
+        isCorrectType: message.type === 'message',
+        isCorrectChat: message.chat_id === currentId
+      });
     }
   });
 
@@ -437,6 +532,34 @@ export default function App() {
       setCurrentChatId(null);
       // Disconnect WebSocket
       socket.disconnect();
+    }
+  });
+
+  // Track current subscription to avoid spam
+  const [currentSubscription, setCurrentSubscription] = createSignal<string | null>(null);
+
+  // Subscribe to current chat via WebSocket
+  createEffect(() => {
+    const currentId = currentChatId();
+    const connectionStatus = socket.state().status;
+    const subscribedId = currentSubscription();
+
+    console.log("🔍 Subscription check:", {
+      currentId,
+      connectionStatus,
+      subscribedId,
+      shouldSubscribe: currentId && connectionStatus === 'connected' && currentId !== subscribedId
+    });
+
+    // Only subscribe when we have a chat, WebSocket is connected, and we're not already subscribed
+    if (currentId && connectionStatus === 'connected' && currentId !== subscribedId) {
+      console.log("📡 Subscribing to chat:", currentId);
+      socket.subscribe(currentId);
+      setCurrentSubscription(currentId);
+    } else if (!currentId && subscribedId) {
+      // Clear subscription if no chat selected
+      console.log("🗑️ Clearing subscription");
+      setCurrentSubscription(null);
     }
   });
 
@@ -500,6 +623,14 @@ export default function App() {
     if (code && state) {
       setAuthenticating(true);
       void finalizeGithubLogin(code, state);
+    } else {
+      // For development: auto-fetch dev token if no OAuth flow
+      void fetchDevSession().then((devSession) => {
+        if (devSession) {
+          setSession(devSession);
+          persistSession(devSession);
+        }
+      });
     }
   });
 
@@ -530,14 +661,20 @@ export default function App() {
           modelPickerOpen={modelPickerOpen}
           setModelPickerOpen={setModelPickerOpen}
           session={session}
-          connectionStatus={createMemo(() => ({
-            status: socket.state.status,
-            error: socket.state.error || undefined
-          }))}
+          connectionStatus={createMemo(() => {
+            const state = socket.state();
+            console.log('WebSocket state:', state);
+            return {
+              status: state.status,
+              error: state.error || undefined
+            };
+          })}
           currentMessages={createMemo(() => {
             const currentId = currentChatId();
             const currentChat = chats().find(c => c.id === currentId);
-            return currentChat ? currentChat.messages : [];
+            const messages = currentChat ? currentChat.messages : [];
+            console.log("🔄 currentMessages memo recalculated:", { currentId, messagesCount: messages.length, messages });
+            return messages;
           })}
           currentChat={createMemo(() => {
             const currentId = currentChatId();

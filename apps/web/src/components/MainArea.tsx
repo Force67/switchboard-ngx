@@ -109,7 +109,7 @@ export default function MainArea(props: Props) {
 
   return (
     <div class="main">
-      <TopRightControls session={props.session} onLogout={props.onLogout} />
+      <TopRightControls session={props.session} onLogout={props.onLogout} connectionStatus={props.connectionStatus} />
       {props.currentChat?.()?.isGroup && (
         <div style={{
           padding: "8px 20px",
@@ -152,6 +152,7 @@ export default function MainArea(props: Props) {
               {status === 'error' ? `Connection Error: ${error || 'Unknown error'}` :
                status === 'connecting' ? 'Connecting...' :
                status === 'disconnected' ? 'Disconnected - messages may not be delivered' :
+               (!status || status === 'undefined') ? 'Connection Status Unknown' :
                `Connection: ${status}`}
             </div>
           );

@@ -165,13 +165,30 @@ class ApiService {
   }
 
   async createChat(token: string, req: CreateChatRequest): Promise<ApiChat> {
+    console.log('Original request:', req);
+
+    // Remove folder_id if it's null/undefined to avoid serialization issues
+    const cleanReq = { ...req };
+    if (!cleanReq.folder_id) {
+      delete cleanReq.folder_id;
+    }
+
+    const requestBody = JSON.stringify(cleanReq);
+    console.log('Cleaned request:', cleanReq);
+    console.log('Request body being sent:', requestBody);
+    console.log('Using token:', token.substring(0, 20) + '...');
+
     const response = await fetch(`${API_BASE}/api/chats`, {
       method: "POST",
       headers: this.getAuthHeaders(token),
-      body: JSON.stringify(req),
+      body: requestBody,
     });
 
+    console.log('Response status:', response.status, response.statusText);
+
     if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Error response body:', errorText);
       throw new Error(`Failed to create chat: ${response.statusText}`);
     }
 

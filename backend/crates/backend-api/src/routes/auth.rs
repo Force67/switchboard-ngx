@@ -107,3 +107,64 @@ pub async fn github_callback(
 
     Ok(Json(SessionResponse::new(session, user)))
 }
+
+// Development endpoint to create a test token
+#[cfg(debug_assertions)]
+pub async fn dev_token(State(state): State<AppState>) -> Result<Json<SessionResponse>, ApiError> {
+    // Create a development user in the database first
+    sqlx::query(
+        r#"
+        INSERT OR IGNORE INTO users (id, public_id, email, display_name, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+        "#
+    )
+    .bind(1i64)
+    .bind("dev-user-123")
+    .bind("dev@example.com")
+    .bind("Dev User")
+    .bind(chrono::Utc::now().to_rfc3339())
+    .bind(chrono::Utc::now().to_rfc3339())
+    .execute(state.db_pool())
+    .await
+    .map_err(|e| {
+        tracing::error!("Failed to create dev user: {}", e);
+        ApiError::internal_server_error("Failed to create dev user")
+    })?;
+
+    // Create a development session by inserting directly into the database
+    let session_token = cuid2::create_id();
+    let expires_at = chrono::Utc::now() + chrono::Duration::hours(24);
+
+    sqlx::query(
+        r#"
+        INSERT INTO sessions (token, user_id, expires_at, created_at)
+        VALUES (?, ?, ?, ?)
+        "#
+    )
+    .bind(&session_token)
+    .bind(1i64)
+    .bind(expires_at.to_rfc3339())
+    .bind(chrono::Utc::now().to_rfc3339())
+    .execute(state.db_pool())
+    .await
+    .map_err(|e| {
+        tracing::error!("Failed to create dev session: {}", e);
+        ApiError::internal_server_error("Failed to create dev session")
+    })?;
+
+    // Create session and user objects
+    let session = AuthSession {
+        token: session_token.clone(),
+        user_id: 1,
+        expires_at,
+    };
+
+    let user = switchboard_auth::User {
+        id: 1,
+        public_id: "dev-user-123".to_string(),
+        email: Some("dev@example.com".to_string()),
+        display_name: Some("Dev User".to_string()),
+    };
+
+    Ok(Json(SessionResponse::new(session, user)))
+}

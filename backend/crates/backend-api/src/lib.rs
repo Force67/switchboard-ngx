@@ -15,6 +15,7 @@ pub fn build_router(state: AppState) -> Router {
         .route("/health", get(routes::health::health_check))
         .route("/api/auth/github/login", get(routes::auth::github_login))
         .route("/api/auth/github/callback", post(routes::auth::github_callback))
+        .route("/api/auth/dev/token", get(routes::auth::dev_token))
         .route("/api/models", get(routes::models::list_models))
         .route("/api/chat", post(routes::chat::chat_completion))
         // Folder routes

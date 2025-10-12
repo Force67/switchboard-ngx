@@ -31,7 +31,7 @@ pub struct Chat {
     pub folder_id: Option<i64>,
     pub title: String,
     pub is_group: bool,
-    pub messages: String,
+    pub messages: Option<String>, // JSON string of messages, optional for compatibility
     pub created_at: String,
     pub updated_at: String,
 }
@@ -53,6 +53,7 @@ pub struct UpdateFolderRequest {
 #[derive(Debug, Deserialize)]
 pub struct CreateChatRequest {
     pub title: String,
+    #[serde(default)]
     pub messages: Vec<ChatMessage>,
     pub folder_id: Option<String>, // public_id
     #[serde(default)]

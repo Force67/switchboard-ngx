@@ -1,6 +1,7 @@
 import { Accessor } from "solid-js";
 import OnlineIndicator from "./OnlineIndicator";
 import UserPill from "./UserPill";
+import WebSocketStatusIndicator from "./WebSocketStatusIndicator";
 
 interface SessionData {
   token: string;
@@ -15,6 +16,7 @@ interface SessionData {
 interface Props {
   session: Accessor<SessionData | null>;
   onLogout: () => void;
+  connectionStatus?: Accessor<{ status: string; error?: string }>;
 }
 
 export default function TopRightControls(props: Props) {
@@ -43,6 +45,9 @@ export default function TopRightControls(props: Props) {
             <path d="M7 0v2M7 12v2M0 7h2M12 7h2M1.5 1.5l1.5 1.5M11 11l1.5 1.5M1.5 12.5l1.5-1.5M11 3l1.5-1.5" />
           </svg>
         </button>
+        {props.connectionStatus && (
+          <WebSocketStatusIndicator status={props.connectionStatus} />
+        )}
         <OnlineIndicator />
         <UserPill session={props.session} onLogout={props.onLogout} />
       </div>

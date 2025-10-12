@@ -1,6 +1,6 @@
 import { createSignal, createEffect, onCleanup, onMount } from "solid-js";
 
-const WS_BASE = import.meta.env.VITE_WS_BASE ?? "ws://localhost:7070";
+const WS_BASE = import.meta.env.VITE_WS_BASE ?? (typeof window !== 'undefined' ? `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}` : "ws://localhost:7070");
 
 type ConnectionStatus = "connecting" | "connected" | "disconnected" | "error";
 
@@ -29,7 +29,7 @@ interface ServerEvent {
   message?: string;
 }
 
-export function useSocket() {
+export function useSocket(token?: () => string | null) {
   const [state, setState] = createSignal<SocketState>({
     status: "disconnected",
     lastMessage: null,
@@ -45,10 +45,25 @@ export function useSocket() {
   const connect = () => {
     if (socket?.readyState === WebSocket.OPEN) return;
 
+    const authToken = token?.();
+
+    // Don't connect if no token available
+    if (!authToken) {
+      console.log('WebSocket: No token available, skipping connection');
+      setState(prev => ({ ...prev, status: "disconnected", error: "No authentication token" }));
+      return;
+    }
+
     setState(prev => ({ ...prev, status: "connecting", error: null }));
 
     try {
-      socket = new WebSocket(`${WS_BASE}/ws`);
+      const wsUrl = `${WS_BASE}/ws?token=${encodeURIComponent(authToken)}`;
+
+      console.log('WebSocket connecting to:', wsUrl);
+      console.log('Token present:', !!authToken);
+      console.log('Token length:', authToken?.length || 0);
+
+      socket = new WebSocket(wsUrl);
 
       socket.onopen = () => {
         console.log("WebSocket connected");
@@ -110,6 +125,7 @@ export function useSocket() {
 
   const send = (event: ClientEvent) => {
     if (socket?.readyState === WebSocket.OPEN) {
+      console.log('WebSocket sending:', JSON.stringify(event));
       socket.send(JSON.stringify(event));
     } else {
       console.warn("WebSocket not connected, cannot send message");

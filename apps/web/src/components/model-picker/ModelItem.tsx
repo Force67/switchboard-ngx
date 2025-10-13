@@ -1,6 +1,7 @@
 import { Component } from "solid-js";
 import { ModelMeta } from "./models";
 import CapabilityBadge from "./CapabilityBadge";
+import ProviderIcon from "./ProviderIcon";
 
 interface Props {
   model: ModelMeta;
@@ -20,14 +21,7 @@ const ModelItem: Component<Props> = (props) => {
     }
   };
 
-  const leftIcon = () => {
-    if (props.model.group === 'gpt') {
-      return <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>;
-    } else {
-      return <svg viewBox="0 0 24 24"><path d="M12 2l2.6 5.7 6.3.9-4.6 4.5 1.1 6.3L12 16.9 6.6 19.4l1.1-6.3L3 8.6l6.3-.9L12 2z"/></svg>;
-    }
-  };
-
+  
   return (
     <button
       class={`row ${isDisabled() ? 'disabled' : ''}`}
@@ -35,20 +29,37 @@ const ModelItem: Component<Props> = (props) => {
       role="option"
       aria-selected={isSelected()}
     >
-      <div class="lefticon">
-        {leftIcon()}
-      </div>
-      <div class="name">
-        {props.model.name}
-        {props.model.tier === 'pro' && <span class="diamond">🔹</span>}
-         {props.model.pricing && (
-           <span class="pricing">
-             {props.model.pricing.input !== undefined && ` $${(props.model.pricing.input * 1000000).toFixed(2)}/M`}
-             {props.model.pricing.output !== undefined && ` / $${(props.model.pricing.output * 1000000).toFixed(2)}/M`}
-           </span>
-         )}
+      <div class="model-info">
+        <div class="provider-icon">
+          <ProviderIcon provider={props.model.provider || 'openrouter'} class="provider-icon-svg" />
+        </div>
+        <div class="name">
+          {props.model.name}
+          {props.model.tier === 'pro' && <span class="diamond">🔹</span>}
+        </div>
       </div>
       <div class="flexfill"></div>
+       {props.model.pricing && (
+         <div class="pricing-container">
+           {props.model.pricing.input !== undefined && (
+             <div class="pricing-item input">
+               <svg class="arrow-icon" viewBox="0 0 12 12">
+                 <path d="M6 2L10 6L6 10L6 7L2 7L2 5L6 5Z" fill="currentColor"/>
+               </svg>
+               <span class="pricing-text">${(props.model.pricing.input * 1000000).toFixed(2)}</span>
+             </div>
+           )}
+           {props.model.pricing.output !== undefined && (
+             <div class="pricing-item output">
+               <svg class="arrow-icon" viewBox="0 0 12 12">
+                 <path d="M6 10L2 6L6 2L6 5L10 5L10 7L6 7Z" fill="currentColor"/>
+               </svg>
+               <span class="pricing-text">${(props.model.pricing.output * 1000000).toFixed(2)}</span>
+             </div>
+           )}
+           <span class="pricing-unit">/M</span>
+         </div>
+       )}
        <div class="badges">
          {props.model.badges.map(badge => (
            <CapabilityBadge type={badge} disabled={isDisabled()} />

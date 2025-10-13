@@ -52,7 +52,7 @@
 .sidebar .spacer{flex:1}
 
 .newchat{
-  height:36px; width:100%; border-radius:10px; border:1px solid var(--hair);
+  height:48px; width:100%; border-radius:10px; border:1px solid var(--hair);
   display:flex; align-items:center; gap:8px; padding:0 12px;
   background:linear-gradient(180deg,#5c0837 0%, #410627 100%);
   cursor:pointer;
@@ -61,7 +61,7 @@
 .newchat svg{width:16px;height:16px;stroke:#f2eef5;stroke-width:1.5;fill:none}
 
 .newfolder{
-  height:28px; padding:0 10px; border-radius:10px; border:1px solid var(--hair);
+  height:40px; padding:0 10px; border-radius:10px; border:1px solid var(--hair);
   display:flex; align-items:center; gap:6px;
   background:var(--chip); cursor:pointer;
 }

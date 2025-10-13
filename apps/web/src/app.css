@@ -349,3 +349,171 @@
   stroke-width: 1.5;
   fill: none;
 }
+
+/* Message blowing animation effect */
+@keyframes messageBlow {
+  0% {
+    transform: scale(1) translateY(0);
+    filter: brightness(1) blur(0px);
+  }
+  25% {
+    transform: scale(1.02) translateY(-2px);
+    filter: brightness(1.1) blur(0.5px);
+  }
+  50% {
+    transform: scale(1.01) translateY(1px);
+    filter: brightness(1.05) blur(0.3px);
+  }
+  75% {
+    transform: scale(1.015) translateY(-1px);
+    filter: brightness(1.08) blur(0.4px);
+  }
+  100% {
+    transform: scale(1) translateY(0);
+    filter: brightness(1) blur(0px);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% center;
+  }
+  100% {
+    background-position: 200% center;
+  }
+}
+
+.user-message-blowing {
+  position: relative;
+  overflow: hidden;
+}
+
+.user-message-blowing::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.1),
+    rgba(229, 76, 191, 0.15),
+    rgba(255, 255, 255, 0.1),
+    transparent
+  );
+  animation: shimmer 3s ease-in-out infinite;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.user-message-blowing::after {
+  content: "";
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  background: linear-gradient(
+    45deg,
+    transparent,
+    rgba(229, 76, 191, 0.2),
+    transparent,
+    rgba(215, 196, 230, 0.15),
+    transparent
+  );
+  border-radius: 14px;
+  animation: shimmer 4s ease-in-out infinite reverse;
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* Blowing particles */
+.blowing-particles {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  z-index: 2;
+  overflow: visible;
+}
+
+.particle {
+  position: absolute;
+  font-size: 12px;
+  opacity: 0;
+  animation: particleFloat 3s ease-in-out infinite;
+}
+
+.particle-1 {
+  top: 20%;
+  left: 10%;
+  animation-delay: 0s;
+}
+
+.particle-2 {
+  top: 30%;
+  right: 15%;
+  animation-delay: 0.6s;
+}
+
+.particle-3 {
+  top: 50%;
+  left: 8%;
+  animation-delay: 1.2s;
+}
+
+.particle-4 {
+  top: 70%;
+  right: 12%;
+  animation-delay: 1.8s;
+}
+
+.particle-5 {
+  top: 85%;
+  left: 20%;
+  animation-delay: 2.4s;
+}
+
+@keyframes particleFloat {
+  0% {
+    transform: translateY(0) translateX(0) scale(0);
+    opacity: 0;
+  }
+  20% {
+    transform: translateY(-10px) translateX(5px) scale(1);
+    opacity: 0.8;
+  }
+  50% {
+    transform: translateY(-25px) translateX(15px) scale(1.2);
+    opacity: 1;
+  }
+  80% {
+    transform: translateY(-40px) translateX(25px) scale(0.8);
+    opacity: 0.6;
+  }
+  100% {
+    transform: translateY(-60px) translateX(40px) scale(0);
+    opacity: 0;
+  }
+}
+
+/* Glow effect for blowing message */
+@keyframes glowPulse {
+  0% {
+    box-shadow: 0 0 20px rgba(229, 76, 191, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(229, 76, 191, 0.5), 0 0 40px rgba(215, 196, 230, 0.2);
+  }
+  100% {
+    box-shadow: 0 0 20px rgba(229, 76, 191, 0.3);
+  }
+}
+
+.user-message-blowing {
+  animation: messageBlow 3s ease-in-out infinite, glowPulse 3s ease-in-out infinite;
+}

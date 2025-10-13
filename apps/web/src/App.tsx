@@ -112,6 +112,7 @@ const fetchDevSession = async (): Promise<SessionData | null> => {
 };
 
 export default function App() {
+  console.log('🚀 App render called');
   const [session, setSession] = createSignal<SessionData | null>(null);
   const [prompt, setPrompt] = createSignal("");
   const [attachedImages, setAttachedImages] = createSignal<File[]>([]);
@@ -126,6 +127,7 @@ export default function App() {
   const [authenticating, setAuthenticating] = createSignal(false);
   const [authError, setAuthError] = createSignal<string | null>(null);
   const [modelPickerOpen, setModelPickerOpen] = createSignal(false);
+  const [testLoading, setTestLoading] = createSignal(false);
 
   // WebSocket integration
   const socket = useSocket(() => session()?.token || null);
@@ -481,9 +483,16 @@ export default function App() {
 
       // Note: Assistant response will come via WebSocket and be handled by the effect above
 
+      // Fallback: Stop loading after 10 seconds in case WebSocket doesn't work
+      setTimeout(() => {
+        if (loading()) {
+          console.log('⏰ Fallback: Stopping loading after timeout');
+          setLoading(false);
+        }
+      }, 10000);
+
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to send message");
-    } finally {
       setLoading(false);
     }
   };
@@ -511,7 +520,9 @@ export default function App() {
     }
 
     if (message.type === 'message') {
-      console.log("📨 Message type is 'message'");
+      // Stop loading immediately when any message is received
+      setLoading(false);
+
       if (message.chat_id === currentId) {
         console.log("✅ Message chat ID matches current chat ID - processing message");
       // Check if this message already exists in the chat (user messages are added immediately)
@@ -570,6 +581,9 @@ export default function App() {
         console.log("📊 Chat with new message:", updated.find(c => c.id === currentId)?.messages);
         return updated;
       });
+
+      // Stop loading when any message is received
+      setLoading(false);
       } else {
         console.log("❌ Message chat ID does NOT match current chat ID:", {
           messageChatId: message.chat_id,
@@ -754,7 +768,7 @@ export default function App() {
         onDeleteFolder={deleteFolder}
         actions={sidebarActions}
       />
-        <MainArea
+          <MainArea
           prompt={prompt}
           setPrompt={setPrompt}
           attachedImages={attachedImages}

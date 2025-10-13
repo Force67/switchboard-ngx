@@ -1,4 +1,4 @@
-import { Accessor, Setter, For, createMemo, createSignal, Show } from "solid-js";
+import { Accessor, Setter, For, createMemo, createSignal, createEffect, Show } from "solid-js";
 import { onMount, onCleanup } from "solid-js";
 import TopRightControls from "./TopRightControls";
 import Composer from "./Composer";
@@ -135,42 +135,68 @@ export default function MainArea(props: Props) {
             </div>
           );
         })()}
-        <For each={props.currentMessages()}>
-          {(message) => {
+                  <For each={props.currentMessages()}>
+          {(message, i) => {
             const isCurrentUser = message.user_id === 1; // Assuming user_id 1 is current user
             const displayName = message.role === 'user'
               ? (isCurrentUser ? 'You' : `User ${message.user_id}`)
               : `Assistant${message.model ? ` (${message.model})` : ''}`;
 
+            // Only animate while this user message has no assistant message after it
+            const shouldAnimate = () => {
+              if (message.role !== "user") return false;
+              const arr = props.currentMessages();        // always read the live array
+              for (let j = i() + 1; j < arr.length; j++) {
+                if (arr[j].role === "assistant") return false; // assistant reply arrived
+              }
+              return true; // still waiting on assistant reply after this user msg
+            };
+
             return (
-              <div style={`padding: 20px; margin: 10px 20px; border-radius: 12px; background: ${message.role === 'user' ? 'var(--bg-3)' : 'var(--bg-2)'}; color: var(--text-0);`}>
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                  <div style="font-weight: bold;">
-                    {displayName}
+              <>
+                <div
+                  style={`padding: 20px; margin: 10px 20px; border-radius: 12px; background: ${message.role === 'user' ? 'var(--bg-3)' : 'var(--bg-2)'}; color: var(--text-0); position: relative; ${shouldAnimate() ? 'border: 3px solid yellow;' : ''}`}
+                  classList={{
+                    'user-message-blowing': shouldAnimate()
+                  }}
+                >
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <div style="font-weight: bold;">
+                      {displayName}
+                    </div>
+                    {message.timestamp && (
+                      <small style="color: var(--text-1);">
+                        {new Date(message.timestamp).toLocaleTimeString()}
+                      </small>
+                    )}
                   </div>
-                  {message.timestamp && (
-                    <small style="color: var(--text-1);">
-                      {new Date(message.timestamp).toLocaleTimeString()}
+                  <LatexRenderer content={message.content} />
+                  {message.usage && (
+                    <small style="color: var(--text-1); margin-top: 8px; display: block;">
+                      Tokens: {message.usage.prompt_tokens} prompt, {message.usage.completion_tokens} completion
                     </small>
                   )}
+                  {message.reasoning && message.reasoning.length > 0 && (
+                    <details style="margin-top: 8px;">
+                      <summary style="cursor: pointer; color: var(--text-1);">Reasoning</summary>
+                      <ol style="margin-top: 4px;">
+                        <For each={message.reasoning}>
+                          {(step) => <li style="color: var(--text-1);">{step}</li>}
+                        </For>
+                      </ol>
+                    </details>
+                  )}
                 </div>
-                <LatexRenderer content={message.content} />
-                {message.usage && (
-                  <small style="color: var(--text-1); margin-top: 8px; display: block;">
-                    Tokens: {message.usage.prompt_tokens} prompt, {message.usage.completion_tokens} completion
-                  </small>
-                )}
-                {message.reasoning && message.reasoning.length > 0 && (
-                  <details style="margin-top: 8px;">
-                    <summary style="cursor: pointer; color: var(--text-1);">Reasoning</summary>
-                    <ol style="margin-top: 4px;">
-                      <For each={message.reasoning}>
-                        {(step) => <li style="color: var(--text-1);">{step}</li>}
-                      </For>
-                    </ol>
-                  </details>
-                )}
-              </div>
+                <Show when={shouldAnimate()}>
+                  <div class="blowing-particles">
+                    <div class="particle particle-1">✨</div>
+                    <div class="particle particle-2">🌟</div>
+                    <div class="particle particle-3">💫</div>
+                    <div class="particle particle-4">⭐</div>
+                    <div class="particle particle-5">✨</div>
+                  </div>
+                </Show>
+              </>
             );
           }}
         </For>

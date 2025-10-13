@@ -48,7 +48,7 @@ const ModelPickerPanel: Component<Props> = (props) => {
     });
   };
 
-  const isFavorite = createMemo(() => (id: string) => favorites().includes(id));
+  const isFavorite = (id: string) => favorites().includes(id);
 
   const filteredModels = createMemo(() => {
     let models = props.models.filter(model =>
@@ -94,7 +94,7 @@ const ModelPickerPanel: Component<Props> = (props) => {
         highlightedId={highlightedId()}
         onSelect={props.onSelect}
         onToggleFavorite={toggleFavorite}
-        isFavorite={isFavorite()}
+        isFavorite={isFavorite}
         expanded={expanded()}
       />
       <div class="divider"></div>

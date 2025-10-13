@@ -39,6 +39,11 @@ const ModelItem: Component<Props> = (props) => {
         </div>
       </div>
       <div class="flexfill"></div>
+       <div class="badges">
+         {props.model.badges.map(badge => (
+           <CapabilityBadge type={badge} disabled={isDisabled()} />
+         ))}
+       </div>
        {props.model.pricing && (
          <div class="pricing-container">
            {props.model.pricing.input !== undefined && (
@@ -60,11 +65,6 @@ const ModelItem: Component<Props> = (props) => {
            <span class="pricing-unit">/M</span>
          </div>
        )}
-       <div class="badges">
-         {props.model.badges.map(badge => (
-           <CapabilityBadge type={badge} disabled={isDisabled()} />
-         ))}
-       </div>
        <span
          class="favorite-btn"
          onClick={(e) => {

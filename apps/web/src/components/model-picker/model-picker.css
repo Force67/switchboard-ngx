@@ -21,6 +21,7 @@
 
 .list {
   overflow-y: auto; max-height: 480px; padding-bottom: 4px; /* room over divider */
+  min-height: 48px; /* ensure at least one row is visible */
 }
 
 .row {
@@ -106,11 +107,39 @@
 .badges { display:flex; align-items:center; gap:8px; }
 .badge {
   width:24px; height:24px; border-radius:6px; display:grid; place-items:center;
-  background: var(--badge-bg); border: 1px solid var(--badge-hair);
+  background: transparent; border: none;
+  position: relative;
+  z-index: 1;
 }
-.badge svg { width:14px; height:14px; stroke:#cfc3d9; stroke-width:1.6; fill:none; }
-.badge.reasoning svg { fill: #cfc3d9; stroke: none; }
+.badge svg {
+  width:16px; height:16px;
+  stroke: #666;
+  stroke-width:1.8;
+  fill:none;
+  display: block;
+}
+.badge.reasoning svg {
+  fill: #666;
+  stroke: #666;
+}
+.badge.image svg {
+  fill: #666;
+  stroke: #666;
+}
 .badge.dim { opacity: .35; }
+
+/* Light mode colors */
+[data-theme="light"] .badge svg {
+  stroke: #333;
+}
+[data-theme="light"] .badge.reasoning svg {
+  fill: #333;
+  stroke: #333;
+}
+[data-theme="light"] .badge.image svg {
+  fill: #333;
+  stroke: #333;
+}
 
 .favorite-btn {
   width: 24px; height: 24px; border: none; background: transparent; cursor: pointer;

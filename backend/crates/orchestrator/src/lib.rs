@@ -12,8 +12,9 @@ use denkwerk::{
 };
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use serde_json;
 use thiserror::Error;
-use tracing::{debug, info, warn};
+use tracing::{debug, error, info, warn};
 
 use switchboard_config::{AppConfig, OpenRouterProviderConfig, OrchestratorConfig};
 
@@ -188,32 +189,84 @@ impl Orchestrator {
         }
 
         let response = request.send().await?.error_for_status()?;
-        let parsed: OpenRouterModelList = response.json().await?;
+
+        // Debug: log the raw response text first
+        let response_text = response.text().await?;
+        debug!(raw_response = %response_text, "Raw OpenRouter API response");
+
+        // Try to parse as JSON
+        let parsed: OpenRouterModelList = serde_json::from_str(&response_text)
+            .map_err(|e| {
+                error!(error = %e, "Failed to parse OpenRouter response as JSON");
+                error!(raw_response_preview = %&response_text[..response_text.len().min(500)], "Response preview");
+                OrchestratorError::ProviderResponse(e)
+            })?;
 
         let models = parsed
             .data
             .into_iter()
             .map(|model| {
+                // Parse pricing directly from JSON - be more flexible with field names
                 let pricing = model.pricing.as_ref().map(|p| {
-                    let input = p.get("prompt").and_then(|s| s.parse::<f64>().ok());
-                    let output = p.get("completion").and_then(|s| s.parse::<f64>().ok());
+                    let input = p.prompt
+                        .as_ref()
+                        .or_else(|| p.input.as_ref())
+                        .and_then(|s| s.parse::<f64>().ok());
+                    let output = p.completion
+                        .as_ref()
+                        .or_else(|| p.output.as_ref())
+                        .and_then(|s| s.parse::<f64>().ok());
                     ModelPricing { input, output }
                 });
-                let supports_images = model
-                    .modality
+
+                // Trust capabilities array from OpenRouter API
+                let caps = model.capabilities.unwrap_or_default();
+
+                // Get input modalities from the array (preferred)
+                let input_modalities = model.architecture
                     .as_ref()
-                    .map(|m| m.contains("image"))
-                    .unwrap_or(false);
-                let supports_reasoning = model.id.contains("deepseek")
-                    || model.id.contains("o1")
-                    || model.id.contains("reasoning");
+                    .and_then(|a| a.input_modalities.clone())
+                    .unwrap_or_default();
+
+                // Fallback: parse string modality if input_modalities is empty
+                let modalities = if input_modalities.is_empty() {
+                    model.architecture
+                        .as_ref()
+                        .and_then(|a| a.modality.as_ref())
+                        .map(|m| {
+                            // Parse "text+image->text" or "text->text" format
+                            if m.contains("->") {
+                                m.split("->").next()
+                                    .unwrap_or("")
+                                    .split("+")
+                                    .map(|s| s.trim().to_string())
+                                    .collect()
+                            } else {
+                                m.split("+").map(|s| s.trim().to_string()).collect()
+                            }
+                        })
+                        .unwrap_or_default()
+                } else {
+                    input_modalities
+                };
+
+                // Get supported parameters for capability detection
+                let supported_params = model.supported_parameters.unwrap_or_default();
+
                 OpenRouterModelSummary {
                     id: model.id.clone(),
                     label: model.name.unwrap_or_else(|| model.id.clone()),
                     description: model.description,
                     pricing,
-                    supports_reasoning,
-                    supports_images,
+                    supports_reasoning: supported_params.contains(&"reasoning".to_string()),
+                    supports_images: modalities.contains(&"image".to_string()),
+                    supports_tools: supported_params.contains(&"tools".to_string()) || supported_params.contains(&"tool_choice".to_string()),
+                    supports_agents: caps.contains(&"agents".to_string()), // Only if explicitly marked as agent
+                    supports_function_calling: supported_params.contains(&"tool_choice".to_string()) || supported_params.contains(&"tools".to_string()),
+                    supports_vision: modalities.contains(&"image".to_string()),
+                    supports_tool_use: supported_params.contains(&"tools".to_string()),
+                    supports_structured_outputs: supported_params.contains(&"structured_outputs".to_string()),
+                    supports_streaming: supported_params.contains(&"streaming".to_string()) || true, // Default true for modern models
                 }
             })
             .collect();
@@ -353,6 +406,20 @@ pub struct OpenRouterModelSummary {
     pub supports_reasoning: bool,
     #[serde(default)]
     pub supports_images: bool,
+    #[serde(default)]
+    pub supports_tools: bool,
+    #[serde(default)]
+    pub supports_agents: bool,
+    #[serde(default)]
+    pub supports_function_calling: bool,
+    #[serde(default)]
+    pub supports_vision: bool,
+    #[serde(default)]
+    pub supports_tool_use: bool,
+    #[serde(default)]
+    pub supports_structured_outputs: bool,
+    #[serde(default)]
+    pub supports_streaming: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -363,12 +430,40 @@ struct OpenRouterModelList {
 #[derive(Debug, Deserialize)]
 struct OpenRouterModelEntry {
     id: String,
-    #[serde(default)]
+    #[serde(default, alias = "model_name")]
     name: Option<String>,
-    #[serde(default)]
+    #[serde(default, alias = "model_description")]
     description: Option<String>,
     #[serde(default)]
-    pricing: Option<std::collections::HashMap<String, String>>,
+    pricing: Option<OpenRouterPricing>,
     #[serde(default)]
-    modality: Option<String>,
+    capabilities: Option<Vec<String>>,
+    #[serde(default)]
+    architecture: Option<OpenRouterArchitecture>,
+    #[serde(default)]
+    supported_parameters: Option<Vec<String>>,
+    #[serde(default)]
+    context_length: Option<i32>,
+}
+
+#[derive(Debug, Deserialize)]
+struct OpenRouterArchitecture {
+    #[serde(default)]
+    modality: Option<String>,  // Keep as string for now
+    #[serde(default)]
+    input_modalities: Option<Vec<String>>,
+    #[serde(default)]
+    output_modalities: Option<Vec<String>>,
+}
+
+#[derive(Debug, Deserialize)]
+struct OpenRouterPricing {
+    #[serde(default, alias = "prompt_price")]
+    prompt: Option<String>,
+    #[serde(default, alias = "completion_price")]
+    completion: Option<String>,
+    #[serde(default)]
+    input: Option<String>,
+    #[serde(default)]
+    output: Option<String>,
 }

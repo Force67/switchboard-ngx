@@ -86,13 +86,14 @@ pub async fn list_chats(
 
     let chats = sqlx::query_as::<_, Chat>(
         r#"
-        SELECT c.id, c.public_id, c.user_id, c.folder_id, c.title, c.is_group, NULL as messages, c.created_at, c.updated_at
+        SELECT c.id, c.public_id, c.user_id, c.folder_id, c.title, c.chat_type, c.created_at, c.updated_at
         FROM chats c
-        WHERE c.user_id = ? OR (c.is_group = 1 AND EXISTS (SELECT 1 FROM chat_members cm WHERE cm.chat_id = c.id AND cm.user_id = ?))
-        ORDER BY c.created_at DESC
+        WHERE c.id IN (
+            SELECT chat_id FROM chat_members WHERE user_id = ?
+        )
+        ORDER BY c.updated_at DESC
         "#
     )
-    .bind(user.id)
     .bind(user.id)
     .fetch_all(state.db_pool())
     .await
@@ -104,9 +105,8 @@ pub async fn list_chats(
     // Add messages to each chat
     let mut chats_with_messages = Vec::new();
     for chat in chats {
-        let messages_json = fetch_chat_messages(chat.id, state.db_pool()).await?;
+        let _messages_json = fetch_chat_messages(chat.id, state.db_pool()).await?;
         let chat_with_messages = Chat {
-            messages: messages_json,
             ..chat
         };
         chats_with_messages.push(chat_with_messages);
@@ -143,18 +143,18 @@ pub async fn create_chat(
         None
     };
 
-    // Create the chat first
+    // Create the chat first (user_id is now nullable, managed through chat_members)
     let chat_db_id = sqlx::query(
         r#"
-        INSERT INTO chats (public_id, user_id, folder_id, title, is_group, created_at, updated_at)
+        INSERT INTO chats (public_id, user_id, folder_id, title, chat_type, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?)
         "#,
     )
     .bind(&public_id)
-    .bind(user.id)
+    .bind(user.id)  // Set user_id for backwards compatibility
     .bind(folder_db_id)
     .bind(&req.title)
-    .bind(req.is_group)
+    .bind(&req.chat_type)
     .bind(&now)
     .bind(&now)
     .execute(state.db_pool())
@@ -215,7 +215,7 @@ pub async fn create_chat(
     })?;
 
     // Get messages for the newly created chat
-    let messages_json = if req.messages.is_empty() {
+    let _messages_json = if req.messages.is_empty() {
         Some("[]".to_string())
     } else {
         // Return the initial messages as JSON
@@ -227,11 +227,10 @@ pub async fn create_chat(
     let chat = Chat {
         id: chat_db_id,
         public_id: public_id.clone(),
-        user_id: user.id,
+        user_id: Some(user.id),
         folder_id: folder_db_id,
         title: req.title.clone(),
-        is_group: req.is_group,
-        messages: messages_json,
+        chat_type: req.chat_type.clone(),
         created_at: now.clone(),
         updated_at: now.clone(),
     };
@@ -249,9 +248,10 @@ pub async fn get_chat(
 
     let chat = sqlx::query_as::<_, Chat>(
         r#"
-        SELECT id, public_id, user_id, folder_id, title, is_group, NULL as messages, created_at, updated_at
-        FROM chats
-        WHERE public_id = ? AND user_id = ?
+        SELECT c.id, c.public_id, c.user_id, c.folder_id, c.title, c.chat_type, c.created_at, c.updated_at
+        FROM chats c
+        JOIN chat_members cm ON c.id = cm.chat_id
+        WHERE c.public_id = ? AND cm.user_id = ?
         "#
     )
     .bind(&chat_id)
@@ -264,10 +264,7 @@ pub async fn get_chat(
     })?
     .ok_or_else(|| ApiError::not_found("Chat not found"))?;
 
-    // Add messages to the chat
-    let messages_json = fetch_chat_messages(chat.id, state.db_pool()).await?;
     let chat_with_messages = Chat {
-        messages: messages_json,
         ..chat
     };
 
@@ -344,11 +341,12 @@ pub async fn update_chat(
         ApiError::internal_server_error("Failed to update chat")
     })?;
 
-    let mut chat = sqlx::query_as::<_, Chat>(
+    let chat = sqlx::query_as::<_, Chat>(
         r#"
-        SELECT id, public_id, user_id, folder_id, title, is_group, NULL as messages, created_at, updated_at
-        FROM chats
-        WHERE public_id = ? AND user_id = ?
+        SELECT c.id, c.public_id, c.user_id, c.folder_id, c.title, c.chat_type, c.created_at, c.updated_at
+        FROM chats c
+        JOIN chat_members cm ON c.id = cm.chat_id
+        WHERE c.public_id = ? AND cm.user_id = ?
         "#
     )
     .bind(&chat_id)
@@ -361,8 +359,6 @@ pub async fn update_chat(
     })?
     .ok_or_else(|| ApiError::not_found("Chat not found"))?;
 
-    chat.messages = fetch_chat_messages(chat.id, state.db_pool()).await?;
-
     Ok(Json(ChatResponse { chat }))
 }
 
@@ -374,9 +370,31 @@ pub async fn delete_chat(
     let token = require_bearer(&headers)?;
     let (user, _) = state.authenticate(&token).await?;
 
-    sqlx::query("DELETE FROM chats WHERE public_id = ? AND user_id = ?")
+    // Check if user is owner of the chat before deleting
+    let chat_role: Option<String> = sqlx::query_scalar(
+        r#"
+        SELECT cm.role FROM chats c
+        JOIN chat_members cm ON c.id = cm.chat_id
+        WHERE c.public_id = ? AND cm.user_id = ?
+        "#
+    )
+    .bind(&chat_id)
+    .bind(user.id)
+    .fetch_optional(state.db_pool())
+    .await
+    .map_err(|e| {
+        tracing::error!("Failed to check chat ownership: {}", e);
+        ApiError::internal_server_error("Failed to delete chat")
+    })?;
+
+    let chat_role = chat_role.ok_or_else(|| ApiError::not_found("Chat not found"))?;
+
+    if chat_role != "owner" {
+        return Err(ApiError::forbidden("Only chat owners can delete chats"));
+    }
+
+    sqlx::query("DELETE FROM chats WHERE public_id = ?")
         .bind(&chat_id)
-        .bind(user.id)
         .execute(state.db_pool())
         .await
         .map_err(|e| {
@@ -397,11 +415,11 @@ pub async fn create_invite(
     let (user, _) = state.authenticate(&token).await?;
 
     // Check if chat exists and is a group chat, and user is a member
-    let chat_db_id: Option<i64> = sqlx::query_scalar(
+    let result: Option<(i64, String)> = sqlx::query_as(
         r#"
-        SELECT c.id FROM chats c
+        SELECT c.id, cm.role FROM chats c
         JOIN chat_members cm ON c.id = cm.chat_id
-        WHERE c.public_id = ? AND c.is_group = 1 AND cm.user_id = ?
+        WHERE c.public_id = ? AND c.chat_type = 'group' AND cm.user_id = ?
         "#,
     )
     .bind(&chat_id)
@@ -413,8 +431,13 @@ pub async fn create_invite(
         ApiError::internal_server_error("Failed to check chat")
     })?;
 
-    let chat_db_id =
-        chat_db_id.ok_or_else(|| ApiError::not_found("Chat not found or not a group chat"))?;
+    let (chat_db_id, user_role) =
+        result.ok_or_else(|| ApiError::not_found("Chat not found or not a group chat"))?;
+
+    // Check if user has permission to invite (owner or admin)
+    if user_role != "owner" && user_role != "admin" {
+        return Err(ApiError::forbidden("Only owners and admins can invite members"));
+    }
 
     let now = chrono::Utc::now().to_rfc3339();
 
@@ -725,8 +748,6 @@ pub async fn update_member_role(
             }
         }
     }
-
-    let now = chrono::Utc::now().to_rfc3339();
 
     // Update the role
     sqlx::query(

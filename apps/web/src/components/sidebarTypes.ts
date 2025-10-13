@@ -2,6 +2,18 @@ import type {
   Chat as BaseChat,
   Message as BaseMessage,
   TokenUsage as BaseTokenUsage,
+  Folder as BaseFolder,
+  User,
+  ChatMember,
+  ChatInvite,
+  Reaction,
+  MessageEdit,
+  MessageDeletion,
+  MessageAttachment,
+  Notification,
+  Permission,
+  Session,
+  UserIdentity,
 } from "../types/chat";
 import type { ApiChat } from "../api";
 
@@ -10,16 +22,24 @@ export type ID = string;
 export type Chat = BaseChat;
 export type Message = BaseMessage;
 export type TokenUsage = BaseTokenUsage;
-
-export type Folder = {
-  id: ID;
-  public_id: string;
-  name: string;
-  color?: string;
+export type Folder = Omit<BaseFolder, 'parent_id'> & {
   parentId?: ID;            // undefined => top-level
   // derived: depth = parentId ? 2 : 1
   collapsed?: boolean;      // UI state
 };
+
+// Export all new types
+export type User = User;
+export type ChatMember = ChatMember;
+export type ChatInvite = ChatInvite;
+export type Reaction = Reaction;
+export type MessageEdit = MessageEdit;
+export type MessageDeletion = MessageDeletion;
+export type MessageAttachment = MessageAttachment;
+export type Notification = Notification;
+export type Permission = Permission;
+export type Session = Session;
+export type UserIdentity = UserIdentity;
 
 export type SidebarState = {
   folders: Record<ID, Folder>;

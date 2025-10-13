@@ -1,7 +1,11 @@
+pub mod attachments;
 pub mod auth;
 pub mod chat;
 pub mod chats;
 pub mod folders;
 pub mod health;
+pub mod messages;
 pub mod models;
+pub mod notifications;
+pub mod permissions;
 pub mod websocket;

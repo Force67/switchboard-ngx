@@ -61,7 +61,7 @@ async fn handle_socket(
     let mut subscribed_chats = HashMap::new(); // chat_public_id -> (chat_db_id, broadcaster)
 
     let (out_tx, mut out_rx) = mpsc::channel::<ServerEvent>(100);
-    let sender_task = tokio::spawn(async move {
+    let _sender_task = tokio::spawn(async move {
         while let Some(event) = out_rx.recv().await {
             let json = serde_json::to_string(&event).unwrap();
             tracing::debug!("📡 Sending WebSocket message to client: {}", json);

@@ -73,6 +73,78 @@ pub fn build_router(state: AppState) -> Router {
             "/api/chats/:chat_id/members/:member_user_id",
             delete(routes::chats::remove_member),
         )
+        // Message routes
+        .route(
+            "/api/chats/:chat_id/messages",
+            get(routes::messages::get_messages),
+        )
+        .route(
+            "/api/chats/:chat_id/messages",
+            post(routes::messages::create_message),
+        )
+        .route(
+            "/api/chats/:chat_id/messages/:message_id",
+            put(routes::messages::update_message),
+        )
+        .route(
+            "/api/chats/:chat_id/messages/:message_id",
+            delete(routes::messages::delete_message),
+        )
+        .route(
+            "/api/chats/:chat_id/messages/:message_id/edits",
+            get(routes::messages::get_message_edits),
+        )
+        // Attachment routes
+        .route(
+            "/api/chats/:chat_id/messages/:message_id/attachments",
+            get(routes::attachments::get_message_attachments),
+        )
+        .route(
+            "/api/chats/:chat_id/messages/:message_id/attachments",
+            post(routes::attachments::create_message_attachment),
+        )
+        .route(
+            "/api/chats/:chat_id/messages/:message_id/attachments/:attachment_id",
+            delete(routes::attachments::delete_attachment),
+        )
+        // Notification routes
+        .route(
+            "/api/notifications",
+            get(routes::notifications::get_notifications),
+        )
+        .route(
+            "/api/notifications/unread-count",
+            get(routes::notifications::get_unread_count),
+        )
+        .route(
+            "/api/notifications/mark-all-read",
+            post(routes::notifications::mark_all_read),
+        )
+        .route(
+            "/api/notifications/:notification_id",
+            put(routes::notifications::mark_notification_read),
+        )
+        .route(
+            "/api/notifications/:notification_id",
+            delete(routes::notifications::delete_notification),
+        )
+        // Permission routes
+        .route(
+            "/api/users/:user_id/permissions",
+            get(routes::permissions::get_user_permissions),
+        )
+        .route(
+            "/api/permissions/:resource_type/:resource_id",
+            get(routes::permissions::get_resource_permissions),
+        )
+        .route(
+            "/api/permissions/:resource_type/:resource_id",
+            post(routes::permissions::grant_permission),
+        )
+        .route(
+            "/api/permissions/:resource_type/:resource_id/:user_id",
+            delete(routes::permissions::revoke_permission),
+        )
         // WebSocket route
         .route("/ws", get(routes::websocket::websocket_handler))
         .with_state(state)

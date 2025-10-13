@@ -501,7 +501,7 @@ async fn run_console() -> anyhow::Result<()> {
                     println!("Folders:");
                     for folder in folders {
                         let id: i64 = folder.get("id");
-                        let public_id: String = folder.get("public_id");
+                        let _public_id: String = folder.get("public_id");
                         let name: String = folder.get("name");
                         let color: Option<String> = folder.get("color");
                         println!(

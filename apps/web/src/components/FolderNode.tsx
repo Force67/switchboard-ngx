@@ -1,5 +1,5 @@
 import { For, createSignal, Show } from "solid-js";
-import type { Folder, Chat, Actions, ID } from "./sidebarTypes";
+import type { Folder, Actions, ID, Chat } from "./sidebarTypes";
 import ChatRow from "./ChatRow";
 import ContextMenu from "./ContextMenu";
 import MoveToPopover from "./MoveToPopover";
@@ -21,6 +21,9 @@ interface Props {
   subfolderOrder: Record<ID, ID[]>;
   chatOrderByFolder: Record<ID, ID[]>;
   allChats: Chat[];
+  onRenameChat: (chatId: string, title: string) => void;
+  onDeleteChat: (chatId: string) => void;
+  onDeleteFolder: (folderId: string) => void;
 }
 
 export default function FolderNode(props: Props) {
@@ -142,7 +145,7 @@ export default function FolderNode(props: Props) {
         }
 
         if (confirm(message)) {
-          props.actions.deleteFolder(props.folder.id, "delete-all");
+          props.onDeleteFolder(props.folder.id);
         }
       },
       icon: "M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"
@@ -268,6 +271,9 @@ export default function FolderNode(props: Props) {
                     subfolderOrder={props.subfolderOrder}
                     chatOrderByFolder={props.chatOrderByFolder}
                     allChats={props.allChats}
+                    onRenameChat={props.onRenameChat}
+                    onDeleteChat={props.onDeleteChat}
+                    onDeleteFolder={props.onDeleteFolder}
                   />
                 );
               }}
@@ -278,14 +284,16 @@ export default function FolderNode(props: Props) {
                   chat={chat}
                   isSelected={props.currentChatId === chat.id}
                   depth={props.depth === 1 ? 2 : 2}
-                  onSelect={() => props.onSelectChat(chat.id)}
-                  actions={props.actions}
-                  folders={props.folders}
-                  folderOrder={props.folderOrder}
-                  subfolderOrder={props.subfolderOrder}
-                />
-              )}
-            </For>
+              onSelect={() => props.onSelectChat(chat.id)}
+              actions={props.actions}
+              folders={props.folders}
+              folderOrder={props.folderOrder}
+              subfolderOrder={props.subfolderOrder}
+              onRename={props.onRenameChat}
+              onDelete={props.onDeleteChat}
+            />
+          )}
+        </For>
           </div>
         </div>
       </Show>

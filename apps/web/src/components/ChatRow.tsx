@@ -1,5 +1,5 @@
-import { createSignal, onMount } from "solid-js";
-import type { Chat, Actions, ID, Folder } from "./sidebarTypes";
+import { createEffect, createSignal, onMount } from "solid-js";
+import type { Actions, ID, Folder, Chat } from "./sidebarTypes";
 import ContextMenu from "./ContextMenu";
 import MoveToPopover from "./MoveToPopover";
 
@@ -12,6 +12,8 @@ interface Props {
   folders: Record<ID, Folder>;
   folderOrder: ID[];
   subfolderOrder: Record<ID, ID[]>;
+  onRename: (chatId: string, title: string) => void;
+  onDelete: (chatId: string) => void;
 }
 
 export default function ChatRow(props: Props) {
@@ -24,6 +26,12 @@ export default function ChatRow(props: Props) {
 
   onMount(() => {
     // Register with drag manager if needed
+  });
+
+  createEffect(() => {
+    if (!isEditing()) {
+      setEditValue(props.chat.title);
+    }
   });
 
   const handleContextMenu = (e: MouseEvent) => {
@@ -76,21 +84,30 @@ export default function ChatRow(props: Props) {
     {
       label: "Delete",
       action: () => {
-        // TODO: Implement delete with confirmation
-        console.log("Delete", props.chat.id);
+        const confirmed = confirm(`Delete chat "${props.chat.title}"?`);
+        if (confirmed) {
+          props.onDelete(props.chat.id);
+        }
       },
       icon: "M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"
     }
   ];
 
+  const commitRename = () => {
+    const newTitle = editValue().trim();
+    if (newTitle && newTitle !== props.chat.title) {
+      props.onRename(props.chat.id, newTitle);
+      setEditValue(newTitle);
+    } else {
+      setEditValue(props.chat.title);
+    }
+    setIsEditing(false);
+  };
+
   const handleEditKeyDown = (e: KeyboardEvent) => {
     if (e.key === "Enter") {
-      const newTitle = editValue().trim();
-      if (newTitle && newTitle !== props.chat.title) {
-        // TODO: Implement rename action
-        console.log("Rename chat", props.chat.id, newTitle);
-      }
-      setIsEditing(false);
+      e.preventDefault();
+      commitRename();
     } else if (e.key === "Escape") {
       setEditValue(props.chat.title);
       setIsEditing(false);
@@ -98,8 +115,9 @@ export default function ChatRow(props: Props) {
   };
 
   const handleEditBlur = () => {
-    setIsEditing(false);
-    setEditValue(props.chat.title);
+    if (isEditing()) {
+      commitRename();
+    }
   };
 
   const handleKeyDown = (e: KeyboardEvent) => {

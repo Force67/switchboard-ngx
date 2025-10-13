@@ -36,7 +36,7 @@ pub async fn list_folders(
         FROM folders
         WHERE user_id = ?
         ORDER BY created_at ASC
-        "#
+        "#,
     )
     .bind(user.id)
     .fetch_all(state.db_pool())
@@ -62,17 +62,15 @@ pub async fn create_folder(
 
     let parent_db_id = if let Some(parent_public_id) = &req.parent_id {
         // Resolve parent folder ID from public_id
-        sqlx::query_scalar::<_, i64>(
-            "SELECT id FROM folders WHERE public_id = ? AND user_id = ?"
-        )
-        .bind(parent_public_id)
-        .bind(user.id)
-        .fetch_optional(state.db_pool())
-        .await
-        .map_err(|e| {
-            tracing::error!("Failed to resolve parent folder: {}", e);
-            ApiError::internal_server_error("Failed to resolve parent folder")
-        })?
+        sqlx::query_scalar::<_, i64>("SELECT id FROM folders WHERE public_id = ? AND user_id = ?")
+            .bind(parent_public_id)
+            .bind(user.id)
+            .fetch_optional(state.db_pool())
+            .await
+            .map_err(|e| {
+                tracing::error!("Failed to resolve parent folder: {}", e);
+                ApiError::internal_server_error("Failed to resolve parent folder")
+            })?
     } else {
         None
     };
@@ -134,7 +132,7 @@ pub async fn get_folder(
         SELECT id, public_id, user_id, name, color, parent_id, collapsed, created_at, updated_at
         FROM folders
         WHERE public_id = ? AND user_id = ?
-        "#
+        "#,
     )
     .bind(&folder_id)
     .bind(user.id)
@@ -168,7 +166,7 @@ pub async fn update_folder(
             collapsed = COALESCE(?, collapsed),
             updated_at = ?
         WHERE public_id = ? AND user_id = ?
-        "#
+        "#,
     )
     .bind(&req.name)
     .bind(&req.color)
@@ -188,7 +186,7 @@ pub async fn update_folder(
         SELECT id, public_id, user_id, name, color, parent_id, collapsed, created_at, updated_at
         FROM folders
         WHERE public_id = ? AND user_id = ?
-        "#
+        "#,
     )
     .bind(&folder_id)
     .bind(user.id)
@@ -211,17 +209,15 @@ pub async fn delete_folder(
     let token = require_bearer(&headers)?;
     let (user, _) = state.authenticate(&token).await?;
 
-    sqlx::query(
-        "DELETE FROM folders WHERE public_id = ? AND user_id = ?"
-    )
-    .bind(&folder_id)
-    .bind(user.id)
-    .execute(state.db_pool())
-    .await
-    .map_err(|e| {
-        tracing::error!("Failed to delete folder: {}", e);
-        ApiError::internal_server_error("Failed to delete folder")
-    })?;
+    sqlx::query("DELETE FROM folders WHERE public_id = ? AND user_id = ?")
+        .bind(&folder_id)
+        .bind(user.id)
+        .execute(state.db_pool())
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to delete folder: {}", e);
+            ApiError::internal_server_error("Failed to delete folder")
+        })?;
 
     Ok(())
 }

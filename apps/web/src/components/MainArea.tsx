@@ -6,6 +6,7 @@ import ModelPickerPanel from "./model-picker/ModelPickerPanel";
 import { ModelMeta } from "./model-picker/models";
 import LatexRenderer from "./LatexRenderer";
 import GroupChatManager from "./GroupChatManager";
+import type { Chat, Message } from "../types/chat";
 
 interface ModelOption {
   id: string;
@@ -19,23 +20,6 @@ interface ModelOption {
   supports_images?: boolean;
 }
 
-interface Message {
-  id?: string;
-  chat_id?: string;
-  user_id?: number;
-  role: "user" | "assistant" | "system";
-  content: string;
-  model?: string;
-  usage?: {
-    prompt_tokens: number;
-    completion_tokens: number;
-    total_tokens: number;
-  };
-  reasoning?: string[];
-  timestamp?: string;
-  message_type?: string;
-}
-
 interface SessionData {
   token: string;
   user: {
@@ -44,12 +28,6 @@ interface SessionData {
     display_name?: string | null;
   };
   expires_at: string;
-}
-
-interface Chat {
-  id: string;
-  title: string;
-  isGroup?: boolean;
 }
 
 interface Props {

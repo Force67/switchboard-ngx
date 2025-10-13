@@ -4,11 +4,17 @@ use axum::{
     Json,
 };
 use serde::Serialize;
+use serde_json::json;
+use sqlx::Row;
 
 use uuid::Uuid;
 
 use crate::{
-    routes::models::{Chat, ChatInvite, ChatMember, CreateChatRequest, CreateInviteRequest, InviteResponse, InvitesResponse, MemberResponse, MembersResponse, UpdateChatRequest, UpdateMemberRoleRequest, ChatMessage},
+    routes::models::{
+        Chat, ChatInvite, ChatMember, CreateChatRequest, CreateInviteRequest, InviteResponse,
+        InvitesResponse, MemberResponse, MembersResponse, UpdateChatRequest,
+        UpdateMemberRoleRequest,
+    },
     util::require_bearer,
     ApiError, AppState,
 };
@@ -24,10 +30,51 @@ pub struct ChatResponse {
 }
 
 // Helper function to fetch messages for a chat as JSON
-async fn fetch_chat_messages(chat_id: i64, pool: &sqlx::Pool<sqlx::Sqlite>) -> Result<Option<String>, ApiError> {
-    // For now, return empty array for all chats to fix the frontend parsing issue
-    // TODO: Implement proper message fetching later
-    Ok(Some("[]".to_string()))
+async fn fetch_chat_messages(
+    chat_id: i64,
+    pool: &sqlx::Pool<sqlx::Sqlite>,
+) -> Result<Option<String>, ApiError> {
+    let rows = sqlx::query(
+        r#"
+        SELECT public_id, user_id, content, role, model, message_type, created_at
+        FROM messages
+        WHERE chat_id = ?
+        ORDER BY created_at ASC
+        "#,
+    )
+    .bind(chat_id)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| {
+        tracing::error!("Failed to fetch messages for chat {}: {}", chat_id, e);
+        ApiError::internal_server_error("Failed to fetch chat messages")
+    })?;
+
+    if rows.is_empty() {
+        return Ok(Some("[]".to_string()));
+    }
+
+    let mut messages = Vec::with_capacity(rows.len());
+    for row in rows {
+        let role: String = row.get("role");
+        let content: String = row.get("content");
+        let model: Option<String> = row.try_get("model").unwrap_or(None);
+        let message_json = json!({
+            "id": row.get::<String, _>("public_id"),
+            "user_id": row.get::<i64, _>("user_id"),
+            "role": role,
+            "content": content,
+            "model": model,
+            "timestamp": row.get::<String, _>("created_at"),
+            "message_type": row.get::<String, _>("message_type"),
+        });
+        messages.push(message_json);
+    }
+
+    serde_json::to_string(&messages).map(Some).map_err(|e| {
+        tracing::error!("Failed to serialize messages for chat {}: {}", chat_id, e);
+        ApiError::internal_server_error("Failed to serialize chat messages")
+    })
 }
 
 pub async fn list_chats(
@@ -65,7 +112,9 @@ pub async fn list_chats(
         chats_with_messages.push(chat_with_messages);
     }
 
-    Ok(Json(ChatsResponse { chats: chats_with_messages }))
+    Ok(Json(ChatsResponse {
+        chats: chats_with_messages,
+    }))
 }
 
 pub async fn create_chat(
@@ -81,17 +130,15 @@ pub async fn create_chat(
 
     let folder_db_id = if let Some(folder_public_id) = &req.folder_id {
         // Resolve folder ID from public_id
-        sqlx::query_scalar::<_, i64>(
-            "SELECT id FROM folders WHERE public_id = ? AND user_id = ?"
-        )
-        .bind(folder_public_id)
-        .bind(user.id)
-        .fetch_optional(state.db_pool())
-        .await
-        .map_err(|e| {
-            tracing::error!("Failed to resolve folder: {}", e);
-            ApiError::internal_server_error("Failed to resolve folder")
-        })?
+        sqlx::query_scalar::<_, i64>("SELECT id FROM folders WHERE public_id = ? AND user_id = ?")
+            .bind(folder_public_id)
+            .bind(user.id)
+            .fetch_optional(state.db_pool())
+            .await
+            .map_err(|e| {
+                tracing::error!("Failed to resolve folder: {}", e);
+                ApiError::internal_server_error("Failed to resolve folder")
+            })?
     } else {
         None
     };
@@ -101,7 +148,7 @@ pub async fn create_chat(
         r#"
         INSERT INTO chats (public_id, user_id, folder_id, title, is_group, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?)
-        "#
+        "#,
     )
     .bind(&public_id)
     .bind(user.id)
@@ -121,17 +168,24 @@ pub async fn create_chat(
     // Insert initial messages if provided
     for message in &req.messages {
         let message_public_id = Uuid::new_v4().to_string();
+        let message_type = if message.role.eq_ignore_ascii_case("system") {
+            "system"
+        } else {
+            "text"
+        };
         sqlx::query(
             r#"
-            INSERT INTO messages (public_id, chat_id, user_id, content, message_type, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO messages (public_id, chat_id, user_id, content, message_type, role, model, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             "#
         )
         .bind(&message_public_id)
         .bind(chat_db_id)
         .bind(user.id)
         .bind(&message.content)
-        .bind("text")
+        .bind(message_type)
+        .bind(message.role.as_str())
+        .bind(message.model.clone())
         .bind(&now)
         .bind(&now)
         .execute(state.db_pool())
@@ -147,7 +201,7 @@ pub async fn create_chat(
         r#"
         INSERT INTO chat_members (chat_id, user_id, role, joined_at)
         VALUES (?, ?, ?, ?)
-        "#
+        "#,
     )
     .bind(chat_db_id)
     .bind(user.id)
@@ -217,7 +271,9 @@ pub async fn get_chat(
         ..chat
     };
 
-    Ok(Json(ChatResponse { chat: chat_with_messages }))
+    Ok(Json(ChatResponse {
+        chat: chat_with_messages,
+    }))
 }
 
 pub async fn update_chat(
@@ -231,13 +287,17 @@ pub async fn update_chat(
 
     let now = chrono::Utc::now().to_rfc3339();
 
-    let folder_db_id = if let Some(folder_public_id) = &req.folder_id {
+    let mut folder_update_requested = false;
+    let mut folder_set_null = false;
+    let mut folder_db_id: Option<i64> = None;
+
+    if let Some(folder_public_id) = &req.folder_id {
+        folder_update_requested = true;
         if folder_public_id.is_empty() {
-            None
+            folder_set_null = true;
         } else {
-            // Resolve folder ID from public_id
-            sqlx::query_scalar::<_, i64>(
-                "SELECT id FROM folders WHERE public_id = ? AND user_id = ?"
+            folder_db_id = sqlx::query_scalar::<_, i64>(
+                "SELECT id FROM folders WHERE public_id = ? AND user_id = ?",
             )
             .bind(folder_public_id)
             .bind(user.id)
@@ -246,28 +306,33 @@ pub async fn update_chat(
             .map_err(|e| {
                 tracing::error!("Failed to resolve folder: {}", e);
                 ApiError::internal_server_error("Failed to resolve folder")
-            })?
-        }
-    } else {
-        None
-    };
+            })?;
 
-    let messages_json = req.messages.as_ref().map(|msgs| {
-        serde_json::to_string(msgs).unwrap_or_else(|_| "[]".to_string())
-    });
+            if folder_db_id.is_none() {
+                return Err(ApiError::not_found("Folder not found"));
+            }
+        }
+    }
+
+    let update_folder_flag: i32 = if folder_update_requested { 1 } else { 0 };
+    let set_folder_null_flag: i32 = if folder_set_null { 1 } else { 0 };
 
     sqlx::query(
         r#"
         UPDATE chats
         SET title = COALESCE(?, title),
-            messages = COALESCE(?, messages),
-            folder_id = ?,
+            folder_id = CASE
+                WHEN ? = 0 THEN folder_id
+                WHEN ? = 1 THEN NULL
+                ELSE ?
+            END,
             updated_at = ?
         WHERE public_id = ? AND user_id = ?
-        "#
+        "#,
     )
     .bind(&req.title)
-    .bind(&messages_json)
+    .bind(update_folder_flag)
+    .bind(set_folder_null_flag)
     .bind(folder_db_id)
     .bind(&now)
     .bind(&chat_id)
@@ -279,9 +344,9 @@ pub async fn update_chat(
         ApiError::internal_server_error("Failed to update chat")
     })?;
 
-    let chat = sqlx::query_as::<_, Chat>(
+    let mut chat = sqlx::query_as::<_, Chat>(
         r#"
-        SELECT id, public_id, user_id, folder_id, title, is_group, created_at, updated_at
+        SELECT id, public_id, user_id, folder_id, title, is_group, NULL as messages, created_at, updated_at
         FROM chats
         WHERE public_id = ? AND user_id = ?
         "#
@@ -296,6 +361,8 @@ pub async fn update_chat(
     })?
     .ok_or_else(|| ApiError::not_found("Chat not found"))?;
 
+    chat.messages = fetch_chat_messages(chat.id, state.db_pool()).await?;
+
     Ok(Json(ChatResponse { chat }))
 }
 
@@ -307,17 +374,15 @@ pub async fn delete_chat(
     let token = require_bearer(&headers)?;
     let (user, _) = state.authenticate(&token).await?;
 
-    sqlx::query(
-        "DELETE FROM chats WHERE public_id = ? AND user_id = ?"
-    )
-    .bind(&chat_id)
-    .bind(user.id)
-    .execute(state.db_pool())
-    .await
-    .map_err(|e| {
-        tracing::error!("Failed to delete chat: {}", e);
-        ApiError::internal_server_error("Failed to delete chat")
-    })?;
+    sqlx::query("DELETE FROM chats WHERE public_id = ? AND user_id = ?")
+        .bind(&chat_id)
+        .bind(user.id)
+        .execute(state.db_pool())
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to delete chat: {}", e);
+            ApiError::internal_server_error("Failed to delete chat")
+        })?;
 
     Ok(())
 }
@@ -337,7 +402,7 @@ pub async fn create_invite(
         SELECT c.id FROM chats c
         JOIN chat_members cm ON c.id = cm.chat_id
         WHERE c.public_id = ? AND c.is_group = 1 AND cm.user_id = ?
-        "#
+        "#,
     )
     .bind(&chat_id)
     .bind(user.id)
@@ -348,7 +413,8 @@ pub async fn create_invite(
         ApiError::internal_server_error("Failed to check chat")
     })?;
 
-    let chat_db_id = chat_db_id.ok_or_else(|| ApiError::not_found("Chat not found or not a group chat"))?;
+    let chat_db_id =
+        chat_db_id.ok_or_else(|| ApiError::not_found("Chat not found or not a group chat"))?;
 
     let now = chrono::Utc::now().to_rfc3339();
 
@@ -405,7 +471,7 @@ pub async fn list_invites(
         SELECT c.id FROM chats c
         JOIN chat_members cm ON c.id = cm.chat_id
         WHERE c.public_id = ? AND cm.user_id = ?
-        "#
+        "#,
     )
     .bind(&chat_id)
     .bind(user.id)
@@ -424,7 +490,7 @@ pub async fn list_invites(
         FROM chat_invites
         WHERE chat_id = ?
         ORDER BY created_at DESC
-        "#
+        "#,
     )
     .bind(chat_db_id)
     .fetch_all(state.db_pool())
@@ -447,7 +513,7 @@ pub async fn accept_invite(
 
     // Get the invite and check if the email matches
     let invite: Option<(i64, String)> = sqlx::query_as(
-        "SELECT chat_id, invitee_email FROM chat_invites WHERE id = ? AND status = 'pending'"
+        "SELECT chat_id, invitee_email FROM chat_invites WHERE id = ? AND status = 'pending'",
     )
     .bind(invite_id)
     .fetch_optional(state.db_pool())
@@ -457,7 +523,8 @@ pub async fn accept_invite(
         ApiError::internal_server_error("Failed to fetch invite")
     })?;
 
-    let (chat_db_id, invitee_email) = invite.ok_or_else(|| ApiError::not_found("Invite not found"))?;
+    let (chat_db_id, invitee_email) =
+        invite.ok_or_else(|| ApiError::not_found("Invite not found"))?;
 
     // Check if the user's email matches
     if user.email.as_ref() != Some(&invitee_email) {
@@ -467,24 +534,22 @@ pub async fn accept_invite(
     let now = chrono::Utc::now().to_rfc3339();
 
     // Update invite status
-    sqlx::query(
-        "UPDATE chat_invites SET status = 'accepted', updated_at = ? WHERE id = ?"
-    )
-    .bind(&now)
-    .bind(invite_id)
-    .execute(state.db_pool())
-    .await
-    .map_err(|e| {
-        tracing::error!("Failed to update invite: {}", e);
-        ApiError::internal_server_error("Failed to accept invite")
-    })?;
+    sqlx::query("UPDATE chat_invites SET status = 'accepted', updated_at = ? WHERE id = ?")
+        .bind(&now)
+        .bind(invite_id)
+        .execute(state.db_pool())
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to update invite: {}", e);
+            ApiError::internal_server_error("Failed to accept invite")
+        })?;
 
     // Add user to chat members
     sqlx::query(
         r#"
         INSERT INTO chat_members (chat_id, user_id, role, joined_at)
         VALUES (?, ?, 'member', ?)
-        "#
+        "#,
     )
     .bind(chat_db_id)
     .bind(user.id)
@@ -509,7 +574,7 @@ pub async fn reject_invite(
 
     // Get the invite and check if the email matches
     let invitee_email: Option<String> = sqlx::query_scalar(
-        "SELECT invitee_email FROM chat_invites WHERE id = ? AND status = 'pending'"
+        "SELECT invitee_email FROM chat_invites WHERE id = ? AND status = 'pending'",
     )
     .bind(invite_id)
     .fetch_optional(state.db_pool())
@@ -529,17 +594,15 @@ pub async fn reject_invite(
     let now = chrono::Utc::now().to_rfc3339();
 
     // Update invite status
-    sqlx::query(
-        "UPDATE chat_invites SET status = 'rejected', updated_at = ? WHERE id = ?"
-    )
-    .bind(&now)
-    .bind(invite_id)
-    .execute(state.db_pool())
-    .await
-    .map_err(|e| {
-        tracing::error!("Failed to update invite: {}", e);
-        ApiError::internal_server_error("Failed to reject invite")
-    })?;
+    sqlx::query("UPDATE chat_invites SET status = 'rejected', updated_at = ? WHERE id = ?")
+        .bind(&now)
+        .bind(invite_id)
+        .execute(state.db_pool())
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to update invite: {}", e);
+            ApiError::internal_server_error("Failed to reject invite")
+        })?;
 
     Ok(())
 }
@@ -558,7 +621,7 @@ pub async fn list_members(
         SELECT c.id FROM chats c
         JOIN chat_members cm ON c.id = cm.chat_id
         WHERE c.public_id = ? AND cm.user_id = ?
-        "#
+        "#,
     )
     .bind(&chat_id)
     .bind(user.id)
@@ -577,7 +640,7 @@ pub async fn list_members(
         FROM chat_members
         WHERE chat_id = ?
         ORDER BY joined_at ASC
-        "#
+        "#,
     )
     .bind(chat_db_id)
     .fetch_all(state.db_pool())
@@ -605,7 +668,7 @@ pub async fn update_member_role(
         SELECT cm.role FROM chats c
         JOIN chat_members cm ON c.id = cm.chat_id
         WHERE c.public_id = ? AND cm.user_id = ?
-        "#
+        "#,
     )
     .bind(&chat_id)
     .bind(user.id)
@@ -634,7 +697,7 @@ pub async fn update_member_role(
             SELECT COUNT(*) FROM chat_members cm
             JOIN chats c ON c.id = cm.chat_id
             WHERE c.public_id = ? AND cm.role = 'owner'
-            "#
+            "#,
         )
         .bind(&chat_id)
         .fetch_one(state.db_pool())
@@ -671,7 +734,7 @@ pub async fn update_member_role(
         UPDATE chat_members
         SET role = ?
         WHERE chat_id = (SELECT id FROM chats WHERE public_id = ?) AND user_id = ?
-        "#
+        "#,
     )
     .bind(&req.role)
     .bind(&chat_id)
@@ -690,7 +753,7 @@ pub async fn update_member_role(
         FROM chat_members cm
         JOIN chats c ON c.id = cm.chat_id
         WHERE c.public_id = ? AND cm.user_id = ?
-        "#
+        "#,
     )
     .bind(&chat_id)
     .bind(member_user_id)
@@ -719,7 +782,7 @@ pub async fn remove_member(
         SELECT cm.role FROM chats c
         JOIN chat_members cm ON c.id = cm.chat_id
         WHERE c.public_id = ? AND cm.user_id = ?
-        "#
+        "#,
     )
     .bind(&chat_id)
     .bind(user.id)
@@ -743,7 +806,7 @@ pub async fn remove_member(
             SELECT COUNT(*) FROM chat_members cm
             JOIN chats c ON c.id = cm.chat_id
             WHERE c.public_id = ? AND cm.role = 'owner'
-            "#
+            "#,
         )
         .bind(&chat_id)
         .fetch_one(state.db_pool())
@@ -775,7 +838,7 @@ pub async fn remove_member(
         r#"
         DELETE FROM chat_members
         WHERE chat_id = (SELECT id FROM chats WHERE public_id = ?) AND user_id = ?
-        "#
+        "#,
     )
     .bind(&chat_id)
     .bind(member_user_id)

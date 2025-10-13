@@ -1,24 +1,5 @@
-import { Accessor } from "solid-js";
-import { For } from "solid-js";
-
-interface Message {
-  role: "user" | "assistant";
-  content: string;
-  model?: string;
-  usage?: {
-    prompt_tokens: number;
-    completion_tokens: number;
-    total_tokens: number;
-  };
-  reasoning?: string[];
-}
-
-interface Chat {
-  id: string;
-  title: string;
-  messages: Message[];
-  createdAt: Date;
-}
+import { Accessor, For } from "solid-js";
+import type { Chat } from "./sidebarTypes";
 
 interface Props {
   chats: Accessor<Chat[]>;

@@ -1,13 +1,12 @@
 use anyhow::Context;
 use clap::{Parser, Subcommand};
+use sqlx::Row;
 use switchboard_backend_api::{build_router, AppState};
 use switchboard_backend_runtime::{telemetry, BackendServices};
 use switchboard_config::load as load_config;
-use std::io::Write;
-use tokio::net::TcpListener;
 use tokio::io::{AsyncBufReadExt, BufReader};
+use tokio::net::TcpListener;
 use tracing::info;
-use sqlx::Row;
 
 #[derive(Parser)]
 #[command(name = "switchboard-backend")]
@@ -55,7 +54,12 @@ async fn run_server() -> anyhow::Result<()> {
         .await
         .context("failed to initialise backend services")?;
 
-    let state = AppState::new(services.db_pool.clone(), services.orchestrator.clone(), services.authenticator.clone(), services.redis_conn.clone());
+    let state = AppState::new(
+        services.db_pool.clone(),
+        services.orchestrator.clone(),
+        services.authenticator.clone(),
+        services.redis_conn.clone(),
+    );
     let app = build_router(state);
 
     let address = format!("{}:{}", config.http.address, config.http.port);
@@ -93,7 +97,7 @@ async fn dump_data() -> anyhow::Result<()> {
         SELECT id, public_id, user_id, name, color, parent_id, collapsed, created_at, updated_at
         FROM folders
         ORDER BY created_at ASC
-        "#
+        "#,
     )
     .fetch_all(&services.db_pool)
     .await
@@ -104,8 +108,18 @@ async fn dump_data() -> anyhow::Result<()> {
         println!("No folders found in database");
     } else {
         println!("Found {} folders:", folders.len());
-        println!("{:<5} {:<20} {:<10} {:<30} {:<10} {:<10} {:<10} {:<25} {:<25}",
-                 "ID", "Public ID", "User ID", "Name", "Color", "Parent ID", "Collapsed", "Created At", "Updated At");
+        println!(
+            "{:<5} {:<20} {:<10} {:<30} {:<10} {:<10} {:<10} {:<25} {:<25}",
+            "ID",
+            "Public ID",
+            "User ID",
+            "Name",
+            "Color",
+            "Parent ID",
+            "Collapsed",
+            "Created At",
+            "Updated At"
+        );
         println!("{}", "-".repeat(150));
 
         for folder in folders {
@@ -119,16 +133,20 @@ async fn dump_data() -> anyhow::Result<()> {
             let created_at: String = folder.get("created_at");
             let updated_at: String = folder.get("updated_at");
 
-            println!("{:<5} {:<20} {:<10} {:<30} {:<10} {:<10} {:<10} {:<25} {:<25}",
-                     id,
-                     public_id,
-                     user_id,
-                     name,
-                     color.as_deref().unwrap_or("NULL"),
-                     parent_id.map(|id| id.to_string()).unwrap_or("NULL".to_string()),
-                     collapsed,
-                     created_at,
-                     updated_at);
+            println!(
+                "{:<5} {:<20} {:<10} {:<30} {:<10} {:<10} {:<10} {:<25} {:<25}",
+                id,
+                public_id,
+                user_id,
+                name,
+                color.as_deref().unwrap_or("NULL"),
+                parent_id
+                    .map(|id| id.to_string())
+                    .unwrap_or("NULL".to_string()),
+                collapsed,
+                created_at,
+                updated_at
+            );
         }
     }
 
@@ -139,7 +157,7 @@ async fn dump_data() -> anyhow::Result<()> {
         SELECT id, public_id, user_id, folder_id, title, is_group, created_at, updated_at
         FROM chats
         ORDER BY created_at ASC
-        "#
+        "#,
     )
     .fetch_all(&services.db_pool)
     .await
@@ -149,8 +167,17 @@ async fn dump_data() -> anyhow::Result<()> {
         println!("No chats found in database");
     } else {
         println!("Found {} chats:", chats.len());
-        println!("{:<5} {:<20} {:<10} {:<10} {:<30} {:<10} {:<25} {:<25}",
-                 "ID", "Public ID", "User ID", "Folder ID", "Title", "Is Group", "Created At", "Updated At");
+        println!(
+            "{:<5} {:<20} {:<10} {:<10} {:<30} {:<10} {:<25} {:<25}",
+            "ID",
+            "Public ID",
+            "User ID",
+            "Folder ID",
+            "Title",
+            "Is Group",
+            "Created At",
+            "Updated At"
+        );
         println!("{}", "-".repeat(160));
 
         for chat in chats {
@@ -163,15 +190,19 @@ async fn dump_data() -> anyhow::Result<()> {
             let created_at: String = chat.get("created_at");
             let updated_at: String = chat.get("updated_at");
 
-            println!("{:<5} {:<20} {:<10} {:<10} {:<30} {:<10} {:<25} {:<25}",
-                     id,
-                     public_id,
-                     user_id,
-                     folder_id.map(|id| id.to_string()).unwrap_or("NULL".to_string()),
-                     title,
-                     is_group,
-                     created_at,
-                     updated_at);
+            println!(
+                "{:<5} {:<20} {:<10} {:<10} {:<30} {:<10} {:<25} {:<25}",
+                id,
+                public_id,
+                user_id,
+                folder_id
+                    .map(|id| id.to_string())
+                    .unwrap_or("NULL".to_string()),
+                title,
+                is_group,
+                created_at,
+                updated_at
+            );
         }
     }
 
@@ -182,7 +213,7 @@ async fn dump_data() -> anyhow::Result<()> {
         SELECT id, chat_id, user_id, role, joined_at
         FROM chat_members
         ORDER BY joined_at ASC
-        "#
+        "#,
     )
     .fetch_all(&services.db_pool)
     .await
@@ -192,8 +223,10 @@ async fn dump_data() -> anyhow::Result<()> {
         println!("No chat members found in database");
     } else {
         println!("Found {} chat members:", chat_members.len());
-        println!("{:<5} {:<10} {:<10} {:<15} {:<25}",
-                 "ID", "Chat ID", "User ID", "Role", "Joined At");
+        println!(
+            "{:<5} {:<10} {:<10} {:<15} {:<25}",
+            "ID", "Chat ID", "User ID", "Role", "Joined At"
+        );
         println!("{}", "-".repeat(70));
 
         for member in chat_members {
@@ -203,8 +236,10 @@ async fn dump_data() -> anyhow::Result<()> {
             let role: String = member.get("role");
             let joined_at: String = member.get("joined_at");
 
-            println!("{:<5} {:<10} {:<10} {:<15} {:<25}",
-                     id, chat_id, user_id, role, joined_at);
+            println!(
+                "{:<5} {:<10} {:<10} {:<15} {:<25}",
+                id, chat_id, user_id, role, joined_at
+            );
         }
     }
 
@@ -225,8 +260,18 @@ async fn dump_data() -> anyhow::Result<()> {
         println!("No messages found in database");
     } else {
         println!("Found {} messages:", messages.len());
-        println!("{:<5} {:<20} {:<10} {:<10} {:<50} {:<15} {:<12} {:<25} {:<25}",
-                 "ID", "Public ID", "Chat ID", "User ID", "Content (truncated)", "Type", "Reply To", "Created At", "Updated At");
+        println!(
+            "{:<5} {:<20} {:<10} {:<10} {:<50} {:<15} {:<12} {:<25} {:<25}",
+            "ID",
+            "Public ID",
+            "Chat ID",
+            "User ID",
+            "Content (truncated)",
+            "Type",
+            "Reply To",
+            "Created At",
+            "Updated At"
+        );
         println!("{}", "-".repeat(200));
 
         for message in messages {
@@ -246,16 +291,20 @@ async fn dump_data() -> anyhow::Result<()> {
                 content
             };
 
-            println!("{:<5} {:<20} {:<10} {:<10} {:<50} {:<15} {:<12} {:<25} {:<25}",
-                     id,
-                     public_id,
-                     chat_id,
-                     user_id,
-                     content_display,
-                     message_type,
-                     reply_to_id.map(|id| id.to_string()).unwrap_or("NULL".to_string()),
-                     created_at,
-                     updated_at);
+            println!(
+                "{:<5} {:<20} {:<10} {:<10} {:<50} {:<15} {:<12} {:<25} {:<25}",
+                id,
+                public_id,
+                chat_id,
+                user_id,
+                content_display,
+                message_type,
+                reply_to_id
+                    .map(|id| id.to_string())
+                    .unwrap_or("NULL".to_string()),
+                created_at,
+                updated_at
+            );
         }
     }
 
@@ -455,7 +504,12 @@ async fn run_console() -> anyhow::Result<()> {
                         let public_id: String = folder.get("public_id");
                         let name: String = folder.get("name");
                         let color: Option<String> = folder.get("color");
-                        println!("  {}: {} ({})", id, name, color.unwrap_or_else(|| "no color".to_string()));
+                        println!(
+                            "  {}: {} ({})",
+                            id,
+                            name,
+                            color.unwrap_or_else(|| "no color".to_string())
+                        );
                     }
                 }
             }
@@ -479,7 +533,14 @@ async fn run_console() -> anyhow::Result<()> {
                         let id: i64 = chat.get("id");
                         let title: String = chat.get("title");
                         let folder_id: Option<i64> = chat.get("folder_id");
-                        println!("  {}: {} (folder: {})", id, title, folder_id.map(|id| id.to_string()).unwrap_or_else(|| "none".to_string()));
+                        println!(
+                            "  {}: {} (folder: {})",
+                            id,
+                            title,
+                            folder_id
+                                .map(|id| id.to_string())
+                                .unwrap_or_else(|| "none".to_string())
+                        );
                     }
                 }
             }
@@ -499,7 +560,11 @@ async fn run_console() -> anyhow::Result<()> {
                     .await
                     .context("failed to delete folders")?;
 
-                println!("Cleared {} chats and {} folders", chats_deleted.rows_affected(), folders_deleted.rows_affected());
+                println!(
+                    "Cleared {} chats and {} folders",
+                    chats_deleted.rows_affected(),
+                    folders_deleted.rows_affected()
+                );
             }
             "/seed" | "/s" => {
                 // Insert test folders

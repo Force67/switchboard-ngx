@@ -1,4 +1,8 @@
-const API_BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:7070";
+import type { TokenUsage } from "./types/chat";
+
+const DEFAULT_API_BASE =
+  typeof window !== "undefined" ? window.location.origin : "http://localhost:7070";
+const API_BASE = import.meta.env.VITE_API_BASE ?? DEFAULT_API_BASE;
 
 export interface ApiFolder {
   id: number;
@@ -13,26 +17,22 @@ export interface ApiFolder {
 }
 
 export interface ApiChat {
-  id: string;
+  id: number;
   public_id: string;
   user_id: number;
-  folder_id?: number;
+  folder_id: number | null;
   title: string;
   is_group: boolean;
-  messages: string; // JSON string
+  messages: string | null; // JSON string
   created_at: string;
   updated_at: string;
 }
 
 export interface ChatMessage {
-  role: "user" | "assistant";
+  role: "user" | "assistant" | "system";
   content: string;
   model?: string;
-  usage?: {
-    prompt_tokens: number;
-    completion_tokens: number;
-    total_tokens: number;
-  };
+  usage?: TokenUsage;
   reasoning?: string[];
 }
 

@@ -8,11 +8,7 @@ use bytes::Bytes;
 use denkwerk::{ChatMessage, CompletionRequest, TokenUsage};
 use serde::Serialize;
 
-use crate::{
-    util::require_bearer,
-    ApiError,
-    AppState,
-};
+use crate::{util::require_bearer, ApiError, AppState};
 
 #[derive(Debug, Serialize)]
 pub struct ChatResponse {

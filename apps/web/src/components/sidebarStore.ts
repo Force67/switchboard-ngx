@@ -1,5 +1,5 @@
 import { createSignal } from "solid-js";
-import type { SidebarState, Actions, ID, Folder, Chat } from "./sidebarTypes";
+import type { SidebarState, Actions, ID, Folder, Chat, Message } from "./sidebarTypes";
 import { apiService, ApiFolder, ApiChat } from "../api";
 
 const getInitialState = (): SidebarState => ({
@@ -13,7 +13,7 @@ const getInitialState = (): SidebarState => ({
 });
 
 // Convert API folder to frontend folder
-const apiFolderToFolder = (apiFolder: ApiFolder, apiFolders: ApiFolder[]): Folder => {
+const apiFolderToFolder = (apiFolder: ApiFolder, apiFolders: ApiFolder[] = []): Folder => {
   let parentId: string | undefined;
   if (apiFolder.parent_id) {
     const parentFolder = apiFolders.find(f => f.id === apiFolder.parent_id);
@@ -32,15 +32,16 @@ const apiFolderToFolder = (apiFolder: ApiFolder, apiFolders: ApiFolder[]): Folde
 
 // Convert API chat to frontend chat
 const apiChatToChat = (apiChat: ApiChat, apiFolders: ApiFolder[]): Chat => {
-  let messages: any[] = [];
+  let messages: Message[] = [];
   try {
-    messages = JSON.parse(apiChat.messages);
+    const rawMessages = apiChat.messages ?? "[]";
+    messages = JSON.parse(rawMessages) as Message[];
   } catch (e) {
     console.error("Failed to parse chat messages", e);
   }
 
   let folderId: string | undefined;
-  if (apiChat.folder_id) {
+  if (typeof apiChat.folder_id === "number") {
     const folder = apiFolders.find(f => f.id === apiChat.folder_id);
     folderId = folder?.public_id;
   }
@@ -56,13 +57,15 @@ const apiChatToChat = (apiChat: ApiChat, apiFolders: ApiFolder[]): Chat => {
   };
 };
 
+type SidebarBootstrapData = { folders: ApiFolder[]; chats: ApiChat[] };
+
 const [sidebarState, setSidebarState] = createSignal<SidebarState>(getInitialState());
 const [authToken, setAuthToken] = createSignal<string | null>(null);
 const [isLoading, setIsLoading] = createSignal(false);
 const [error, setError] = createSignal<string | null>(null);
 
 // Initialize data from API
-const initializeFromAPI = async (token: string) => {
+async function initializeFromAPI(token: string): Promise<SidebarBootstrapData> {
   setAuthToken(token);
   try {
     const [apiFolders, apiChats] = await Promise.all([
@@ -120,10 +123,12 @@ const initializeFromAPI = async (token: string) => {
       selection: null,
       drag: null,
     });
+    return { folders: apiFolders, chats: apiChats };
   } catch (error) {
     console.error("Failed to initialize sidebar from API", error);
+    throw error;
   }
-};
+}
 
 // Actions implementation
 const actions: Actions = {
@@ -140,7 +145,10 @@ const actions: Actions = {
         parent_id: parentId,
       });
 
-      const folder = apiFolderToFolder(apiFolder);
+      const folder = {
+        ...apiFolderToFolder(apiFolder),
+        parentId,
+      };
 
       setSidebarState(prev => {
         const newState = {
@@ -322,52 +330,51 @@ const actions: Actions = {
     if (!token) return;
 
     try {
-      await apiService.updateChat(token, id, {
-        folder_id: target.folderId || "",
+      const updatedChat = await apiService.updateChat(token, id, {
+        folder_id: target.folderId ?? "",
       });
 
       setSidebarState(prev => {
-        const newState = { ...prev };
+        const chatOrderByFolder = { ...prev.chatOrderByFolder };
+        let chatOrderRoot = [...prev.chatOrderRoot];
 
-        // Remove from current location
-        if (prev.chatOrderByFolder[id]) {
-          // Chat is in a folder, remove it from that folder's order
-          const folderId = Object.keys(prev.chatOrderByFolder).find(fid =>
-            prev.chatOrderByFolder[fid].includes(id)
-          );
-          if (folderId) {
-            newState.chatOrderByFolder = {
-              ...prev.chatOrderByFolder,
-              [folderId]: prev.chatOrderByFolder[folderId].filter(chatId => chatId !== id)
-            };
-          }
+        const currentFolderEntry = Object.entries(prev.chatOrderByFolder).find(([, chats]) =>
+          chats.includes(id)
+        );
+        const currentFolderId = currentFolderEntry?.[0];
+
+        if (currentFolderId) {
+          chatOrderByFolder[currentFolderId] = currentFolderEntry![1].filter(chatId => chatId !== id);
         } else {
-          // Chat is in root, remove from root order
-          newState.chatOrderRoot = prev.chatOrderRoot.filter(chatId => chatId !== id);
+          chatOrderRoot = chatOrderRoot.filter(chatId => chatId !== id);
         }
 
-        // Add to new location
+        const clampIndex = (index: number, length: number) =>
+          Math.min(Math.max(index, 0), length);
+
         if (target.folderId) {
-          // Add to folder
-          const folderChats = [...(prev.chatOrderByFolder[target.folderId] || [])];
-          const insertIndex = target.index ?? folderChats.length;
-          folderChats.splice(insertIndex, 0, id);
-          newState.chatOrderByFolder = {
-            ...prev.chatOrderByFolder,
-            [target.folderId]: folderChats
-          };
+          const destinationId = target.folderId;
+          const destinationChats = [...(chatOrderByFolder[destinationId] || [])];
+          const insertIndex = clampIndex(target.index ?? destinationChats.length, destinationChats.length);
+          destinationChats.splice(insertIndex, 0, id);
+          chatOrderByFolder[destinationId] = destinationChats;
         } else {
-          // Add to root
-          const insertIndex = target.index ?? prev.chatOrderRoot.length;
-          const newOrder = [...prev.chatOrderRoot];
-          newOrder.splice(insertIndex, 0, id);
-          newState.chatOrderRoot = newOrder;
+          const insertIndex = clampIndex(target.index ?? chatOrderRoot.length, chatOrderRoot.length);
+          chatOrderRoot.splice(insertIndex, 0, id);
         }
 
-        return newState;
+        return {
+          ...prev,
+          chatOrderByFolder,
+          chatOrderRoot,
+        };
       });
+
+      return updatedChat;
     } catch (error) {
       console.error("Failed to move chat", error);
+      setError("Failed to move chat. Please try again.");
+      return;
     }
   },
 
@@ -458,4 +465,70 @@ const actions: Actions = {
   },
 };
 
-export { sidebarState, setSidebarState, actions, initializeFromAPI, isLoading, error, setError };
+function addChatToSidebar(chatId: ID, folderId?: ID) {
+  setSidebarState(prev => {
+    if (folderId) {
+      const existingChats = prev.chatOrderByFolder[folderId] || [];
+      if (existingChats.includes(chatId)) {
+        return prev;
+      }
+      return {
+        ...prev,
+        chatOrderByFolder: {
+          ...prev.chatOrderByFolder,
+          [folderId]: [chatId, ...existingChats],
+        },
+      };
+    }
+
+    if (prev.chatOrderRoot.includes(chatId)) {
+      return prev;
+    }
+
+    return {
+      ...prev,
+      chatOrderRoot: [chatId, ...prev.chatOrderRoot],
+    };
+  });
+}
+
+function removeChatFromSidebar(chatId: ID) {
+  setSidebarState(prev => {
+    const newRoot = prev.chatOrderRoot.filter(id => id !== chatId);
+
+    let touched = newRoot.length !== prev.chatOrderRoot.length;
+    const newByFolder: Record<ID, ID[]> = {};
+
+    for (const [folderId, order] of Object.entries(prev.chatOrderByFolder)) {
+      const filtered = order.filter(id => id !== chatId);
+      if (filtered.length !== order.length) {
+        touched = true;
+      }
+      newByFolder[folderId] = filtered;
+    }
+
+    if (!touched) {
+      return prev;
+    }
+
+    return {
+      ...prev,
+      chatOrderRoot: newRoot,
+      chatOrderByFolder: newByFolder,
+    };
+  });
+}
+
+export {
+  sidebarState,
+  setSidebarState,
+  actions,
+  isLoading,
+  error,
+  setError,
+  initializeFromAPI,
+  addChatToSidebar,
+  removeChatFromSidebar,
+};
+
+export type { SidebarBootstrapData };

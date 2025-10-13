@@ -19,8 +19,8 @@ pub mod telemetry {
     use tracing_subscriber::{fmt::SubscriberBuilder, EnvFilter};
 
     pub fn init_tracing() -> Result<()> {
-        let env_filter = EnvFilter::try_from_default_env()
-            .unwrap_or_else(|_| EnvFilter::new("info"));
+        let env_filter =
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
 
         let subscriber = SubscriberBuilder::default()
             .with_max_level(Level::INFO)
@@ -37,7 +37,7 @@ pub struct BackendServices {
     pub db_pool: SqlitePool,
     pub authenticator: Authenticator,
     pub orchestrator: Arc<Orchestrator>,
-    pub     redis_conn: Option<ConnectionManager>,
+    pub redis_conn: Option<ConnectionManager>,
 }
 
 impl BackendServices {
@@ -60,12 +60,18 @@ impl BackendServices {
                     Some(conn)
                 }
                 Err(e) => {
-                    tracing::warn!("failed to connect to redis, proceeding without redis: {}", e);
+                    tracing::warn!(
+                        "failed to connect to redis, proceeding without redis: {}",
+                        e
+                    );
                     None
                 }
             },
             Err(e) => {
-                tracing::warn!("failed to create redis client, proceeding without redis: {}", e);
+                tracing::warn!(
+                    "failed to create redis client, proceeding without redis: {}",
+                    e
+                );
                 None
             }
         };
@@ -112,9 +118,9 @@ async fn ensure_sqlite_path(url: &str) -> Result<()> {
     let path = Path::new(sqlite_path);
     if let Some(parent) = path.parent() {
         if !parent.as_os_str().is_empty() {
-            fs::create_dir_all(parent)
-                .await
-                .with_context(|| format!("failed to create sqlite directory {}", parent.display()))?;
+            fs::create_dir_all(parent).await.with_context(|| {
+                format!("failed to create sqlite directory {}", parent.display())
+            })?;
         }
     }
 
@@ -124,12 +130,7 @@ async fn ensure_sqlite_path(url: &str) -> Result<()> {
             .write(true)
             .open(path)
             .await
-            .with_context(|| {
-                format!(
-                    "failed to create sqlite database file {}",
-                    path.display()
-                )
-            })?;
+            .with_context(|| format!("failed to create sqlite database file {}", path.display()))?;
     }
 
     Ok(())

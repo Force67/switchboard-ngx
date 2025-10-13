@@ -4,7 +4,9 @@ import SidebarNewFolder from "./SidebarNewFolder";
 import SidebarSearch from "./SidebarSearch";
 import SidebarTree from "./SidebarTree";
 import SidebarFooter from "./SidebarFooter";
-import { sidebarState, actions } from "./sidebarStore";
+import { sidebarState } from "./sidebarStore";
+import type { Chat } from "../types/chat";
+import type { Actions } from "./sidebarTypes";
 import "./sidebar-folders.css";
 
 interface SessionData {
@@ -17,25 +19,6 @@ interface SessionData {
   expires_at: string;
 }
 
-interface Chat {
-  id: string;
-  title: string;
-  messages: Message[];
-  createdAt: Date;
-}
-
-interface Message {
-  role: "user" | "assistant";
-  content: string;
-  model?: string;
-  usage?: {
-    prompt_tokens: number;
-    completion_tokens: number;
-    total_tokens: number;
-  };
-  reasoning?: string[];
-}
-
 interface Props {
   session: Accessor<SessionData | null>;
   chats: Accessor<Chat[]>;
@@ -45,11 +28,15 @@ interface Props {
   onNewChat: (folderId?: string) => void;
   onNewGroupChat?: (folderId?: string) => void;
   onSelectChat: (chatId: string) => void;
+  onRenameChat: (chatId: string, title: string) => void;
+  onDeleteChat: (chatId: string) => void;
+  onDeleteFolder: (folderId: string) => void;
+  actions: Actions;
 }
 
 export default function Sidebar(props: Props) {
   const handleNewFolder = () => {
-    actions.createFolder();
+    props.actions.createFolder();
   };
 
   return (
@@ -64,12 +51,15 @@ export default function Sidebar(props: Props) {
       <div class="sidebar-content">
         <SidebarTree
           state={sidebarState()}
-          actions={actions}
+          actions={props.actions}
           chats={props.chats()}
           currentChatId={props.currentChatId()}
           onSelectChat={props.onSelectChat}
           onNewChat={props.onNewChat}
           onNewFolder={handleNewFolder}
+          onRenameChat={props.onRenameChat}
+          onDeleteChat={props.onDeleteChat}
+          onDeleteFolder={props.onDeleteFolder}
         />
       </div>
       <SidebarFooter

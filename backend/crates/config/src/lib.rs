@@ -9,6 +9,10 @@ const DEFAULT_CONFIG_FILES: &[&str] = &[
     "crates/config/switchboard.toml",
     "../switchboard.toml",
     "../config/switchboard.toml",
+    "../crates/config/switchboard.toml",
+    "backend/switchboard.toml",
+    "backend/config/switchboard.toml",
+    "backend/crates/config/switchboard.toml",
 ];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

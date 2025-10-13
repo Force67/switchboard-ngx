@@ -3,3 +3,6 @@
 switchboard.toml
 backend/crates/config/switchboard.toml
 /backend/.sqlx
+/.devcontainer
+/.pnpm-store
+/node_modules

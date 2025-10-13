@@ -199,8 +199,14 @@ impl Orchestrator {
                     let output = p.get("completion").and_then(|s| s.parse::<f64>().ok());
                     ModelPricing { input, output }
                 });
-                let supports_images = model.modality.as_ref().map(|m| m.contains("image")).unwrap_or(false);
-                let supports_reasoning = model.id.contains("deepseek") || model.id.contains("o1") || model.id.contains("reasoning");
+                let supports_images = model
+                    .modality
+                    .as_ref()
+                    .map(|m| m.contains("image"))
+                    .unwrap_or(false);
+                let supports_reasoning = model.id.contains("deepseek")
+                    || model.id.contains("o1")
+                    || model.id.contains("reasoning");
                 OpenRouterModelSummary {
                     id: model.id.clone(),
                     label: model.name.unwrap_or_else(|| model.id.clone()),

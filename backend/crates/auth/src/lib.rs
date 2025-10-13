@@ -6,6 +6,7 @@ use argon2::Argon2;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine as _;
 use chrono::{DateTime, Duration, Utc};
+use cuid2::CuidConstructor;
 use oauth2::basic::BasicClient;
 use oauth2::reqwest::async_http_client;
 use oauth2::{
@@ -20,7 +21,6 @@ use sqlx::{Row, SqlitePool, Transaction};
 use switchboard_config::{AuthConfig, GithubAuthConfig};
 use thiserror::Error;
 use tracing::{debug, info};
-use cuid2::CuidConstructor;
 
 const GITHUB_USER_API: &str = "https://api.github.com/user";
 
@@ -380,7 +380,7 @@ impl Authenticator {
         Ok(hash.to_string())
     }
 
-fn generate_session_token(&self) -> String {
+    fn generate_session_token(&self) -> String {
         let mut bytes = [0u8; 32];
         rand::thread_rng().fill_bytes(&mut bytes);
         URL_SAFE_NO_PAD.encode(bytes)

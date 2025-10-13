@@ -1,4 +1,15 @@
+import type {
+  Chat as BaseChat,
+  Message as BaseMessage,
+  TokenUsage as BaseTokenUsage,
+} from "../types/chat";
+import type { ApiChat } from "../api";
+
 export type ID = string;
+
+export type Chat = BaseChat;
+export type Message = BaseMessage;
+export type TokenUsage = BaseTokenUsage;
 
 export type Folder = {
   id: ID;
@@ -8,28 +19,6 @@ export type Folder = {
   parentId?: ID;            // undefined => top-level
   // derived: depth = parentId ? 2 : 1
   collapsed?: boolean;      // UI state
-};
-
-export type Chat = {
-  id: string;
-  public_id: string;
-  title: string;
-  messages: Message[];
-  createdAt: Date;
-  folderId?: ID;            // undefined => root
-  updatedAt?: string;
-};
-
-export type Message = {
-  role: "user" | "assistant";
-  content: string;
-  model?: string;
-  usage?: {
-    prompt_tokens: number;
-    completion_tokens: number;
-    total_tokens: number;
-  };
-  reasoning?: string[];
 };
 
 export type SidebarState = {
@@ -51,13 +40,13 @@ export type DragState = {
 };
 
 export type Actions = {
-  createFolder(parentId?: ID, name?: string): void;
-  renameFolder(id: ID, name: string): void;
-  setFolderColor(id: ID, color: string): void;
-  deleteFolder(id: ID, mode: "move-up"|"delete-all"): void;
-  moveChat(id: ID, target: { folderId?: ID; index?: number }): void;
+  createFolder(parentId?: ID, name?: string): Promise<void>;
+  renameFolder(id: ID, name: string): Promise<void>;
+  setFolderColor(id: ID, color: string): Promise<void>;
+  deleteFolder(id: ID, mode: "move-up"|"delete-all"): Promise<void>;
+  moveChat(id: ID, target: { folderId?: ID; index?: number }): Promise<ApiChat | void>;
   moveFolder(id: ID, target: { parentId?: ID; index?: number }): void;
-  setCollapsed(id: ID, v: boolean): void;
+  setCollapsed(id: ID, v: boolean): Promise<void>;
   startKeyboardDrag(ref: RowRef): void;
 };
 

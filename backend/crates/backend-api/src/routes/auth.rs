@@ -116,7 +116,7 @@ pub async fn dev_token(State(state): State<AppState>) -> Result<Json<SessionResp
         r#"
         INSERT OR IGNORE INTO users (id, public_id, email, display_name, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?)
-        "#
+        "#,
     )
     .bind(1i64)
     .bind("dev-user-123")
@@ -139,7 +139,7 @@ pub async fn dev_token(State(state): State<AppState>) -> Result<Json<SessionResp
         r#"
         INSERT INTO sessions (token, user_id, expires_at, created_at)
         VALUES (?, ?, ?, ?)
-        "#
+        "#,
     )
     .bind(&session_token)
     .bind(1i64)

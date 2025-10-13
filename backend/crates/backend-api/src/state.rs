@@ -13,28 +13,54 @@ use crate::ApiError;
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ClientEvent {
-    Subscribe { chat_id: String },
-    Unsubscribe { chat_id: String },
-    Message { chat_id: String, content: String },
-    Typing { chat_id: String, is_typing: bool },
+    Subscribe {
+        chat_id: String,
+    },
+    Unsubscribe {
+        chat_id: String,
+    },
+    Message {
+        chat_id: String,
+        content: String,
+        model: Option<String>,
+    },
+    Typing {
+        chat_id: String,
+        is_typing: bool,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ServerEvent {
-    Hello { version: String, user_id: i64 },
-    Subscribed { chat_id: String },
-    Unsubscribed { chat_id: String },
+    Hello {
+        version: String,
+        user_id: i64,
+    },
+    Subscribed {
+        chat_id: String,
+    },
+    Unsubscribed {
+        chat_id: String,
+    },
     Message {
         chat_id: String,
         message_id: String,
         user_id: i64,
         content: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        model: Option<String>,
         timestamp: String,
         message_type: String,
     },
-    Typing { chat_id: String, user_id: i64, is_typing: bool },
-    Error { message: String },
+    Typing {
+        chat_id: String,
+        user_id: i64,
+        is_typing: bool,
+    },
+    Error {
+        message: String,
+    },
 }
 
 const DEFAULT_OAUTH_STATE_TTL: StdDuration = StdDuration::from_secs(600);
@@ -50,7 +76,12 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub fn new(db_pool: SqlitePool, orchestrator: Arc<Orchestrator>, authenticator: Authenticator, redis_conn: Option<ConnectionManager>) -> Self {
+    pub fn new(
+        db_pool: SqlitePool,
+        orchestrator: Arc<Orchestrator>,
+        authenticator: Authenticator,
+        redis_conn: Option<ConnectionManager>,
+    ) -> Self {
         Self {
             db_pool,
             orchestrator,

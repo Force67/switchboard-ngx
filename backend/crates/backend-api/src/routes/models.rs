@@ -1,7 +1,7 @@
 use axum::{extract::State, Json};
 use serde::{Deserialize, Serialize};
-use switchboard_orchestrator::OpenRouterModelSummary;
 use sqlx::FromRow;
+use switchboard_orchestrator::OpenRouterModelSummary;
 
 use crate::{ApiError, AppState};
 

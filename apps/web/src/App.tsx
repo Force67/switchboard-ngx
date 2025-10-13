@@ -4,14 +4,27 @@ import "./app.css";
 import Sidebar from "./components/Sidebar";
 import MainArea from "./components/MainArea";
 import { apiService } from "./api";
-import { initializeFromAPI } from "./components/sidebarStore";
+import type { ApiChat } from "./api";
+import {
+  actions,
+  addChatToSidebar,
+  initializeFromAPI,
+  removeChatFromSidebar,
+  sidebarState,
+} from "./components/sidebarStore";
+import type { Actions } from "./components/sidebarTypes";
+import type { SidebarBootstrapData } from "./components/sidebarStore";
 import { useSocket } from "./hooks/useSocket";
+import type { Chat, Message, TokenUsage } from "./types/chat";
 
-const API_BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:7070";
+const DEFAULT_API_BASE =
+  typeof window !== "undefined" ? window.location.origin : "http://localhost:7070";
+const API_BASE = import.meta.env.VITE_API_BASE ?? DEFAULT_API_BASE;
 const DEFAULT_MODEL = import.meta.env.VITE_DEFAULT_MODEL ?? "";
 const GITHUB_REDIRECT_PATH =
   import.meta.env.VITE_GITHUB_REDIRECT_PATH ?? "/auth/callback";
 const SESSION_KEY = "switchboard.session";
+const ENABLE_DEV_LOGIN = import.meta.env.VITE_ENABLE_DEV_LOGIN === "false";
 
 interface UserProfile {
   id: string;
@@ -23,35 +36,6 @@ interface SessionData {
   token: string;
   user: UserProfile;
   expires_at: string;
-}
-
-interface TokenUsage {
-  prompt_tokens: number;
-  completion_tokens: number;
-  total_tokens: number;
-}
-
-interface Message {
-  id?: string;
-  chat_id?: string;
-  user_id?: number;
-  role: "user" | "assistant" | "system";
-  content: string;
-  model?: string;
-  usage?: TokenUsage;
-  reasoning?: string[];
-  timestamp?: string;
-  message_type?: string;
-}
-
-interface Chat {
-  id: string;
-  title: string;
-  messages: Message[];
-  createdAt: Date;
-  folderId?: string;
-  updatedAt?: number;
-  isGroup?: boolean;
 }
 
 interface ChatResponse {
@@ -294,7 +278,7 @@ export default function App() {
     if (!activeSession) return;
 
     // Handle case where folderId might be a click event object
-    const validFolderId = (folderId && typeof folderId === 'string') ? folderId : undefined;
+    const validFolderId = folderId && typeof folderId === "string" ? folderId : undefined;
 
     try {
       const apiChat = await apiService.createChat(activeSession.token, {
@@ -310,12 +294,13 @@ export default function App() {
         title: apiChat.title,
         messages: [],
         createdAt: new Date(apiChat.created_at),
-        folderId,
+        folderId: validFolderId,
         updatedAt: apiChat.updated_at,
         isGroup: apiChat.is_group,
       };
 
-      setChats(prev => [newChatObj, ...prev]);
+      setChats(prev => [newChatObj, ...prev.filter(chat => chat.id !== newChatObj.id)]);
+      addChatToSidebar(apiChat.public_id, validFolderId);
       setCurrentChatId(apiChat.public_id);
       setPrompt("");
       setError(null);
@@ -327,6 +312,88 @@ export default function App() {
 
   const newGroupChat = async (folderId?: string) => {
     await newChat(folderId, true);
+  };
+
+  const renameChat = async (chatId: string, title: string) => {
+    const activeSession = session();
+    if (!activeSession) return;
+
+    try {
+      await apiService.updateChat(activeSession.token, chatId, { title });
+      setChats(prev =>
+        prev.map(chat => (chat.id === chatId ? { ...chat, title } : chat)),
+      );
+      setError(null);
+    } catch (error) {
+      console.error("Failed to rename chat", error);
+      setError("Failed to rename chat");
+    }
+  };
+
+  const deleteChat = async (chatId: string) => {
+    const activeSession = session();
+    if (!activeSession) return;
+
+    try {
+      await apiService.deleteChat(activeSession.token, chatId);
+      removeChatFromSidebar(chatId);
+      const updatedChats = chats().filter(chat => chat.id !== chatId);
+      setChats(updatedChats);
+
+      if (currentChatId() === chatId) {
+        setCurrentChatId(updatedChats[0]?.id ?? null);
+        setPrompt("");
+      }
+
+      setError(null);
+    } catch (error) {
+      console.error("Failed to delete chat", error);
+      setError("Failed to delete chat");
+    }
+  };
+
+  const deleteFolder = async (folderId: string) => {
+    const activeSession = session();
+    if (!activeSession) return;
+
+    const snapshot = sidebarState();
+    const folderIds: string[] = [];
+    const collect = (id: string) => {
+      folderIds.push(id);
+      const subs = snapshot.subfolderOrder[id] || [];
+      subs.forEach(collect);
+    };
+    collect(folderId);
+
+    const chatIdsToRemove = new Set<string>();
+    for (const id of folderIds) {
+      const chatsInFolder = snapshot.chatOrderByFolder[id] || [];
+      chatsInFolder.forEach(chatId => chatIdsToRemove.add(chatId));
+    }
+
+    try {
+      for (const chatId of chatIdsToRemove) {
+        await apiService.deleteChat(activeSession.token, chatId);
+        removeChatFromSidebar(chatId);
+      }
+
+      await actions.deleteFolder(folderId, "delete-all");
+
+      if (chatIdsToRemove.size > 0) {
+        const updatedChats = chats().filter(chat => !chatIdsToRemove.has(chat.id));
+        setChats(updatedChats);
+        const currentId = currentChatId();
+        if (currentId && chatIdsToRemove.has(currentId)) {
+          setCurrentChatId(updatedChats[0]?.id ?? null);
+          setPrompt("");
+        }
+      }
+
+      setError(null);
+    } catch (error) {
+      console.error("Failed to delete folder", error);
+      setError("Failed to delete folder");
+    }
   };
 
   const selectChat = (chatId: string) => {
@@ -406,9 +473,11 @@ export default function App() {
     setPrompt("");
     setAttachedImages([]);
 
+    const selectedModelId = selectedModel().trim();
+
     try {
       // Send message via WebSocket
-      socket.sendMessage(currentId, trimmedPrompt);
+      socket.sendMessage(currentId, trimmedPrompt, selectedModelId);
 
       // Note: Assistant response will come via WebSocket and be handled by the effect above
 
@@ -481,6 +550,7 @@ export default function App() {
         user_id: message.user_id,
         role: 'assistant',
         content: message.content,
+        model: message.model,
         timestamp: message.timestamp,
         message_type: message.message_type,
       };
@@ -507,6 +577,11 @@ export default function App() {
           chatIdsMatch: message.chat_id === currentId
         });
       }
+    } else if (message.type === 'error') {
+      const details = message.message || "An unexpected error occurred while processing the request.";
+      console.error("🚨 Error received via WebSocket:", details);
+      setError(details);
+      setLoading(false);
     } else {
       console.log("❌ Message type is not 'message':", {
         messageType: message.type,
@@ -565,18 +640,25 @@ export default function App() {
 
   const loadChatsAndFolders = async (token: string) => {
     try {
-      // Initialize sidebar with folders
-      await initializeFromAPI(token);
+      const sidebarData: SidebarBootstrapData = await initializeFromAPI(token);
+      const { folders: apiFolders, chats: apiChats } = sidebarData;
 
-      // Load chats
-      const apiChats = await apiService.listChats(token);
-      const frontendChats: Chat[] = apiChats.map(apiChat => {
+      const folderIdMap = new Map<number, string>();
+      for (const folder of apiFolders) {
+        folderIdMap.set(folder.id, folder.public_id);
+      }
+
+      const frontendChats: Chat[] = apiChats.map((apiChat: ApiChat) => {
         let messages: Message[] = [];
         try {
-          messages = JSON.parse(apiChat.messages);
+          const rawMessages = apiChat.messages ?? "[]";
+          messages = JSON.parse(rawMessages) as Message[];
         } catch (e) {
           console.error("Failed to parse chat messages", e);
         }
+
+        const folderPublicId =
+          typeof apiChat.folder_id === "number" ? folderIdMap.get(apiChat.folder_id) : undefined;
 
         return {
           id: apiChat.public_id,
@@ -584,7 +666,7 @@ export default function App() {
           title: apiChat.title,
           messages,
           createdAt: new Date(apiChat.created_at),
-          folderId: undefined, // Will be resolved by sidebar
+          folderId: folderPublicId,
           updatedAt: apiChat.updated_at,
           isGroup: apiChat.is_group,
         };
@@ -624,15 +706,37 @@ export default function App() {
       setAuthenticating(true);
       void finalizeGithubLogin(code, state);
     } else {
-      // For development: auto-fetch dev token if no OAuth flow
-      void fetchDevSession().then((devSession) => {
-        if (devSession) {
-          setSession(devSession);
-          persistSession(devSession);
-        }
-      });
+      const storedSession = loadStoredSession();
+      if (storedSession) {
+        setSession(storedSession);
+      } else if (ENABLE_DEV_LOGIN) {
+        // Optional development helper: auto-fetch dev token when explicitly enabled
+        void fetchDevSession().then((devSession) => {
+          if (devSession) {
+            setSession(devSession);
+            persistSession(devSession);
+          }
+        });
+      }
     }
   });
+
+  const sidebarActions: Actions = {
+    ...actions,
+    moveChat: async (chatId, target) => {
+      const result = await actions.moveChat(chatId, target);
+      if (result) {
+        const normalizedFolderId =
+          target.folderId && target.folderId !== "" ? target.folderId : undefined;
+        setChats(prev =>
+          prev.map(chat =>
+            chat.id === chatId ? { ...chat, folderId: normalizedFolderId } : chat,
+          ),
+        );
+      }
+      return result;
+    },
+  };
 
   return (
     <div class="app">
@@ -645,6 +749,10 @@ export default function App() {
         onNewChat={newChat}
         onNewGroupChat={newGroupChat}
         onSelectChat={selectChat}
+        onRenameChat={renameChat}
+        onDeleteChat={deleteChat}
+        onDeleteFolder={deleteFolder}
+        actions={sidebarActions}
       />
         <MainArea
           prompt={prompt}

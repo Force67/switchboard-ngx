@@ -1,5 +1,8 @@
 {
   "dependencies": {
     "ws": "^8.18.3"
+  },
+  "devDependencies": {
+    "bun-types": "^1.3.0"
   }
 }

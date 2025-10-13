@@ -15,6 +15,9 @@ interface Props {
   onSelectChat: (chatId: string) => void;
   onNewChat: (folderId?: string) => void;
   onNewFolder: () => void;
+  onRenameChat: (chatId: string, title: string) => void;
+  onDeleteChat: (chatId: string) => void;
+  onDeleteFolder: (folderId: string) => void;
 }
 
 export default function SidebarTree(props: Props) {
@@ -135,9 +138,9 @@ export default function SidebarTree(props: Props) {
     setCreateInline(null);
   };
 
-  const getOrderedFolders = () => {
-    return props.state.folderOrder.map(id => props.state.folders[id]).filter(Boolean);
-  };
+  const orderedFolders = createMemo(() =>
+    props.state.folderOrder.map(id => props.state.folders[id]).filter(Boolean)
+  );
 
   const getOrderedRootChats = createMemo(() => {
     // Return only chats that don't have a folderId (root level chats)
@@ -154,59 +157,72 @@ export default function SidebarTree(props: Props) {
           {error()}
         </div>
       </Show>
-      <For each={getOrderedFolders()}>
-        {(folder) => {
-          const subfolderIds = props.state.subfolderOrder[folder.id] || [];
-          const folderChats = createMemo(() => props.chats.filter(chat => chat.folderId === folder.id));
-          return (
-            <FolderNode
-              folder={folder}
-              depth={1}
-              subfolders={subfolderIds
-                .map(id => props.state.folders[id])
-                .filter(Boolean)}
-              chats={folderChats()}
-              isSelected={false} // TODO: Implement selection
-              currentChatId={props.currentChatId}
-              onSelect={() => {
-                // TODO: Update selection
-              }}
-              onSelectChat={props.onSelectChat}
-              onNewChat={props.onNewChat}
-              actions={props.actions}
-              folders={props.state.folders}
-              folderOrder={props.state.folderOrder}
-              subfolderOrder={props.state.subfolderOrder}
-              chatOrderByFolder={props.state.chatOrderByFolder}
-              allChats={props.chats}
-            />
-          );
-        }}
-      </For>
 
-      <Show when={createInline() && !createInline()!.parentId}>
-        <CreateInline
-          onConfirm={handleCreateConfirm}
-          onCancel={handleCreateCancel}
-          isLoading={isLoading()}
-        />
+      <Show when={orderedFolders().length > 0 || (createInline() && !createInline()!.parentId)}>
+        <div class="tree-section tree-folders">
+          <For each={orderedFolders()}>
+            {(folder) => {
+              const subfolderIds = props.state.subfolderOrder[folder.id] || [];
+              const folderChats = createMemo(() => props.chats.filter(chat => chat.folderId === folder.id));
+              return (
+                <FolderNode
+                  folder={folder}
+                  depth={1}
+                  subfolders={subfolderIds
+                    .map(id => props.state.folders[id])
+                    .filter(Boolean)}
+                  chats={folderChats()}
+                  isSelected={false} // TODO: Implement selection
+                  currentChatId={props.currentChatId}
+                  onSelect={() => {
+                    // TODO: Update selection
+                  }}
+                  onSelectChat={props.onSelectChat}
+                  onNewChat={props.onNewChat}
+                  actions={props.actions}
+                  folders={props.state.folders}
+                  folderOrder={props.state.folderOrder}
+                  subfolderOrder={props.state.subfolderOrder}
+                  chatOrderByFolder={props.state.chatOrderByFolder}
+                  allChats={props.chats}
+                  onRenameChat={props.onRenameChat}
+                  onDeleteChat={props.onDeleteChat}
+                  onDeleteFolder={props.onDeleteFolder}
+                />
+              );
+            }}
+          </For>
+
+          <Show when={createInline() && !createInline()!.parentId}>
+            <CreateInline
+              onConfirm={handleCreateConfirm}
+              onCancel={handleCreateCancel}
+              isLoading={isLoading()}
+            />
+          </Show>
+        </div>
       </Show>
 
-      {/* Root chats */}
-      <For each={getOrderedRootChats()}>
-        {(chat) => (
-          <ChatRow
-            chat={chat}
-            isSelected={props.currentChatId === chat.id}
-            depth={1}
-            onSelect={() => props.onSelectChat(chat.id)}
-            actions={props.actions}
-            folders={props.state.folders}
-            folderOrder={props.state.folderOrder}
-            subfolderOrder={props.state.subfolderOrder}
-          />
-        )}
-      </For>
+      <Show when={getOrderedRootChats().length > 0}>
+        <div class="tree-section tree-root-chats">
+          <For each={getOrderedRootChats()}>
+            {(chat) => (
+              <ChatRow
+                chat={chat}
+                isSelected={props.currentChatId === chat.id}
+                depth={1}
+                onSelect={() => props.onSelectChat(chat.id)}
+                actions={props.actions}
+                folders={props.state.folders}
+                folderOrder={props.state.folderOrder}
+                subfolderOrder={props.state.subfolderOrder}
+                onRename={props.onRenameChat}
+                onDelete={props.onDeleteChat}
+              />
+            )}
+          </For>
+        </div>
+      </Show>
 
       {contextMenu() && (
         <ContextMenu

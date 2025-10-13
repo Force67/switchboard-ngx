@@ -1,6 +1,8 @@
 import { createSignal } from "solid-js";
 
-const API_BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:7070";
+const DEFAULT_API_BASE =
+  typeof window !== "undefined" ? window.location.origin : "http://localhost:7070";
+const API_BASE = import.meta.env.VITE_API_BASE ?? DEFAULT_API_BASE;
 
 type ConnectionStatus = "online" | "offline" | "connecting" | "limited";
 

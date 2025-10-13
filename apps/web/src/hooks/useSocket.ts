@@ -1,4 +1,4 @@
-import { createSignal, createEffect, onCleanup, onMount } from "solid-js";
+import { createSignal, createEffect, onCleanup } from "solid-js";
 
 const WS_BASE = import.meta.env.VITE_WS_BASE ?? (typeof window !== 'undefined' ? `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}` : "ws://localhost:7070");
 
@@ -15,6 +15,7 @@ interface ClientEvent {
   chat_id?: string;
   content?: string;
   is_typing?: boolean;
+  model?: string;
 }
 
 interface ServerEvent {
@@ -24,6 +25,7 @@ interface ServerEvent {
   message_id?: string;
   user_id?: string;
   content?: string;
+  model?: string;
   timestamp?: string;
   is_typing?: boolean;
   message?: string;
@@ -41,27 +43,41 @@ export function useSocket(token?: () => string | null) {
   let reconnectAttempts = 0;
   const maxReconnectAttempts = 5;
   const reconnectDelay = 1000; // Start with 1 second
+  let activeToken: string | null = null;
 
-  const connect = () => {
-    if (socket?.readyState === WebSocket.OPEN) return;
+  const connect = (providedToken?: string | null) => {
+    const resolvedToken = providedToken ?? token?.() ?? null;
 
-    const authToken = token?.();
-
-    // Don't connect if no token available
-    if (!authToken) {
-      console.log('WebSocket: No token available, skipping connection');
-      setState(prev => ({ ...prev, status: "disconnected", error: "No authentication token" }));
+    if (
+      socket &&
+      (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) &&
+      activeToken === resolvedToken
+    ) {
       return;
     }
 
+    // Don't connect if no token available
+    if (!resolvedToken) {
+      console.log('WebSocket: No token available, skipping connection');
+      activeToken = null;
+      setState(prev => ({ ...prev, status: "disconnected", error: null }));
+      return;
+    }
+
+    if (socket) {
+      socket.close(1000, "Reinitializing connection");
+      socket = null;
+    }
+
+    activeToken = resolvedToken;
     setState(prev => ({ ...prev, status: "connecting", error: null }));
 
     try {
-      const wsUrl = `${WS_BASE}/ws?token=${encodeURIComponent(authToken)}`;
+      const wsUrl = `${WS_BASE}/ws?token=${encodeURIComponent(resolvedToken)}`;
 
       console.log('WebSocket connecting to:', wsUrl);
-      console.log('Token present:', !!authToken);
-      console.log('Token length:', authToken?.length || 0);
+      console.log('Token present:', !!resolvedToken);
+      console.log('Token length:', resolvedToken.length || 0);
 
       socket = new WebSocket(wsUrl);
 
@@ -92,6 +108,10 @@ export function useSocket(token?: () => string | null) {
         setState(prev => ({ ...prev, status: "disconnected" }));
         socket = null;
 
+        if (!activeToken) {
+          return;
+        }
+
         // Attempt to reconnect if not a normal closure
         if (event.code !== 1000 && reconnectAttempts < maxReconnectAttempts) {
           scheduleReconnect();
@@ -120,6 +140,7 @@ export function useSocket(token?: () => string | null) {
       socket = null;
     }
 
+    activeToken = null;
     setState(prev => ({ ...prev, status: "disconnected" }));
   };
 
@@ -140,8 +161,12 @@ export function useSocket(token?: () => string | null) {
     send({ type: "unsubscribe", chat_id: chatId });
   };
 
-  const sendMessage = (chatId: string, content: string) => {
-    send({ type: "message", chat_id: chatId, content });
+  const sendMessage = (chatId: string, content: string, model?: string) => {
+    const event: ClientEvent = { type: "message", chat_id: chatId, content };
+    if (model && model.trim()) {
+      event.model = model.trim();
+    }
+    send(event);
   };
 
   const sendTyping = (chatId: string, isTyping: boolean) => {
@@ -149,7 +174,7 @@ export function useSocket(token?: () => string | null) {
   };
 
   const scheduleReconnect = () => {
-    if (reconnectTimeout) return;
+    if (reconnectTimeout || !activeToken) return;
 
     reconnectAttempts++;
     const delay = reconnectDelay * Math.pow(2, reconnectAttempts - 1); // Exponential backoff
@@ -158,13 +183,22 @@ export function useSocket(token?: () => string | null) {
 
     reconnectTimeout = window.setTimeout(() => {
       reconnectTimeout = null;
-      connect();
+      connect(activeToken);
     }, delay);
   };
 
-  // Auto-connect on mount
-  onMount(() => {
-    connect();
+  createEffect(() => {
+    const authToken = token?.() ?? null;
+
+    if (!authToken) {
+      reconnectAttempts = 0;
+      disconnect();
+      setState(prev => ({ ...prev, error: null }));
+      return;
+    }
+
+    reconnectAttempts = 0;
+    connect(authToken);
   });
 
   // Cleanup on unmount

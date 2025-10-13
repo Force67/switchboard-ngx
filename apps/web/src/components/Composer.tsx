@@ -1,7 +1,11 @@
-import { createSignal, createEffect, Accessor, Setter, For } from "solid-js";
+import { createSignal, createEffect, Accessor, Setter, For, Show, createMemo } from "solid-js";
 import ModelSelector from "./ModelSelector";
 import Chip from "./Chip";
 import SendButton from "./SendButton";
+import ModelPickerPanel from "./model-picker/ModelPickerPanel";
+import { MODELS, type ModelMeta } from "./model-picker/models";
+import ColoredTextarea from "./ColoredTextarea";
+import "./model-picker/model-picker.css";
 
 interface ModelOption {
   id: string;
@@ -30,8 +34,25 @@ interface Props {
 
 export default function Composer(props: Props) {
   let textareaRef: HTMLTextAreaElement | undefined;
+  const [showModelPicker, setShowModelPicker] = createSignal(false);
+  const [cursorPosition, setCursorPosition] = createSignal(0);
 
   const handleSend = (event: Event) => {
+    let text = props.prompt();
+
+    // Extract model from @mention if present
+    const atMatch = text.match(/@(\w+)/);
+    if (atMatch) {
+      const modelName = atMatch[1];
+      const model = props.models().find(m => m.label.toLowerCase().replace(/\s+/g, '') === modelName.toLowerCase());
+      if (model) {
+        props.setSelectedModel(model.id);
+        // Remove the @mention from the message before sending
+        text = text.replace(/@\w+\s*/, '');
+        props.setPrompt(text.trim());
+      }
+    }
+
     props.onSend(event);
   };
 
@@ -42,21 +63,123 @@ export default function Composer(props: Props) {
     }
   });
 
+  // Note: Click outside is now handled by the backdrop overlay
+
+  const checkForAtSymbol = (text: string, position: number) => {
+    if (position > 0 && text[position - 1] === '@') {
+      const wordStart = text.lastIndexOf(' ', position - 1) + 1;
+      const beforeAt = text.substring(wordStart, position - 1);
+      if (beforeAt === '') {
+        setShowModelPicker(true);
+        setCursorPosition(position);
+        return true;
+      }
+    }
+    setShowModelPicker(false);
+    return false;
+  };
+
+  const handleInputChange = (e: InputEvent) => {
+    const textarea = e.currentTarget as HTMLTextAreaElement;
+    const newValue = textarea.value;
+    const newPosition = textarea.selectionStart;
+
+    props.setPrompt(newValue);
+
+    checkForAtSymbol(newValue, newPosition);
+  };
+
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if (e.key === 'Enter' && e.shiftKey) {
+      e.preventDefault();
+      props.onSend(e);
+    } else if (e.key === 'Escape' && showModelPicker()) {
+      e.preventDefault();
+      setShowModelPicker(false);
+    }
+  };
+
+  const handleModelSelect = (modelId: string) => {
+    const text = props.prompt();
+    const cursorPos = cursorPosition();
+    const model = props.models().find(m => m.id === modelId);
+
+    if (model) {
+      const beforeAt = text.substring(0, cursorPos - 1);
+      const afterCursor = text.substring(cursorPos);
+      const modelName = model.label.toLowerCase().replace(/\s+/g, '');
+      const newText = beforeAt + '@' + modelName + ' ' + afterCursor;
+      props.setPrompt(newText);
+      props.setSelectedModel(modelId);
+    }
+
+    setShowModelPicker(false);
+
+    setTimeout(() => {
+      if (textareaRef) {
+        const model = props.models().find(m => m.id === modelId);
+        if (model) {
+          const modelName = model.label.toLowerCase().replace(/\s+/g, '');
+          const newCursorPos = cursorPos + modelName.length;
+          textareaRef.focus();
+          textareaRef.setSelectionRange(newCursorPos, newCursorPos);
+        }
+      }
+    }, 0);
+  };
+
   return (
-    <form class="composer" onSubmit={handleSend}>
-      <div class="ta">
-        <textarea
-          ref={textareaRef}
+    <>
+      <form class="composer" onSubmit={handleSend}>
+      <div class="ta" style="position: relative;">
+        <ColoredTextarea
+          value={props.prompt}
+          onInput={props.setPrompt}
+          onKeyDown={handleKeyDown}
+          onInputCustom={handleInputChange}
           placeholder="Type your message..."
-          value={props.prompt()}
-          onInput={(e) => props.setPrompt(e.currentTarget.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && e.shiftKey) {
-              e.preventDefault();
-              props.onSend(e);
-            }
+          style={{
+            width: "100%",
+            minHeight: "44px",
+            maxHeight: "120px",
+            border: "none",
+            outline: "none",
+            fontSize: "14px",
+            fontFamily: "inherit",
+            lineHeight: "1.5",
           }}
+          ref={(el) => textareaRef = el}
         />
+        <Show when={showModelPicker()}>
+          <>
+            <div
+              style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.1); z-index: 999;"
+              onClick={() => setShowModelPicker(false)}
+            />
+            <div
+              style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: center; z-index: 1000;"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div style="transform: translateY(-700px);">
+                <ModelPickerPanel
+                  models={props.models().map(model => ({
+                    id: model.id,
+                    name: model.label,
+                    badges: [
+                      ...(model.supports_reasoning ? ['reasoning' as const] : []),
+                      ...(model.supports_images ? ['vision' as const] : []),
+                    ],
+                    tier: undefined,
+                    disabled: false,
+                    group: undefined,
+                    pricing: model.pricing,
+                  }))}
+                  onSelect={handleModelSelect}
+                />
+              </div>
+            </div>
+          </>
+        </Show>
       </div>
       {props.attachedImages().length > 0 && (
         <div class="previews">
@@ -91,5 +214,7 @@ export default function Composer(props: Props) {
         <SendButton disabled={!props.prompt().trim() || props.loading()} type="submit" />
       </div>
     </form>
+
+      </>
   );
 }

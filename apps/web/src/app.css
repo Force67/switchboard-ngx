@@ -145,7 +145,7 @@
   font-weight: 600;
   color: var(--text-0);
   margin: 0;
-  background: linear-gradient(135deg, #e54cbf 0%, #d7c4e6 100%);
+  background: linear-gradient(135deg, var(--accent) 0%, var(--text-1) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -158,11 +158,11 @@
 }
 .icircle{
   width:28px; height:28px; border-radius:999px; display:grid; place-items:center;
-  background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.07);
+  background:var(--glass); border:1px solid var(--hair);
   cursor:pointer;
 }
-.icircle:hover{background:rgba(255,255,255,0.12)}
-.icircle svg{width:14px;height:14px;stroke:#fff;stroke-width:1.6;fill:none}
+.icircle:hover{background:var(--chip)}
+.icircle svg{width:14px;height:14px;stroke:var(--text-0);stroke-width:1.6;fill:none}
 
 /* Indicator pill */
 .status {

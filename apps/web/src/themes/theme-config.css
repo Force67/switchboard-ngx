@@ -1,0 +1,182 @@
+:root {
+  /* Light theme colors (default) */
+  --bg-0-light: #ffffff;
+  --bg-1-light: #f8fafc;
+  --bg-2-light: #f1f5f9;
+  --bg-3-light: #e2e8f0;
+  --text-0-light: #0f172a;
+  --text-1-light: #475569;
+  --text-dim-light: #64748b;
+  --accent-light: #3b82f6;
+  --brand-light: #2563eb;
+  --panel-light: #ffffff;
+  --panel-2-light: #f8fafc;
+  --panel-3-light: #f1f5f9;
+  --badge-bg-light: #f8fafc;
+  --badge-hair-light: rgba(0, 0, 0, 0.10);
+  --chip-light: #e2e8f0;
+  --hair-light: rgba(0, 0, 0, 0.08);
+  --ok-light: #22c55e;
+  --warn-light: #f59e0b;
+  --err-light: #ef4444;
+  --status-bg-light: rgba(0, 0, 0, 0.06);
+  --status-hair-light: rgba(0, 0, 0, 0.10);
+  --glass-light: rgba(0, 0, 0, 0.08);
+  --focus-light: 0 0 0 2px rgba(59, 130, 246, 0.35);
+  --button-light: #3b82f6;
+  --button-hover-light: #2563eb;
+
+  /* Dark theme colors (current theme) */
+  --bg-0-dark: #0f0c10;
+  --bg-1-dark: #17121b;
+  --bg-2-dark: #1e1723;
+  --bg-3-dark: #241a29;
+  --text-0-dark: #f2eef5;
+  --text-1-dark: #cbbad7;
+  --text-dim-dark: #8c7a98;
+  --accent-dark: #e54cbf;
+  --brand-dark: #b83a7e;
+  --panel-dark: #141016;
+  --panel-2-dark: #1a141d;
+  --panel-3-dark: #211827;
+  --badge-bg-dark: #241c2b;
+  --badge-hair-dark: rgba(255, 255, 255, 0.10);
+  --chip-dark: #2a2230;
+  --hair-dark: rgba(255, 255, 255, 0.08);
+  --ok-dark: #4ade80;
+  --warn-dark: #fbbf24;
+  --err-dark: #f87171;
+  --status-bg-dark: rgba(255, 255, 255, 0.06);
+  --status-hair-dark: rgba(255, 255, 255, 0.10);
+  --glass-dark: rgba(255, 255, 255, 0.08);
+  --focus-dark: 0 0 0 2px rgba(229, 76, 191, 0.35);
+  --button-dark: #e54cbf;
+  --button-hover-dark: #d140a6;
+
+  /* Layout variables (theme-independent) */
+  --sidebar-width: 240px;
+  --content-padding: 16px;
+}
+
+/* Light theme - default */
+:root {
+  --bg-0: var(--bg-0-light);
+  --bg-1: var(--bg-1-light);
+  --bg-2: var(--bg-2-light);
+  --bg-3: var(--bg-3-light);
+  --text-0: var(--text-0-light);
+  --text-1: var(--text-1-light);
+  --text-dim: var(--text-dim-light);
+  --accent: var(--accent-light);
+  --brand: var(--brand-light);
+  --panel: var(--panel-light);
+  --panel-2: var(--panel-2-light);
+  --panel-3: var(--panel-3-light);
+  --badge-bg: var(--badge-bg-light);
+  --badge-hair: var(--badge-hair-light);
+  --chip: var(--chip-light);
+  --hair: var(--hair-light);
+  --ok: var(--ok-light);
+  --warn: var(--warn-light);
+  --err: var(--err-light);
+  --status-bg: var(--status-bg-light);
+  --status-hair: var(--status-hair-light);
+  --glass: var(--glass-light);
+  --focus: var(--focus-light);
+  --button: var(--button-light);
+  --button-hover: var(--button-hover-light);
+}
+
+/* Dark theme */
+[data-theme="dark"] {
+  --bg-0: var(--bg-0-dark);
+  --bg-1: var(--bg-1-dark);
+  --bg-2: var(--bg-2-dark);
+  --bg-3: var(--bg-3-dark);
+  --text-0: var(--text-0-dark);
+  --text-1: var(--text-1-dark);
+  --text-dim: var(--text-dim-dark);
+  --accent: var(--accent-dark);
+  --brand: var(--brand-dark);
+  --panel: var(--panel-dark);
+  --panel-2: var(--panel-2-dark);
+  --panel-3: var(--panel-3-dark);
+  --badge-bg: var(--badge-bg-dark);
+  --badge-hair: var(--badge-hair-dark);
+  --chip: var(--chip-dark);
+  --hair: var(--hair-dark);
+  --ok: var(--ok-dark);
+  --warn: var(--warn-dark);
+  --err: var(--err-dark);
+  --status-bg: var(--status-bg-dark);
+  --status-hair: var(--status-hair-dark);
+  --glass: var(--glass-dark);
+  --focus: var(--focus-dark);
+  --button: var(--button-dark);
+  --button-hover: var(--button-hover-dark);
+}
+
+/* Smooth transitions for theme switching */
+:root {
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+
+/* System preference support */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg-0: var(--bg-0-dark);
+    --bg-1: var(--bg-1-dark);
+    --bg-2: var(--bg-2-dark);
+    --bg-3: var(--bg-3-dark);
+    --text-0: var(--text-0-dark);
+    --text-1: var(--text-1-dark);
+    --text-dim: var(--text-dim-dark);
+    --accent: var(--accent-dark);
+    --brand: var(--brand-dark);
+    --panel: var(--panel-dark);
+    --panel-2: var(--panel-2-dark);
+    --panel-3: var(--panel-3-dark);
+    --badge-bg: var(--badge-bg-dark);
+    --badge-hair: var(--badge-hair-dark);
+    --chip: var(--chip-dark);
+    --hair: var(--hair-dark);
+    --ok: var(--ok-dark);
+    --warn: var(--warn-dark);
+    --err: var(--err-dark);
+    --status-bg: var(--status-bg-dark);
+    --status-hair: var(--status-hair-dark);
+    --glass: var(--glass-dark);
+    --focus: var(--focus-dark);
+    --button: var(--button-dark);
+    --button-hover: var(--button-hover-dark);
+  }
+}
+
+/* Force light theme when data-theme="light" */
+[data-theme="light"] {
+  --bg-0: var(--bg-0-light);
+  --bg-1: var(--bg-1-light);
+  --bg-2: var(--bg-2-light);
+  --bg-3: var(--bg-3-light);
+  --text-0: var(--text-0-light);
+  --text-1: var(--text-1-light);
+  --text-dim: var(--text-dim-light);
+  --accent: var(--accent-light);
+  --brand: var(--brand-light);
+  --panel: var(--panel-light);
+  --panel-2: var(--panel-2-light);
+  --panel-3: var(--panel-3-light);
+  --badge-bg: var(--badge-bg-light);
+  --badge-hair: var(--badge-hair-light);
+  --chip: var(--chip-light);
+  --hair: var(--hair-light);
+  --ok: var(--ok-light);
+  --warn: var(--warn-light);
+  --err: var(--err-light);
+  --status-bg: var(--status-bg-light);
+  --status-hair: var(--status-hair-light);
+  --glass: var(--glass-light);
+  --focus: var(--focus-light);
+  --button: var(--button-light);
+  --button-hover: var(--button-hover-light);
+}

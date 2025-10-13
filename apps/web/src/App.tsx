@@ -1,6 +1,7 @@
 import { createSignal, createEffect, onMount, createMemo } from "solid-js";
 import "./theme.css";
 import "./app.css";
+import { ThemeProvider } from "./contexts/ThemeContext";
 import Sidebar from "./components/Sidebar";
 import MainArea from "./components/MainArea";
 import { apiService } from "./api";
@@ -753,58 +754,60 @@ export default function App() {
   };
 
   return (
-    <div class="app">
-      <Sidebar
-        session={session}
-        chats={chats}
-        currentChatId={currentChatId}
-        onLogin={beginGithubLogin}
-        onLogout={logout}
-        onNewChat={newChat}
-        onNewGroupChat={newGroupChat}
-        onSelectChat={selectChat}
-        onRenameChat={renameChat}
-        onDeleteChat={deleteChat}
-        onDeleteFolder={deleteFolder}
-        actions={sidebarActions}
-      />
-          <MainArea
-          prompt={prompt}
-          setPrompt={setPrompt}
-          attachedImages={attachedImages}
-          setAttachedImages={setAttachedImages}
-          selectedModel={selectedModel}
-          setSelectedModel={setSelectedModel}
-          models={models}
-          modelsLoading={modelsLoading}
-          modelsError={modelsError}
-          loading={loading}
-          error={error}
-          modelPickerOpen={modelPickerOpen}
-          setModelPickerOpen={setModelPickerOpen}
+    <ThemeProvider>
+      <div class="app">
+        <Sidebar
           session={session}
-          connectionStatus={createMemo(() => {
-            const state = socket.state();
-            console.log('WebSocket state:', state);
-            return {
-              status: state.status,
-              error: state.error || undefined
-            };
-          })}
-          currentMessages={createMemo(() => {
-            const currentId = currentChatId();
-            const currentChat = chats().find(c => c.id === currentId);
-            const messages = currentChat ? currentChat.messages : [];
-            console.log("🔄 currentMessages memo recalculated:", { currentId, messagesCount: messages.length, messages });
-            return messages;
-          })}
-          currentChat={createMemo(() => {
-            const currentId = currentChatId();
-            return chats().find(c => c.id === currentId) || null;
-          })}
-          onSend={handleSubmit}
+          chats={chats}
+          currentChatId={currentChatId}
+          onLogin={beginGithubLogin}
           onLogout={logout}
+          onNewChat={newChat}
+          onNewGroupChat={newGroupChat}
+          onSelectChat={selectChat}
+          onRenameChat={renameChat}
+          onDeleteChat={deleteChat}
+          onDeleteFolder={deleteFolder}
+          actions={sidebarActions}
         />
-    </div>
+            <MainArea
+            prompt={prompt}
+            setPrompt={setPrompt}
+            attachedImages={attachedImages}
+            setAttachedImages={setAttachedImages}
+            selectedModel={selectedModel}
+            setSelectedModel={setSelectedModel}
+            models={models}
+            modelsLoading={modelsLoading}
+            modelsError={modelsError}
+            loading={loading}
+            error={error}
+            modelPickerOpen={modelPickerOpen}
+            setModelPickerOpen={setModelPickerOpen}
+            session={session}
+            connectionStatus={createMemo(() => {
+              const state = socket.state();
+              console.log('WebSocket state:', state);
+              return {
+                status: state.status,
+                error: state.error || undefined
+              };
+            })}
+            currentMessages={createMemo(() => {
+              const currentId = currentChatId();
+              const currentChat = chats().find(c => c.id === currentId);
+              const messages = currentChat ? currentChat.messages : [];
+              console.log("🔄 currentMessages memo recalculated:", { currentId, messagesCount: messages.length, messages });
+              return messages;
+            })}
+            currentChat={createMemo(() => {
+              const currentId = currentChatId();
+              return chats().find(c => c.id === currentId) || null;
+            })}
+            onSend={handleSubmit}
+            onLogout={logout}
+          />
+      </div>
+    </ThemeProvider>
   );
 }

@@ -155,7 +155,7 @@ export default function MainArea(props: Props) {
             return (
               <>
                 <div
-                  style={`padding: 20px; margin: 10px 20px; border-radius: 12px; background: ${message.role === 'user' ? 'var(--bg-3)' : 'var(--bg-2)'}; color: var(--text-0); position: relative; ${shouldAnimate() ? 'border: 3px solid yellow;' : ''}`}
+                  style={`padding: 20px; margin: 10px 20px; border-radius: 12px; background: ${message.role === 'user' ? 'var(--bg-3)' : '#1a2332'}; color: var(--text-0); position: relative; ${shouldAnimate() ? 'border: 3px solid yellow;' : ''}`}
                   classList={{
                     'user-message-blowing': shouldAnimate()
                   }}

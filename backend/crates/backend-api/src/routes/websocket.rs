@@ -71,6 +71,19 @@ async fn handle_socket(
     let mut subscribed_chats = HashMap::new(); // chat_public_id -> (chat_db_id, broadcaster)
 
     let (out_tx, mut out_rx) = mpsc::channel::<ServerEvent>(100);
+
+    // Forward user-scoped broadcasts into this connection so cross-channel
+    // updates (e.g. folder or chat mutations) reach this socket too.
+    let user_forward_tx = out_tx.clone();
+    let user_broadcaster = state.get_user_broadcaster(user.id).await;
+    let _user_task = tokio::spawn(async move {
+        let mut receiver = user_broadcaster.subscribe();
+        while let Ok(event) = receiver.recv().await {
+            if user_forward_tx.send(event.clone()).await.is_err() {
+                break;
+            }
+        }
+    });
     let _sender_task = tokio::spawn(async move {
         while let Some(event) = out_rx.recv().await {
             let json = serde_json::to_string(&event).unwrap();

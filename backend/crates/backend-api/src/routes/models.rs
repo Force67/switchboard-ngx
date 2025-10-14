@@ -48,7 +48,7 @@ pub struct ModelPricing {
     pub output: Option<f64>,
 }
 
-#[derive(Debug, Serialize, FromRow, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, FromRow, ToSchema, Clone)]
 pub struct Folder {
     pub id: i64,
     pub public_id: String,
@@ -61,7 +61,7 @@ pub struct Folder {
     pub updated_at: String,
 }
 
-#[derive(Debug, Serialize, FromRow, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, FromRow, ToSchema, Clone)]
 pub struct Chat {
     pub id: i64,
     pub public_id: String,
@@ -73,7 +73,7 @@ pub struct Chat {
     pub updated_at: String,
 }
 
-#[derive(Debug, Serialize, FromRow, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, FromRow, ToSchema, Clone)]
 pub struct User {
     pub id: i64,
     pub public_id: String,
@@ -83,7 +83,7 @@ pub struct User {
     pub updated_at: String,
 }
 
-#[derive(Debug, Serialize, FromRow, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, FromRow, ToSchema, Clone)]
 pub struct Message {
     pub id: i64,
     pub public_id: String,
@@ -99,7 +99,7 @@ pub struct Message {
     pub updated_at: String,
 }
 
-#[derive(Debug, Serialize, FromRow, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, FromRow, ToSchema, Clone)]
 pub struct MessageEdit {
     pub id: i64,
     pub message_id: i64,
@@ -109,7 +109,7 @@ pub struct MessageEdit {
     pub edited_at: String,
 }
 
-#[derive(Debug, Serialize, FromRow, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, FromRow, ToSchema, Clone)]
 pub struct MessageDeletion {
     pub id: i64,
     pub message_id: i64,
@@ -118,7 +118,7 @@ pub struct MessageDeletion {
     pub deleted_at: String,
 }
 
-#[derive(Debug, Serialize, FromRow, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, FromRow, ToSchema, Clone)]
 pub struct MessageAttachment {
     pub id: i64,
     pub message_id: i64,
@@ -129,7 +129,7 @@ pub struct MessageAttachment {
     pub created_at: String,
 }
 
-#[derive(Debug, Serialize, FromRow, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, FromRow, ToSchema, Clone)]
 pub struct Notification {
     pub id: i64,
     pub user_id: i64,
@@ -140,7 +140,7 @@ pub struct Notification {
     pub created_at: String,
 }
 
-#[derive(Debug, Serialize, FromRow, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, FromRow, ToSchema, Clone)]
 pub struct Permission {
     pub id: i64,
     pub user_id: i64,
@@ -201,7 +201,7 @@ pub struct TokenUsage {
     pub total_tokens: u32,
 }
 
-#[derive(Debug, Serialize, FromRow, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, FromRow, ToSchema, Clone)]
 pub struct ChatInvite {
     pub id: i64,
     pub chat_id: i64,
@@ -227,7 +227,7 @@ pub struct InviteResponse {
     pub invite: ChatInvite,
 }
 
-#[derive(Debug, Serialize, FromRow, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, FromRow, ToSchema, Clone)]
 pub struct ChatMember {
     pub id: i64,
     pub chat_id: i64,

@@ -8,7 +8,10 @@ use switchboard_auth::{AuthSession, Authenticator, User};
 use switchboard_orchestrator::Orchestrator;
 use tokio::sync::{broadcast, Mutex};
 
-use crate::ApiError;
+use crate::{
+    routes::models::{Chat, ChatInvite, ChatMember, Folder, Message},
+    ApiError,
+};
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -62,6 +65,44 @@ pub enum ServerEvent {
     Error {
         message: String,
     },
+    ChatCreated {
+        chat: Chat,
+    },
+    ChatUpdated {
+        chat: Chat,
+    },
+    ChatDeleted {
+        chat_id: String,
+    },
+    FolderCreated {
+        folder: Folder,
+    },
+    FolderUpdated {
+        folder: Folder,
+    },
+    FolderDeleted {
+        folder_id: String,
+    },
+    MessageUpdated {
+        chat_id: String,
+        message: Message,
+    },
+    MessageDeleted {
+        chat_id: String,
+        message_id: String,
+    },
+    InviteCreated {
+        chat_id: String,
+        invite: ChatInvite,
+    },
+    MemberUpdated {
+        chat_id: String,
+        member: ChatMember,
+    },
+    MemberRemoved {
+        chat_id: String,
+        user_id: i64,
+    },
 }
 
 const DEFAULT_OAUTH_STATE_TTL: StdDuration = StdDuration::from_secs(600);
@@ -74,6 +115,7 @@ pub struct AppState {
     oauth_state: OAuthStateStore,
     redis_conn: Option<ConnectionManager>,
     pub chat_broadcasters: Arc<Mutex<HashMap<String, broadcast::Sender<ServerEvent>>>>,
+    pub user_broadcasters: Arc<Mutex<HashMap<i64, broadcast::Sender<ServerEvent>>>>,
 }
 
 impl AppState {
@@ -90,6 +132,7 @@ impl AppState {
             oauth_state: OAuthStateStore::default(),
             redis_conn,
             chat_broadcasters: Arc::new(Mutex::new(HashMap::new())),
+            user_broadcasters: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -107,6 +150,7 @@ impl AppState {
             oauth_state,
             redis_conn,
             chat_broadcasters: Arc::new(Mutex::new(HashMap::new())),
+            user_broadcasters: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -128,6 +172,54 @@ impl AppState {
 
     pub fn redis_conn(&self) -> Option<&ConnectionManager> {
         self.redis_conn.as_ref()
+    }
+
+    pub async fn get_user_broadcaster(&self, user_id: i64) -> broadcast::Sender<ServerEvent> {
+        let mut broadcasters = self.user_broadcasters.lock().await;
+        broadcasters
+            .entry(user_id)
+            .or_insert_with(|| broadcast::channel(100).0)
+            .clone()
+    }
+
+    pub async fn broadcast_to_user(&self, user_id: i64, event: &ServerEvent) {
+        let sender = self.get_user_broadcaster(user_id).await;
+        if let Err(err) = sender.send(event.clone()) {
+            tracing::debug!(
+                "failed to deliver event {:?} to user {}: {}",
+                event,
+                user_id,
+                err
+            );
+        }
+    }
+
+    pub async fn broadcast_to_users(
+        &self,
+        user_ids: impl IntoIterator<Item = i64>,
+        event: &ServerEvent,
+    ) {
+        for user_id in user_ids {
+            self.broadcast_to_user(user_id, event).await;
+        }
+    }
+
+    pub async fn broadcast_to_chat(&self, chat_public_id: &str, event: &ServerEvent) {
+        let broadcaster = {
+            let broadcasters = self.chat_broadcasters.lock().await;
+            broadcasters.get(chat_public_id).cloned()
+        };
+
+        if let Some(sender) = broadcaster {
+            if let Err(err) = sender.send(event.clone()) {
+                tracing::debug!(
+                    "failed to deliver chat event {:?} for chat {}: {}",
+                    event,
+                    chat_public_id,
+                    err
+                );
+            }
+        }
     }
 
     pub async fn authenticate(&self, token: &str) -> Result<(User, AuthSession), ApiError> {

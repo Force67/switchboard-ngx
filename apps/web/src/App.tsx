@@ -25,7 +25,8 @@ const DEFAULT_MODEL = import.meta.env.VITE_DEFAULT_MODEL ?? "";
 const GITHUB_REDIRECT_PATH =
   import.meta.env.VITE_GITHUB_REDIRECT_PATH ?? "/auth/callback";
 const SESSION_KEY = "switchboard.session";
-const ENABLE_DEV_LOGIN = import.meta.env.VITE_ENABLE_DEV_LOGIN === "false";
+const AUTO_DEV_SESSION_ENABLED =
+  import.meta.env.DEV && import.meta.env.VITE_ENABLE_DEV_LOGIN === "true";
 
 interface UserProfile {
   id: string;
@@ -135,10 +136,14 @@ export default function App() {
 
   // WebSocket integration
   const socket = useSocket(() => session()?.token || null);
+  let devSessionBootstrapInFlight = false;
 
   const redirectUri = () => `${window.location.origin}${GITHUB_REDIRECT_PATH}`;
 
-  const persistSession = (value: SessionData | null) => {
+  const persistSession = (
+    value: SessionData | null,
+    options: { suppressAutoBootstrap?: boolean } = {},
+  ) => {
     setSession(value);
     if (typeof window === "undefined") {
       return;
@@ -147,8 +152,33 @@ export default function App() {
       window.localStorage.setItem(SESSION_KEY, JSON.stringify(value));
     } else {
       window.localStorage.removeItem(SESSION_KEY);
+      if (AUTO_DEV_SESSION_ENABLED && !options.suppressAutoBootstrap) {
+        void bootstrapDevSession();
+      }
     }
   };
+
+  async function bootstrapDevSession() {
+    if (
+      devSessionBootstrapInFlight ||
+      session() ||
+      !AUTO_DEV_SESSION_ENABLED
+    ) {
+      return;
+    }
+
+    devSessionBootstrapInFlight = true;
+    try {
+      const devSession = await fetchDevSession();
+      if (devSession) {
+        persistSession(devSession, { suppressAutoBootstrap: true });
+      }
+    } catch (error) {
+      console.error("Failed to bootstrap development session:", error);
+    } finally {
+      devSessionBootstrapInFlight = false;
+    }
+  }
 
   const finalizeGithubLogin = async (code: string, state: string) => {
     setAuthError(null);
@@ -278,7 +308,7 @@ export default function App() {
   };
 
   const logout = () => {
-    persistSession(null);
+    persistSession(null, { suppressAutoBootstrap: true });
     setModels([]);
     setSelectedModels([]);
     setModelStatuses({});
@@ -944,14 +974,8 @@ export default function App() {
       const storedSession = loadStoredSession();
       if (storedSession) {
         setSession(storedSession);
-      } else if (ENABLE_DEV_LOGIN) {
-        // Optional development helper: auto-fetch dev token when explicitly enabled
-        void fetchDevSession().then((devSession) => {
-          if (devSession) {
-            setSession(devSession);
-            persistSession(devSession);
-          }
-        });
+      } else if (AUTO_DEV_SESSION_ENABLED) {
+        void bootstrapDevSession();
       }
     }
   });

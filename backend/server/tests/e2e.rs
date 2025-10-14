@@ -52,7 +52,10 @@ impl TestApp {
 
         let router = build_router(state);
 
-        Self { router, _db_dir: db_dir }
+        Self {
+            router,
+            _db_dir: db_dir,
+        }
     }
 
     async fn request(
@@ -99,12 +102,7 @@ impl TestApp {
         TestResponse { status, text, json }
     }
 
-    async fn authed_request(
-        &self,
-        method: Method,
-        uri: &str,
-        body: Option<Value>,
-    ) -> TestResponse {
+    async fn authed_request(&self, method: Method, uri: &str, body: Option<Value>) -> TestResponse {
         self.request(method, uri, body, Some(TEST_TOKEN)).await
     }
 }
@@ -144,10 +142,7 @@ async fn health_check_returns_ok() {
 
     assert_eq!(response.status, StatusCode::OK);
     assert_eq!(
-        response
-            .json
-            .get("status")
-            .and_then(Value::as_str),
+        response.json.get("status").and_then(Value::as_str),
         Some("ok")
     );
     assert!(
@@ -203,18 +198,10 @@ async fn folder_crud_flow() {
         .expect("public_id")
         .to_string();
 
-    assert_eq!(
-        folder.get("name").and_then(Value::as_str),
-        Some("Projects")
-    );
-    assert_eq!(
-        folder.get("color").and_then(Value::as_str),
-        Some("#FF00AA")
-    );
+    assert_eq!(folder.get("name").and_then(Value::as_str), Some("Projects"));
+    assert_eq!(folder.get("color").and_then(Value::as_str), Some("#FF00AA"));
 
-    let list_response = app
-        .authed_request(Method::GET, "/api/folders", None)
-        .await;
+    let list_response = app.authed_request(Method::GET, "/api/folders", None).await;
 
     assert_eq!(list_response.status, StatusCode::OK);
     let folders = list_response
@@ -230,11 +217,7 @@ async fn folder_crud_flow() {
     );
 
     let get_response = app
-        .authed_request(
-            Method::GET,
-            &format!("/api/folders/{}", folder_id),
-            None,
-        )
+        .authed_request(Method::GET, &format!("/api/folders/{}", folder_id), None)
         .await;
 
     assert_eq!(get_response.status, StatusCode::OK);
@@ -298,9 +281,7 @@ async fn chat_creation_persists_messages() {
         .expect("chat id")
         .to_string();
 
-    let chats_response = app
-        .authed_request(Method::GET, "/api/chats", None)
-        .await;
+    let chats_response = app.authed_request(Method::GET, "/api/chats", None).await;
     assert_eq!(chats_response.status, StatusCode::OK);
     let chats = chats_response
         .json
@@ -318,8 +299,7 @@ async fn chat_creation_persists_messages() {
         .get("messages")
         .and_then(Value::as_str)
         .expect("messages payload");
-    let messages: Vec<Value> =
-        serde_json::from_str(messages_json).expect("parse messages array");
+    let messages: Vec<Value> = serde_json::from_str(messages_json).expect("parse messages array");
     assert_eq!(messages.len(), 1);
     assert_eq!(
         messages[0].get("content").and_then(Value::as_str),
@@ -327,11 +307,7 @@ async fn chat_creation_persists_messages() {
     );
 
     let detail_response = app
-        .authed_request(
-            Method::GET,
-            &format!("/api/chats/{}", chat_id),
-            None,
-        )
+        .authed_request(Method::GET, &format!("/api/chats/{}", chat_id), None)
         .await;
     assert_eq!(detail_response.status, StatusCode::OK);
     assert_eq!(

@@ -22,12 +22,31 @@ use utoipa::ToSchema;
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct ChatsResponse {
-    pub chats: Vec<Chat>,
+    #[schema(value_type = Vec<ChatWithMessages>)]
+    pub chats: Vec<ChatWithMessages>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct ChatDetailResponse {
     pub chat: Chat,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ChatWithMessages {
+    pub id: i64,
+    pub public_id: String,
+    #[schema(nullable)]
+    pub user_id: Option<i64>,
+    #[schema(nullable)]
+    pub folder_id: Option<i64>,
+    pub title: String,
+    pub chat_type: String,
+    pub created_at: String,
+    pub updated_at: String,
+    #[schema(default)]
+    pub is_group: bool,
+    #[schema(nullable)]
+    pub messages: Option<String>,
 }
 
 // Helper function to fetch messages for a chat as JSON
@@ -114,11 +133,23 @@ pub async fn list_chats(
         ApiError::internal_server_error("Failed to fetch chats")
     })?;
 
-    // Add messages to each chat
-    let mut chats_with_messages = Vec::new();
+    // Add messages to each chat so the UI can hydrate its local stores on refresh
+    let mut chats_with_messages = Vec::with_capacity(chats.len());
     for chat in chats {
-        let _messages_json = fetch_chat_messages(chat.id, state.db_pool()).await?;
-        let chat_with_messages = Chat { ..chat };
+        let messages_json = fetch_chat_messages(chat.id, state.db_pool()).await?;
+        let is_group = chat.chat_type.eq_ignore_ascii_case("group");
+        let chat_with_messages = ChatWithMessages {
+            id: chat.id,
+            public_id: chat.public_id,
+            user_id: chat.user_id,
+            folder_id: chat.folder_id,
+            title: chat.title,
+            chat_type: chat.chat_type,
+            created_at: chat.created_at,
+            updated_at: chat.updated_at,
+            is_group,
+            messages: messages_json,
+        };
         chats_with_messages.push(chat_with_messages);
     }
 

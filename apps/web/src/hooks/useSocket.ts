@@ -15,7 +15,7 @@ interface ClientEvent {
   chat_id?: string;
   content?: string;
   is_typing?: boolean;
-  model?: string;
+  models?: string[];
 }
 
 interface ServerEvent {
@@ -161,10 +161,10 @@ export function useSocket(token?: () => string | null) {
     send({ type: "unsubscribe", chat_id: chatId });
   };
 
-  const sendMessage = (chatId: string, content: string, model?: string) => {
+  const sendMessage = (chatId: string, content: string, models?: string[]) => {
     const event: ClientEvent = { type: "message", chat_id: chatId, content };
-    if (model && model.trim()) {
-      event.model = model.trim();
+    if (models && models.length > 0) {
+      event.models = models;
     }
     send(event);
   };

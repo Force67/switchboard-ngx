@@ -117,7 +117,9 @@ export default function App() {
   const [session, setSession] = createSignal<SessionData | null>(null);
   const [prompt, setPrompt] = createSignal("");
   const [attachedImages, setAttachedImages] = createSignal<File[]>([]);
-  const [selectedModel, setSelectedModel] = createSignal<string>(DEFAULT_MODEL);
+  const [selectedModels, setSelectedModels] = createSignal<string[]>(
+    DEFAULT_MODEL ? [DEFAULT_MODEL] : []
+  );
   const [models, setModels] = createSignal<ModelOption[]>([]);
   const [modelsLoading, setModelsLoading] = createSignal(false);
   const [modelsError, setModelsError] = createSignal<string | null>(null);
@@ -129,6 +131,7 @@ export default function App() {
   const [authError, setAuthError] = createSignal<string | null>(null);
   const [modelPickerOpen, setModelPickerOpen] = createSignal(false);
   const [testLoading, setTestLoading] = createSignal(false);
+  const [modelStatuses, setModelStatuses] = createSignal<Record<string, "idle" | "pending">>({});
 
   // WebSocket integration
   const socket = useSocket(() => session()?.token || null);
@@ -241,24 +244,31 @@ export default function App() {
       const data = (await response.json()) as ModelsResponse;
       setModels(data.models);
 
-      const preferred = (() => {
-        const current = selectedModel().trim();
-        if (current && data.models.some((model) => model.id === current)) {
-          return current;
-        }
-        if (
-          DEFAULT_MODEL &&
-          data.models.some((model) => model.id === DEFAULT_MODEL)
-        ) {
-          return DEFAULT_MODEL;
-        }
-        return data.models[0]?.id ?? "";
-      })();
+      const available = data.models;
+      const currentSelection = Array.from(
+        new Set(selectedModels().filter((id) => available.some((model) => model.id === id)))
+      );
 
-      setSelectedModel(preferred);
+      let nextSelection = currentSelection;
+      if (nextSelection.length === 0) {
+        const fallback =
+          (DEFAULT_MODEL && available.find((model) => model.id === DEFAULT_MODEL)?.id) ??
+          available[0]?.id;
+        nextSelection = fallback ? [fallback] : [];
+      }
+
+      setSelectedModels(nextSelection);
+      setModelStatuses(prev => {
+        const next: Record<string, "idle" | "pending"> = {};
+        nextSelection.forEach(id => {
+          next[id] = prev[id] ?? "idle";
+        });
+        return next;
+      });
     } catch (err) {
       setModels([]);
-      setSelectedModel("");
+      setSelectedModels([]);
+      setModelStatuses({});
       setModelsError(
         err instanceof Error ? err.message : "Unable to load models",
       );
@@ -270,7 +280,8 @@ export default function App() {
   const logout = () => {
     persistSession(null);
     setModels([]);
-    setSelectedModel("");
+    setSelectedModels([]);
+    setModelStatuses({});
     setChats([]);
     setCurrentChatId(null);
     setPrompt("");
@@ -405,6 +416,119 @@ export default function App() {
     setError(null);
   };
 
+  const resolveModelMentions = (input: string) => {
+    const available = models();
+    if (!input) {
+      return { cleaned: input, mentions: [] as string[] };
+    }
+
+    const register = (map: Map<string, string>, key: string, id: string) => {
+      const trimmed = key.trim();
+      if (trimmed && !map.has(trimmed)) {
+        map.set(trimmed, id);
+      }
+    };
+
+    const generateKeys = (raw: string) => {
+      const variants = new Set<string>();
+      const base = raw.toLowerCase().trim();
+      if (!base) return variants;
+
+      const withoutParens = base.replace(/\([^)]*\)/g, "");
+      const collapsedWhitespace = base.replace(/\s+/g, "");
+      const collapsedWhitespaceNoParens = withoutParens.replace(/\s+/g, "");
+      const softClean = base.replace(/[^\w:.\-+]/g, "");
+      const softCleanNoParens = withoutParens.replace(/[^\w:.\-+]/g, "");
+      const hardClean = base.replace(/[^a-z0-9]/g, "");
+      const hardCleanNoParens = withoutParens.replace(/[^a-z0-9]/g, "");
+
+      [
+        base,
+        withoutParens,
+        collapsedWhitespace,
+        collapsedWhitespaceNoParens,
+        softClean,
+        softCleanNoParens,
+        hardClean,
+        hardCleanNoParens,
+      ]
+        .map((value) => value.trim())
+        .filter(Boolean)
+        .forEach((value) => variants.add(value));
+
+      return variants;
+    };
+
+    const lookup = new Map<string, string>();
+    available.forEach((model) => {
+      generateKeys(model.id).forEach((key) => register(lookup, key, model.id));
+      if (model.label) {
+        generateKeys(model.label).forEach((key) => register(lookup, key, model.id));
+      }
+    });
+
+    const mentionRegex = /@([^\s]+)/g;
+    const mentions: string[] = [];
+    const removals: Array<{ start: number; end: number }> = [];
+
+    let match: RegExpExecArray | null;
+    while ((match = mentionRegex.exec(input)) !== null) {
+      const rawToken = match[1];
+      const tokenWithoutTrailing = rawToken.replace(/[.,;:!?]+$/, "");
+      const candidateKeys = generateKeys(tokenWithoutTrailing);
+      let resolved: string | undefined;
+      for (const key of candidateKeys) {
+        resolved = lookup.get(key);
+        if (resolved) break;
+      }
+
+      if (resolved) {
+        mentions.push(resolved);
+      }
+
+      removals.push({ start: match.index, end: match.index + match[0].length });
+    }
+
+    if (removals.length === 0) {
+      return { cleaned: input, mentions: [] as string[] };
+    }
+
+    removals.sort((a, b) => a.start - b.start);
+    let cursor = 0;
+    let result = "";
+    for (const removal of removals) {
+      result += input.slice(cursor, removal.start);
+      cursor = removal.end;
+      while (cursor < input.length && input[cursor] === " ") {
+        cursor += 1;
+      }
+    }
+    result += input.slice(cursor);
+
+    const seen = new Set<string>();
+    const orderedMentions = mentions.filter((id) => {
+      if (seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
+
+    return {
+      cleaned: result,
+      mentions: orderedMentions,
+    };
+  };
+
+  createEffect(() => {
+    const selected = selectedModels();
+    setModelStatuses(prev => {
+      const next: Record<string, "idle" | "pending"> = {};
+      selected.forEach(id => {
+        next[id] = prev[id] ?? "idle";
+      });
+      return next;
+    });
+  });
+
   const handleSubmit = async (event: Event) => {
     event.preventDefault();
 
@@ -414,9 +538,39 @@ export default function App() {
       return;
     }
 
-    const trimmedPrompt = prompt().trim();
+    const rawPrompt = prompt();
+    const { cleaned: cleanedPrompt, mentions } = resolveModelMentions(rawPrompt);
+    const trimmedPrompt = cleanedPrompt.trim();
     if (!trimmedPrompt) {
       setError("Please enter a prompt first.");
+      return;
+    }
+
+    const baseSelection = Array.from(
+      new Set(selectedModels().filter((id) => id && id.trim().length > 0)),
+    );
+    const mentionSelection = mentions;
+    let targetModels = mentionSelection.length > 0 ? mentionSelection : baseSelection;
+
+    if (targetModels.length === 0) {
+      const availableModels = models();
+      const fallbackId = (() => {
+        if (
+          DEFAULT_MODEL &&
+          availableModels.some((model) => model.id === DEFAULT_MODEL)
+        ) {
+          return DEFAULT_MODEL;
+        }
+        return availableModels[0]?.id;
+      })();
+
+      if (fallbackId) {
+        targetModels = [fallbackId];
+      }
+    }
+
+    if (targetModels.length === 0) {
+      setError("Select at least one model before sending a message.");
       return;
     }
 
@@ -461,7 +615,18 @@ export default function App() {
       timestamp: new Date().toISOString(),
     };
 
-    const newMessages = [...updatedChat.messages, userMessage];
+    const placeholderMessages: Message[] = targetModels.map((modelId, index) => ({
+      id: `pending-${modelId}-${Date.now()}-${index}`,
+      role: "assistant",
+      content: "",
+      model: modelId,
+      chat_id: currentId,
+      timestamp: new Date().toISOString(),
+      message_type: "text",
+      pending: true,
+    }));
+
+    const newMessages = [...updatedChat.messages, userMessage, ...placeholderMessages];
     const newTitle = updatedChat.messages.length === 0 ? trimmedPrompt.slice(0, 30) + (trimmedPrompt.length > 30 ? "..." : "") : updatedChat.title;
 
     setChats(prev => prev.map(chat =>
@@ -475,20 +640,41 @@ export default function App() {
     ));
     setPrompt("");
     setAttachedImages([]);
-
-    const selectedModelId = selectedModel().trim();
+    setSelectedModels(targetModels);
+    setModelStatuses(() => {
+      const next: Record<string, "idle" | "pending"> = {};
+      targetModels.forEach(id => {
+        next[id] = "pending";
+      });
+      return next;
+    });
 
     try {
       // Send message via WebSocket
-      socket.sendMessage(currentId, trimmedPrompt, selectedModelId);
+      socket.sendMessage(currentId, trimmedPrompt, targetModels);
 
       // Note: Assistant response will come via WebSocket and be handled by the effect above
 
+      const pendingChatId = currentId;
       // Fallback: Stop loading after 10 seconds in case WebSocket doesn't work
       setTimeout(() => {
         if (loading()) {
           console.log('⏰ Fallback: Stopping loading after timeout');
           setLoading(false);
+          setModelStatuses(prev => {
+            const entries = Object.keys(prev).map((key) => [key, "idle" as const]);
+            return Object.fromEntries(entries);
+          });
+          setChats(prev =>
+            prev.map(chat =>
+              chat.id === pendingChatId
+                ? {
+                    ...chat,
+                    messages: chat.messages?.filter(message => !message.pending) ?? [],
+                  }
+                : chat,
+            ),
+          );
         }
       }, 10000);
 
@@ -570,14 +756,26 @@ export default function App() {
       console.log("📝 New message to add:", newMessage);
 
       setChats(prev => {
-        const updated = prev.map(chat =>
-          chat.id === currentId
-            ? {
-                ...chat,
-                messages: [...chat.messages, newMessage]
-              }
-            : chat
-        );
+        const updated = prev.map(chat => {
+          if (chat.id !== currentId) {
+            return chat;
+          }
+
+          const existing = [...(chat.messages ?? [])];
+          if (newMessage.model) {
+            const placeholderIndex = existing.findIndex(
+              (msg) => msg.pending && msg.model === newMessage.model,
+            );
+            if (placeholderIndex >= 0) {
+              existing.splice(placeholderIndex, 1);
+            }
+          }
+
+          return {
+            ...chat,
+            messages: [...existing, newMessage],
+          };
+        });
         console.log("🔄 Updated chats:", updated);
         console.log("📊 Chat with new message:", updated.find(c => c.id === currentId)?.messages);
         return updated;
@@ -585,6 +783,14 @@ export default function App() {
 
       // Stop loading when any message is received
       setLoading(false);
+      if (message.model) {
+        setModelStatuses(prev => {
+          if (!(message.model in prev) || prev[message.model] === "idle") {
+            return prev;
+          }
+          return { ...prev, [message.model]: "idle" };
+        });
+      }
       } else {
         console.log("❌ Message chat ID does NOT match current chat ID:", {
           messageChatId: message.chat_id,
@@ -597,6 +803,19 @@ export default function App() {
       console.error("🚨 Error received via WebSocket:", details);
       setError(details);
       setLoading(false);
+      setModelStatuses(prev => {
+        const next: Record<string, "idle" | "pending"> = {};
+        Object.keys(prev).forEach(key => {
+          next[key] = "idle";
+        });
+        return next;
+      });
+      setChats(prev =>
+        prev.map(chat => ({
+          ...chat,
+          messages: chat.messages?.filter(m => !m.pending),
+        })),
+      );
     } else {
       console.log("❌ Message type is not 'message':", {
         messageType: message.type,
@@ -617,7 +836,8 @@ export default function App() {
       socket.connect();
     } else {
       setModels([]);
-      setSelectedModel("");
+      setSelectedModels([]);
+      setModelStatuses({});
       setChats([]);
       setCurrentChatId(null);
       // Disconnect WebSocket
@@ -775,9 +995,10 @@ export default function App() {
             setPrompt={setPrompt}
             attachedImages={attachedImages}
             setAttachedImages={setAttachedImages}
-            selectedModel={selectedModel}
-            setSelectedModel={setSelectedModel}
+            selectedModels={selectedModels}
+            setSelectedModels={setSelectedModels}
             models={models}
+            modelStatuses={modelStatuses}
             modelsLoading={modelsLoading}
             modelsError={modelsError}
             loading={loading}

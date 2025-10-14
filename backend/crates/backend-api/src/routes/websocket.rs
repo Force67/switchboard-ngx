@@ -5,7 +5,7 @@ use axum::{
 };
 use futures_util::{SinkExt, StreamExt};
 use serde::Deserialize;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use tokio::sync::{broadcast, mpsc};
 use utoipa::IntoParams;
 
@@ -220,7 +220,7 @@ async fn handle_client_event(
         ClientEvent::Message {
             chat_id,
             content,
-            model,
+            models,
         } => {
             tracing::info!(
                 "📨 Received chat message from user {} in chat {}: {}",
@@ -315,167 +315,180 @@ async fn handle_client_event(
                 "🤖 Starting LLM processing for message in chat {}...",
                 chat_id
             );
-            // Process message with LLM
-            let state_clone = state.clone();
-            let chat_id_clone = chat_id.clone();
-            let content_clone = content.clone();
-            let out_tx_clone = out_tx.clone();
-            let broadcaster_clone = broadcaster.clone();
-            let requested_model = model.clone();
-            let chat_db_id = chat_db_id; // Move into the async block
-            let user_id = user.id; // Clone the user ID for the async block
+            let mut requested_models: Vec<String> = models
+                .into_iter()
+                .map(|m| m.trim().to_string())
+                .filter(|m| !m.is_empty())
+                .collect();
 
-            tokio::spawn(async move {
-                let chosen_model = requested_model
-                    .as_deref()
-                    .map(str::trim)
-                    .filter(|value| !value.is_empty())
-                    .map(String::from)
-                    .or_else(|| state_clone.orchestrator().active_model())
-                    .filter(|value| !value.trim().is_empty());
+            if requested_models.is_empty() {
+                if let Some(active) = state.orchestrator().active_model() {
+                    requested_models.push(active);
+                }
+            }
 
-                let model_to_use = match chosen_model {
-                    Some(model_id) => model_id,
-                    None => {
-                        tracing::error!("❌ No model provided and no active model configured");
-                        let error_event = ServerEvent::Error {
-                            message: "No model configured".to_string(),
-                        };
-                        let _ = out_tx_clone.send(error_event).await;
-                        return;
-                    }
+            let mut seen_models = HashSet::new();
+            let models_to_use: Vec<String> = requested_models
+                .into_iter()
+                .filter(|model_id| seen_models.insert(model_id.clone()))
+                .collect();
+
+            if models_to_use.is_empty() {
+                tracing::error!("❌ No model provided and no active model configured");
+                let error_event = ServerEvent::Error {
+                    message: "No model configured".to_string(),
                 };
+                out_tx.send(error_event).await?;
+                return Ok(());
+            }
 
-                tracing::info!("🧠 Using model {} for chat {}", model_to_use, chat_id_clone);
-                tracing::debug!("🔧 Getting LLM provider for model {}", model_to_use);
-                let provider = match state_clone.orchestrator().provider_for_model(&model_to_use) {
-                    Ok(provider) => {
-                        tracing::debug!(
-                            "✅ LLM provider obtained successfully for {}",
-                            model_to_use
-                        );
-                        provider
-                    }
-                    Err(e) => {
-                        tracing::error!(
-                            "❌ Failed to get LLM provider for {}: {}",
-                            model_to_use,
-                            e
-                        );
-                        let error_event = ServerEvent::Error {
-                            message: format!(
-                                "LLM provider not available for {}: {}",
-                                model_to_use, e
-                            ),
-                        };
-                        let _ = out_tx_clone.send(error_event).await;
-                        return;
-                    }
-                };
+            for model_to_use in models_to_use {
+                let state_clone = state.clone();
+                let chat_id_clone = chat_id.clone();
+                let content_clone = content.clone();
+                let out_tx_clone = out_tx.clone();
+                let broadcaster_clone = broadcaster.clone();
+                let chat_db_id = chat_db_id;
+                let user_id = user.id;
 
-                tracing::debug!("📝 Preparing completion request for model {}", model_to_use);
-                let message = denkwerk::ChatMessage::user(&content_clone);
-                let request = denkwerk::CompletionRequest::new(model_to_use.clone(), vec![message]);
-
-                tracing::info!("🚀 Sending request to LLM...");
-                match provider.complete(request).await {
-                    Ok(completion) => {
-                        tracing::info!("✅ LLM response received successfully");
-                        let response_content =
-                            completion.message.text().unwrap_or_default().to_string();
-                        let _reasoning: Option<Vec<String>> = completion
-                            .reasoning
-                            .map(|steps| steps.into_iter().map(|step| step.content).collect());
-
-                        tracing::debug!("💾 Saving assistant response to database...");
-                        // Save assistant response to database
-                        let assistant_message_id = cuid2::create_id();
-                        let assistant_timestamp = chrono::Utc::now().to_rfc3339();
-
-                        if let Err(e) = sqlx::query(
-                            r#"
-                            INSERT INTO messages (public_id, chat_id, user_id, content, message_type, role, model, created_at, updated_at)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                            "#
-                        )
-                        .bind(&assistant_message_id)
-                        .bind(chat_db_id)
-                        .bind(user_id) // Use the same user ID for assistant messages in development
-                        .bind(&response_content)
-                        .bind("text")
-                        .bind("assistant")
-                        .bind(Some(model_to_use.clone()))
-                        .bind(&assistant_timestamp)
-                        .bind(&assistant_timestamp)
-                        .execute(&state_clone.db_pool)
-                        .await {
-                            tracing::error!("❌ Failed to save assistant message: {}", e);
-                            return;
-                        }
-
-                        tracing::debug!(
-                            "✅ Assistant response saved to database with ID: {}",
-                            assistant_message_id
-                        );
-                        tracing::info!(
-                            "📤 Broadcasting assistant response to chat {}",
-                            chat_id_clone
-                        );
-
-                        let assistant_event = ServerEvent::Message {
-                            chat_id: chat_id_clone.clone(),
-                            message_id: assistant_message_id,
-                            user_id: user_id, // Use the same user ID for assistant messages in development
-                            content: response_content,
-                            model: Some(model_to_use.clone()),
-                            timestamp: assistant_timestamp,
-                            message_type: "text".to_string(),
-                        };
-
-                        // Send assistant response to self
-                        tracing::debug!(
-                            "📤 Sending assistant response directly to sender via out_tx"
-                        );
-                        // Check if the channel is still open (connection hasn't closed)
-                        match out_tx_clone.send(assistant_event.clone()).await {
-                            Ok(_) => {
-                                tracing::debug!("✅ Assistant response sent to sender via out_tx");
+                tokio::spawn(async move {
+                    tracing::info!("🧠 Using model {} for chat {}", model_to_use, chat_id_clone);
+                    tracing::debug!("🔧 Getting LLM provider for model {}", model_to_use);
+                    let provider =
+                        match state_clone.orchestrator().provider_for_model(&model_to_use) {
+                            Ok(provider) => {
+                                tracing::debug!(
+                                    "✅ LLM provider obtained successfully for {}",
+                                    model_to_use
+                                );
+                                provider
                             }
                             Err(e) => {
                                 tracing::error!(
-                                    "❌ Failed to send assistant response to sender: {}",
+                                    "❌ Failed to get LLM provider for {}: {}",
+                                    model_to_use,
                                     e
                                 );
-                                tracing::warn!(
-                                    "⚠️ WebSocket connection may have closed during LLM processing"
-                                );
-                                // Don't try to broadcast if we can't send to the original sender
+                                let error_event = ServerEvent::Error {
+                                    message: format!(
+                                        "LLM provider not available for {}: {}",
+                                        model_to_use, e
+                                    ),
+                                };
+                                let _ = out_tx_clone.send(error_event).await;
                                 return;
                             }
-                        }
-                        // Broadcast assistant response to others
-                        tracing::debug!("📡 Broadcasting assistant response to other subscribers");
-                        if let Err(e) = broadcaster_clone.send(assistant_event) {
-                            tracing::error!("❌ Failed to broadcast assistant response: {}", e);
-                        } else {
-                            tracing::debug!("✅ Assistant response broadcasted successfully");
-                        }
-
-                        tracing::info!(
-                            "✅ Message processing completed for chat {}",
-                            chat_id_clone
-                        );
-                    }
-                    Err(e) => {
-                        tracing::error!("❌ LLM completion failed: {}", e);
-                        let error_message = format!("LLM completion failed: {}", e);
-                        let error_event = ServerEvent::Error {
-                            message: error_message,
                         };
-                        let _ = out_tx_clone.send(error_event).await;
+
+                    tracing::debug!("📝 Preparing completion request for model {}", model_to_use);
+                    let message = denkwerk::ChatMessage::user(&content_clone);
+                    let request =
+                        denkwerk::CompletionRequest::new(model_to_use.clone(), vec![message]);
+
+                    tracing::info!("🚀 Sending request to LLM...");
+                    match provider.complete(request).await {
+                        Ok(completion) => {
+                            tracing::info!("✅ LLM response received successfully");
+                            let response_content =
+                                completion.message.text().unwrap_or_default().to_string();
+                            let _reasoning: Option<Vec<String>> = completion
+                                .reasoning
+                                .map(|steps| steps.into_iter().map(|step| step.content).collect());
+
+                            tracing::debug!("💾 Saving assistant response to database...");
+                            // Save assistant response to database
+                            let assistant_message_id = cuid2::create_id();
+                            let assistant_timestamp = chrono::Utc::now().to_rfc3339();
+
+                            if let Err(e) = sqlx::query(
+                                r#"
+                                INSERT INTO messages (public_id, chat_id, user_id, content, message_type, role, model, created_at, updated_at)
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                "#
+                            )
+                            .bind(&assistant_message_id)
+                            .bind(chat_db_id)
+                            .bind(user_id) // Use the same user ID for assistant messages in development
+                            .bind(&response_content)
+                            .bind("text")
+                            .bind("assistant")
+                            .bind(Some(model_to_use.clone()))
+                            .bind(&assistant_timestamp)
+                            .bind(&assistant_timestamp)
+                            .execute(&state_clone.db_pool)
+                            .await {
+                                tracing::error!("❌ Failed to save assistant message: {}", e);
+                                return;
+                            }
+
+                            tracing::debug!(
+                                "✅ Assistant response saved to database with ID: {}",
+                                assistant_message_id
+                            );
+                            tracing::info!(
+                                "📤 Broadcasting assistant response to chat {}",
+                                chat_id_clone
+                            );
+
+                            let assistant_event = ServerEvent::Message {
+                                chat_id: chat_id_clone.clone(),
+                                message_id: assistant_message_id,
+                                user_id: user_id, // Use the same user ID for assistant messages in development
+                                content: response_content,
+                                model: Some(model_to_use.clone()),
+                                timestamp: assistant_timestamp,
+                                message_type: "text".to_string(),
+                            };
+
+                            // Send assistant response to self
+                            tracing::debug!(
+                                "📤 Sending assistant response directly to sender via out_tx"
+                            );
+                            // Check if the channel is still open (connection hasn't closed)
+                            match out_tx_clone.send(assistant_event.clone()).await {
+                                Ok(_) => {
+                                    tracing::debug!(
+                                        "✅ Assistant response sent to sender via out_tx"
+                                    );
+                                }
+                                Err(e) => {
+                                    tracing::error!(
+                                        "❌ Failed to send assistant response to sender: {}",
+                                        e
+                                    );
+                                    tracing::warn!(
+                                        "⚠️ WebSocket connection may have closed during LLM processing"
+                                    );
+                                    // Don't try to broadcast if we can't send to the original sender
+                                    return;
+                                }
+                            }
+                            // Broadcast assistant response to others
+                            tracing::debug!(
+                                "📡 Broadcasting assistant response to other subscribers"
+                            );
+                            if let Err(e) = broadcaster_clone.send(assistant_event) {
+                                tracing::error!("❌ Failed to broadcast assistant response: {}", e);
+                            } else {
+                                tracing::debug!("✅ Assistant response broadcasted successfully");
+                            }
+
+                            tracing::info!(
+                                "✅ Message processing completed for chat {}",
+                                chat_id_clone
+                            );
+                        }
+                        Err(e) => {
+                            tracing::error!("❌ LLM completion failed: {}", e);
+                            let error_message = format!("LLM completion failed: {}", e);
+                            let error_event = ServerEvent::Error {
+                                message: error_message,
+                            };
+                            let _ = out_tx_clone.send(error_event).await;
+                        }
                     }
-                }
-            });
+                });
+            }
         }
         ClientEvent::Typing { chat_id, is_typing } => {
             let broadcaster = match subscribed_chats.get(&chat_id) {

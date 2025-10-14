@@ -29,6 +29,13 @@
   display: flex; align-items: center; gap: 12px; position: relative;
   background: transparent; border: none; color: var(--text-0); cursor: pointer;
 }
+.row.selected {
+  background: var(--panel-3);
+  box-shadow: inset 0 0 0 1px rgba(184, 58, 126, 0.35);
+}
+.row.focused:not(.selected) {
+  background: rgba(255, 255, 255, 0.04);
+}
 .row:hover { background: var(--panel-3); }
 .row[aria-selected="true"] { background: var(--panel-3); box-shadow: inset 0 0 0 1px rgba(184,58,126,0.2); }
 .row.disabled { color: var(--text-dim); cursor: default; pointer-events: none; }
@@ -54,6 +61,28 @@
 .provider-icon-svg {
   width: 16px;
   height: 16px;
+}
+
+.selection-indicator {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  margin-left: -4px;
+  color: var(--accent);
+}
+.selection-indicator svg {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+}
+.selection-placeholder {
+  width: 12px;
+  height: 12px;
+  border-radius: 4px;
+  border: 1px solid var(--hair);
+  display: block;
 }
 
 .name { font-size: 14px; font-weight: 600; }

@@ -19,6 +19,7 @@ export interface Message {
   reply_to_id?: string;
   created_at?: string;
   updated_at?: string;
+  pending?: boolean;
 }
 
 export interface Chat {

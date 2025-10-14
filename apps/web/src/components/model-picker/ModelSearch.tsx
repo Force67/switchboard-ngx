@@ -3,6 +3,7 @@ import { Component } from "solid-js";
 interface Props {
   query: string;
   onInput: (value: string) => void;
+  inputRef?: (el: HTMLInputElement) => void;
 }
 
 const ModelSearch: Component<Props> = (props) => {
@@ -16,6 +17,7 @@ const ModelSearch: Component<Props> = (props) => {
         type="text"
         placeholder="Search models..."
         value={props.query}
+        ref={props.inputRef}
         onInput={(e) => props.onInput(e.currentTarget.value)}
       />
     </div>

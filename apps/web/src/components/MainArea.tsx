@@ -35,9 +35,10 @@ interface Props {
   setPrompt: Setter<string>;
   attachedImages: Accessor<File[]>;
   setAttachedImages: Setter<File[]>;
-  selectedModel: Accessor<string>;
-  setSelectedModel: Setter<string>;
+  selectedModels: Accessor<string[]>;
+  setSelectedModels: Setter<string[]>;
   models: Accessor<ModelOption[]>;
+  modelStatuses: Accessor<Record<string, "idle" | "pending">>;
   connectionStatus?: Accessor<{ status: string; error?: string }>;
   modelsLoading: Accessor<boolean>;
   modelsError: Accessor<string | null>;
@@ -68,6 +69,37 @@ export default function MainArea(props: Props) {
       group: undefined,
       pricing: model.pricing,
     }));
+  });
+
+  const modelSelectorLabel = createMemo(() => {
+    const ids = props.selectedModels();
+    const available = props.models();
+    const names = ids
+      .map(id => available.find(model => model.id === id)?.label || id)
+      .filter(Boolean);
+
+    if (names.length === 0) {
+      return "Select Models";
+    }
+    if (names.length === 1) {
+      return names[0];
+    }
+    if (names.length === 2) {
+      return `${names[0]}, ${names[1]}`;
+    }
+    return `${names[0]} + ${names.length - 1}`;
+  });
+
+  const pendingModels = createMemo(() => {
+    const statuses = props.modelStatuses();
+    const available = props.models();
+    return props.selectedModels()
+      .map((id) => ({
+        id,
+        label: available.find(model => model.id === id)?.label || id,
+        status: statuses[id] ?? "idle",
+      }))
+      .filter(entry => entry.status === "pending");
   });
 
   onMount(() => {
@@ -135,12 +167,30 @@ export default function MainArea(props: Props) {
             </div>
           );
         })()}
+        <Show when={pendingModels().length > 0}>
+          <div class="model-pending-banner">
+            <span class="banner-title">Models still thinking</span>
+            <div class="banner-models">
+              <For each={pendingModels()}>
+                {(item) => (
+                  <span class="pending-chip" title={`${item.label} is working...`}>
+                    <span class="pending-icon">🕺</span>
+                    <span class="pending-label">{item.label}</span>
+                  </span>
+                )}
+              </For>
+            </div>
+          </div>
+        </Show>
                   <For each={props.currentMessages()}>
           {(message, i) => {
             const isCurrentUser = message.user_id === 1; // Assuming user_id 1 is current user
+            const modelInfo = () => props.models().find(m => m.id === message.model);
+            const modelLabel = modelInfo()?.label || message.model || "Assistant";
             const displayName = message.role === 'user'
               ? (isCurrentUser ? 'You' : `User ${message.user_id}`)
-              : `Assistant${message.model ? ` (${message.model})` : ''}`;
+              : `Assistant (${modelLabel})`;
+            const isPendingMessage = message.pending === true;
 
             // Only animate while this user message has no assistant message after it
             const shouldAnimate = () => {
@@ -170,7 +220,14 @@ export default function MainArea(props: Props) {
                       </small>
                     )}
                   </div>
-                  <LatexRenderer content={message.content} />
+                  {isPendingMessage ? (
+                    <div class="assistant-pending-message" title={`${modelLabel} is thinking...`}>
+                      <span class="pending-icon">🕺</span>
+                      <span class="pending-label">{modelLabel} is thinking...</span>
+                    </div>
+                  ) : (
+                    <LatexRenderer content={message.content} />
+                  )}
                   {message.usage && (
                     <small style="color: var(--text-1); margin-top: 8px; display: block;">
                       Tokens: {message.usage.prompt_tokens} prompt, {message.usage.completion_tokens} completion
@@ -211,14 +268,21 @@ export default function MainArea(props: Props) {
           setPrompt={props.setPrompt}
           attachedImages={props.attachedImages}
           setAttachedImages={props.setAttachedImages}
-          selectedModel={props.selectedModel}
-          setSelectedModel={props.setSelectedModel}
+          selectedModelIds={props.selectedModels}
+          modelStatuses={props.modelStatuses}
           models={props.models}
           modelsLoading={props.modelsLoading}
           modelsError={props.modelsError}
           loading={props.loading}
           onSend={props.onSend}
           onOpenModelPicker={() => props.setModelPickerOpen(true)}
+          onMentionSelect={(modelId) => {
+            props.setSelectedModels(prev => {
+              if (prev.includes(modelId)) return prev;
+              return [...prev, modelId];
+            });
+          }}
+          modelSelectorLabel={modelSelectorLabel}
         />
         {props.modelPickerOpen() && (
           <div
@@ -227,11 +291,17 @@ export default function MainArea(props: Props) {
           >
             <ModelPickerPanel
               models={convertedModels()}
-              selectedId={props.selectedModel()}
-              onSelect={(id) => {
-                props.setSelectedModel(id);
-                props.setModelPickerOpen(false);
+              selectedIds={props.selectedModels()}
+              onToggle={(id) => {
+                props.setSelectedModels(prev => {
+                  if (prev.includes(id)) {
+                    return prev.filter(existing => existing !== id);
+                  }
+                  return [...prev, id];
+                });
               }}
+              multiSelect
+              autoFocusSearch
             />
           </div>
         )}

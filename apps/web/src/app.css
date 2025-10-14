@@ -271,6 +271,103 @@
   display:flex; align-items:center; gap:8px; padding:8px 12px;
   border-top:1px solid rgba(255,255,255,0.06);
 }
+.composer .model-status-tray{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  flex-wrap:wrap;
+  flex:1;
+  min-height:26px;
+  color:var(--text-1);
+}
+.composer .model-status-chip{
+  display:inline-flex;
+  align-items:center;
+  gap:4px;
+  padding:4px 8px;
+  border-radius:999px;
+  background:rgba(255,255,255,0.05);
+  border:1px solid rgba(255,255,255,0.08);
+  font-size:12px;
+  line-height:1.1;
+  transition:transform 0.2s ease, background 0.2s ease;
+}
+.composer .model-status-chip[data-status="pending"]{
+  animation:discoPulse 0.9s infinite alternate;
+  background:linear-gradient(135deg, rgba(255,105,180,0.25), rgba(87,111,230,0.25));
+  border-color:rgba(255,255,255,0.3);
+}
+.composer .model-status-icon{
+  font-size:14px;
+}
+.composer .model-status-label{
+  max-width:120px;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+@keyframes discoPulse{
+  from{transform:translateY(0px);}
+  to{transform:translateY(-2px);}
+}
+.model-pending-banner{
+  margin:12px 20px;
+  padding:10px 12px;
+  border-radius:12px;
+  background:rgba(54,54,86,0.45);
+  border:1px solid rgba(255,255,255,0.08);
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+}
+.model-pending-banner .banner-title{
+  font-size:12px;
+  letter-spacing:0.08em;
+  text-transform:uppercase;
+  color:rgba(255,255,255,0.65);
+}
+.model-pending-banner .banner-models{
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+}
+.model-pending-banner .pending-chip{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding:6px 10px;
+  border-radius:999px;
+  background:rgba(255,255,255,0.08);
+  border:1px solid rgba(255,255,255,0.2);
+  font-size:13px;
+  animation:discoPulse 0.9s infinite alternate;
+}
+.model-pending-banner .pending-icon{
+  font-size:16px;
+}
+.model-pending-banner .pending-label{
+  max-width:160px;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.assistant-pending-message{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:12px 14px;
+  border-radius:10px;
+  background:rgba(255,255,255,0.04);
+  border:1px dashed rgba(255,255,255,0.2);
+  color:var(--text-1);
+}
+.assistant-pending-message .pending-icon{
+  font-size:18px;
+  animation:discoPulse 0.9s infinite alternate;
+}
+.assistant-pending-message .pending-label{
+  font-size:13px;
+}
 .pill{
   height:26px; padding:0 10px; display:inline-flex; align-items:center; gap:6px;
   background:var(--chip); color:var(--text-1); border:1px solid rgba(255,255,255,0.06);

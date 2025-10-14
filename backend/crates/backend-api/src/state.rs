@@ -22,7 +22,8 @@ pub enum ClientEvent {
     Message {
         chat_id: String,
         content: String,
-        model: Option<String>,
+        #[serde(default, deserialize_with = "deserialize_models")]
+        models: Vec<String>,
     },
     Typing {
         chat_id: String,
@@ -151,6 +152,27 @@ impl AppState {
             .await
             .map_err(ApiError::from)
     }
+}
+
+fn deserialize_models<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum ModelsField {
+        List(Vec<String>),
+        Single(String),
+    }
+
+    let value: Option<ModelsField> = Option::deserialize(deserializer)?;
+    let models = match value {
+        Some(ModelsField::List(list)) => list,
+        Some(ModelsField::Single(single)) => vec![single],
+        None => Vec::new(),
+    };
+
+    Ok(models)
 }
 
 #[derive(Clone)]

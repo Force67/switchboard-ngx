@@ -7,23 +7,34 @@ import "./model-picker.css";
 
 interface Props {
   models: ModelMeta[];
-  selectedId?: string;
-  onSelect: (id: string) => void;
+  selectedIds?: string[];
+  onToggle: (id: string) => void;
+  multiSelect?: boolean;
+  autoFocusSearch?: boolean;
 }
 
 const ModelPickerPanel: Component<Props> = (props) => {
   const [query, setQuery] = createSignal("");
   const [expanded, setExpanded] = createSignal(false);
-  const [highlightedId, setHighlightedId] = createSignal<string>();
+  const [highlightedId, setHighlightedId] = createSignal<string | undefined>();
   const [panelEl, setPanelEl] = createSignal<HTMLDivElement>();
+  const [searchInput, setSearchInput] = createSignal<HTMLInputElement>();
   const [favorites, setFavorites] = createSignal<string[]>([]);
 
   createEffect(() => {
-    setHighlightedId(props.selectedId || "");
+    const selected = props.selectedIds?.[0];
+    if (selected) {
+      setHighlightedId(selected);
+    }
   });
 
   onMount(() => {
     panelEl()?.focus();
+    if (props.autoFocusSearch !== false) {
+      requestAnimationFrame(() => {
+        searchInput()?.focus();
+      });
+    }
     const stored = localStorage.getItem('switchboard.favorites');
     if (stored) {
       try {
@@ -64,10 +75,28 @@ const ModelPickerPanel: Component<Props> = (props) => {
     return models;
   });
 
+  createEffect(() => {
+    const currentHighlight = highlightedId();
+    const models = filteredModels();
+    if (models.length === 0) {
+      setHighlightedId(undefined);
+      return;
+    }
+
+    if (!currentHighlight || !models.some((model) => model.id === currentHighlight)) {
+      const selectedFallback = props.selectedIds?.find((id) =>
+        models.some((model) => model.id === id)
+      );
+      setHighlightedId(selectedFallback ?? models[0].id);
+    }
+  });
+
   const handleKeyDown = (e: KeyboardEvent) => {
     const models = filteredModels();
     if (models.length === 0) return;
-    const currentIndex = models.findIndex(m => m.id === highlightedId());
+    const current = highlightedId();
+    let currentIndex = models.findIndex(m => m.id === current);
+    if (currentIndex === -1) currentIndex = 0;
     let newIndex = currentIndex;
     if (e.key === 'ArrowUp') {
       e.preventDefault();
@@ -75,9 +104,18 @@ const ModelPickerPanel: Component<Props> = (props) => {
     } else if (e.key === 'ArrowDown') {
       e.preventDefault();
       newIndex = Math.min(models.length - 1, currentIndex + 1);
+    } else if (e.key === ' ') {
+      e.preventDefault();
+      const current = highlightedId();
+      if (current) {
+        handleToggle(current);
+      }
     } else if (e.key === 'Enter') {
       e.preventDefault();
-      props.onSelect(highlightedId());
+      const current = highlightedId();
+      if (current) {
+        handleToggle(current);
+      }
       return;
     } else {
       return;
@@ -85,14 +123,21 @@ const ModelPickerPanel: Component<Props> = (props) => {
     setHighlightedId(models[newIndex].id);
   };
 
+  const handleToggle = (id: string) => {
+    setHighlightedId(id);
+    props.onToggle(id);
+  };
+
   return (
     <div ref={setPanelEl} class="model-panel" onClick={(e) => e.stopPropagation()} onKeyDown={handleKeyDown} tabindex="0">
-      <ModelSearch query={query()} onInput={setQuery} />
+      <ModelSearch query={query()} onInput={setQuery} inputRef={setSearchInput} />
       <div class="divider"></div>
       <ModelList
         models={filteredModels()}
         highlightedId={highlightedId()}
-        onSelect={props.onSelect}
+        selectedIds={props.selectedIds ?? []}
+        multiSelect={props.multiSelect}
+        onToggle={handleToggle}
         onToggleFavorite={toggleFavorite}
         isFavorite={isFavorite}
         expanded={expanded()}

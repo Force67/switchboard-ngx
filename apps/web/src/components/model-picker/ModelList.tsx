@@ -5,7 +5,9 @@ import ModelItem from "./ModelItem";
 interface Props {
   models: ModelMeta[];
   highlightedId?: string;
-  onSelect: (id: string) => void;
+  selectedIds: string[];
+  multiSelect?: boolean;
+  onToggle: (id: string) => void;
   onToggleFavorite: (id: string) => void;
   isFavorite: (id: string) => boolean;
   expanded: boolean;
@@ -19,8 +21,10 @@ const ModelList: Component<Props> = (props) => {
       {displayedModels().map(model => (
         <ModelItem
           model={model}
-          highlightedId={props.highlightedId}
-          onSelect={props.onSelect}
+          highlighted={props.highlightedId === model.id}
+          selected={props.selectedIds.includes(model.id)}
+          multiSelect={props.multiSelect}
+          onToggle={props.onToggle}
           onToggleFavorite={props.onToggleFavorite}
           isFavorite={props.isFavorite(model.id)}
         />

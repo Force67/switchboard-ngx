@@ -1,9 +1,8 @@
-import { createSignal, createEffect, Accessor, Setter, For, Show, createMemo } from "solid-js";
+import { createSignal, createEffect, Accessor, Setter, For, Show } from "solid-js";
 import ModelSelector from "./ModelSelector";
 import Chip from "./Chip";
 import SendButton from "./SendButton";
 import ModelPickerPanel from "./model-picker/ModelPickerPanel";
-import { MODELS, type ModelMeta } from "./model-picker/models";
 import ColoredTextarea from "./ColoredTextarea";
 import "./model-picker/model-picker.css";
 
@@ -15,6 +14,8 @@ interface ModelOption {
     input?: number;
     output?: number;
   };
+  supports_reasoning?: boolean;
+  supports_images?: boolean;
 }
 
 interface Props {
@@ -22,14 +23,16 @@ interface Props {
   setPrompt: Setter<string>;
   attachedImages: Accessor<File[]>;
   setAttachedImages: Setter<File[]>;
-  selectedModel: Accessor<string>;
-  setSelectedModel: Setter<string>;
+  selectedModelIds: Accessor<string[]>;
   models: Accessor<ModelOption[]>;
   modelsLoading: Accessor<boolean>;
   modelsError: Accessor<string | null>;
   loading: Accessor<boolean>;
   onSend: (event: Event) => void;
   onOpenModelPicker: () => void;
+  onMentionSelect?: (modelId: string) => void;
+  modelStatuses: Accessor<Record<string, "idle" | "pending">>;
+  modelSelectorLabel: Accessor<string>;
 }
 
 export default function Composer(props: Props) {
@@ -38,21 +41,6 @@ export default function Composer(props: Props) {
   const [cursorPosition, setCursorPosition] = createSignal(0);
 
   const handleSend = (event: Event) => {
-    let text = props.prompt();
-
-    // Extract model from @mention if present
-    const atMatch = text.match(/@(\w+)/);
-    if (atMatch) {
-      const modelName = atMatch[1];
-      const model = props.models().find(m => m.label.toLowerCase().replace(/\s+/g, '') === modelName.toLowerCase());
-      if (model) {
-        props.setSelectedModel(model.id);
-        // Remove the @mention from the message before sending
-        text = text.replace(/@\w+\s*/, '');
-        props.setPrompt(text.trim());
-      }
-    }
-
     props.onSend(event);
   };
 
@@ -107,10 +95,12 @@ export default function Composer(props: Props) {
     if (model) {
       const beforeAt = text.substring(0, cursorPos - 1);
       const afterCursor = text.substring(cursorPos);
-      const modelName = model.label.toLowerCase().replace(/\s+/g, '');
-      const newText = beforeAt + '@' + modelName + ' ' + afterCursor;
+      const normalized = model.label.toLowerCase().replace(/\s+/g, '');
+      const hasTrailingWhitespace = beforeAt.length === 0 || /\s$/.test(beforeAt);
+      const prefix = hasTrailingWhitespace ? beforeAt : `${beforeAt} `;
+      const newText = prefix + '@' + normalized + ' ' + afterCursor;
       props.setPrompt(newText);
-      props.setSelectedModel(modelId);
+      props.onMentionSelect?.(modelId);
     }
 
     setShowModelPicker(false);
@@ -166,15 +156,17 @@ export default function Composer(props: Props) {
                     id: model.id,
                     name: model.label,
                     badges: [
-                      ...(model.supports_reasoning ? ['reasoning' as const] : []),
-                      ...(model.supports_images ? ['vision' as const] : []),
+                      ...(model.supports_reasoning ? ["reasoning" as const] : []),
+                      ...(model.supports_images ? ["vision" as const] : []),
                     ],
                     tier: undefined,
                     disabled: false,
                     group: undefined,
                     pricing: model.pricing,
                   }))}
-                  onSelect={handleModelSelect}
+                  selectedIds={props.selectedModelIds()}
+                  onToggle={handleModelSelect}
+                  autoFocusSearch
                 />
               </div>
             </div>
@@ -195,10 +187,30 @@ export default function Composer(props: Props) {
       )}
       <div class="foot">
         <ModelSelector
-          label={props.models().find(m => m.id === props.selectedModel())?.label || "Select Model"}
+          label={props.modelSelectorLabel()}
           onOpen={props.onOpenModelPicker}
           loading={props.modelsLoading()}
         />
+        <div class="model-status-tray">
+          <For each={props.selectedModelIds()}>
+            {(id) => {
+              const model = props.models().find(m => m.id === id);
+              const status = props.modelStatuses()[id] ?? "idle";
+              const icon = status === "pending" ? "🕺" : "✨";
+              const label = model?.label ?? id;
+              const title =
+                status === "pending"
+                  ? `${label} is still thinking...`
+                  : `${label} is ready`;
+              return (
+                <span class="model-status-chip" data-status={status} title={title}>
+                  <span class="model-status-icon">{icon}</span>
+                  <span class="model-status-label">{label}</span>
+                </span>
+              );
+            }}
+          </For>
+        </div>
         <Chip label="Search" icon={<svg viewBox="0 0 12 12"><circle cx="4.5" cy="4.5" r="3.5" stroke-width="1.5" fill="none" /><path d="M7.5 7.5L10.5 10.5" stroke-width="1.5" stroke-linecap="round" /></svg>} />
         <Chip circular icon={<svg viewBox="0 0 12 12"><path d="M3 4.5a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h6a.5.5 0 0 0 .5-.5V5a.5.5 0 0 0-.5-.5h-2a.5.5 0 0 1 0-1h2A1.5 1.5 0 0 1 10.5 5v3a1.5 1.5 0 0 1-1.5 1.5h-6A1.5 1.5 0 0 1 1.5 8V5A1.5 1.5 0 0 1 3 3.5h2a.5.5 0 0 0 0-1h-2z" /></svg>} onClick={() => {
           const input = document.createElement('input');

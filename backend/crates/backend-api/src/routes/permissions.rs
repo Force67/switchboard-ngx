@@ -72,7 +72,7 @@ impl PermissionsService {
         resource_type: &str,
         resource_id: i64,
         permission_level: &str,
-        granted_by_user_id: i64,
+        _granted_by_user_id: i64,
     ) -> Result<(), ApiError> {
         let now = chrono::Utc::now().to_rfc3339();
 

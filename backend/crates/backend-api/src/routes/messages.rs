@@ -408,8 +408,8 @@ pub async fn delete_message(
     let chat_db_id = chat_db_id.ok_or_else(|| ApiError::forbidden("Not a member of this chat"))?;
 
     // Get the message details
-    let message_details: Option<(i64, String, i64)> = sqlx::query_as(
-        "SELECT id, content, user_id FROM messages WHERE public_id = ? AND chat_id = ?",
+    let message_details: Option<(i64, i64)> = sqlx::query_as(
+        "SELECT id, user_id FROM messages WHERE public_id = ? AND chat_id = ?",
     )
     .bind(&message_public_id)
     .bind(chat_db_id)
@@ -420,7 +420,7 @@ pub async fn delete_message(
         ApiError::internal_server_error("Failed to fetch message details")
     })?;
 
-    let (message_db_id, content, message_user_id) =
+    let (message_db_id, message_user_id) =
         message_details.ok_or_else(|| ApiError::not_found("Message not found"))?;
 
     // Check if user can delete this message

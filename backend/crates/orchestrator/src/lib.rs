@@ -451,8 +451,6 @@ struct OpenRouterModelEntry {
     architecture: Option<OpenRouterArchitecture>,
     #[serde(default)]
     supported_parameters: Option<Vec<String>>,
-    #[serde(default)]
-    context_length: Option<i32>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -461,8 +459,6 @@ struct OpenRouterArchitecture {
     modality: Option<String>, // Keep as string for now
     #[serde(default)]
     input_modalities: Option<Vec<String>>,
-    #[serde(default)]
-    output_modalities: Option<Vec<String>>,
 }
 
 #[derive(Debug, Deserialize)]

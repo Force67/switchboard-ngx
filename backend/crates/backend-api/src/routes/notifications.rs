@@ -322,9 +322,9 @@ impl NotificationService {
         chat_title: &str,
     ) -> Result<(), ApiError> {
         // Get all members of the chat except the sender
-        let members = sqlx::query_as::<_, (i64, String, String)>(
+        let members = sqlx::query_scalar::<_, i64>(
             r#"
-            SELECT u.id, u.display_name, u.email
+            SELECT u.id
             FROM users u
             JOIN chat_members cm ON u.id = cm.user_id
             WHERE cm.chat_id = ? AND cm.user_id != ?
@@ -342,7 +342,7 @@ impl NotificationService {
         let now = chrono::Utc::now().to_rfc3339();
 
         // Create notifications for all members
-        for (user_id, display_name, _email) in members {
+        for user_id in members {
             let title = format!("New message in {}", chat_title);
             let body = format!("{} sent a message", sender_name);
 
@@ -386,7 +386,7 @@ impl NotificationService {
     // Notify user about accepted invite
     pub async fn notify_invite_accepted(
         pool: &sqlx::Pool<sqlx::Sqlite>,
-        chat_id: i64,
+        _chat_id: i64,
         inviter_user_id: i64,
         accepted_user_name: &str,
         chat_title: &str,

@@ -15,3 +15,10 @@ switchboard-backend-api = { path = "../crates/backend-api" }
 tokio = { workspace = true, features = ["io-std", "io-util"] }
 tracing = { workspace = true }
 axum = { workspace = true }
+
+[dev-dependencies]
+chrono = { workspace = true }
+http-body-util = "0.1"
+serde_json = { workspace = true }
+tempfile = "3.10"
+tower = { version = "0.4", features = ["util"] }

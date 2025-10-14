@@ -78,7 +78,10 @@ pub struct User {
     pub id: i64,
     pub public_id: String,
     pub email: Option<String>,
+    pub username: Option<String>,
     pub display_name: Option<String>,
+    pub bio: Option<String>,
+    pub avatar_url: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }

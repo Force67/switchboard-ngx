@@ -231,14 +231,17 @@ impl AppState {
 
         sqlx::query(
             r#"
-            INSERT OR IGNORE INTO users (id, public_id, email, display_name, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT OR IGNORE INTO users (id, public_id, email, display_name, username, avatar_url, bio, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             "#,
         )
         .bind(1i64)
         .bind("dev-user-123")
         .bind("dev@example.com")
         .bind("Dev User")
+        .bind("devuser")
+        .bind::<Option<&str>>(None)
+        .bind::<Option<&str>>(None)
         .bind(&now_str)
         .bind(&now_str)
         .execute(self.db_pool())
@@ -290,9 +293,11 @@ impl AppState {
 
         match self.authenticator.authenticate_token(token).await {
             Ok(result) => Ok(result),
-            Err(auth_error @ (AuthError::SessionNotFound
-            | AuthError::SessionExpired
-            | AuthError::InvalidSession)) => {
+            Err(
+                auth_error @ (AuthError::SessionNotFound
+                | AuthError::SessionExpired
+                | AuthError::InvalidSession),
+            ) => {
                 if cfg!(debug_assertions) {
                     tracing::warn!(
                         "development session for token {} missing ({}), recreating",

@@ -11,7 +11,7 @@ pub use state::{AppState, OAuthStateStore};
 
 use axum::{
     http::header::{AUTHORIZATION, CONTENT_TYPE},
-    routing::{delete, get, post, put},
+    routing::{delete, get, patch, post, put},
     Router,
 };
 use tower_http::cors::{Any, CorsLayer};
@@ -29,6 +29,8 @@ pub fn build_router(state: AppState) -> Router {
             post(routes::auth::github_callback),
         )
         .route("/api/auth/dev/token", get(routes::auth::dev_token))
+        .route("/api/users/me", get(routes::users::get_current_user))
+        .route("/api/users/me", patch(routes::users::update_current_user))
         .route("/api/models", get(routes::models::list_models))
         .route("/api/chat", post(routes::chat::chat_completion))
         // Folder routes

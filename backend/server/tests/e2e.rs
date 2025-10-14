@@ -118,14 +118,17 @@ async fn seed_user(pool: &SqlitePool) -> anyhow::Result<()> {
 
     sqlx::query(
         r#"
-        INSERT INTO users (id, public_id, email, display_name, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO users (id, public_id, email, display_name, username, avatar_url, bio, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         "#,
     )
     .bind(1_i64)
     .bind("test-user")
     .bind(Some("test@example.com".to_string()))
     .bind(Some("Test User".to_string()))
+    .bind(Some("testuser".to_string()))
+    .bind::<Option<String>>(None)
+    .bind::<Option<String>>(None)
     .bind(&now)
     .bind(&now)
     .execute(pool)

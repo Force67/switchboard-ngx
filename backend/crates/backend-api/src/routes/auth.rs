@@ -49,6 +49,12 @@ pub struct UserResponse {
     pub email: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub display_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub username: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bio: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub avatar_url: Option<String>,
 }
 
 impl From<User> for UserResponse {
@@ -56,7 +62,10 @@ impl From<User> for UserResponse {
         Self {
             id: value.public_id,
             email: value.email,
+            username: value.username,
             display_name: value.display_name,
+            bio: value.bio,
+            avatar_url: value.avatar_url,
         }
     }
 }
@@ -146,14 +155,17 @@ pub async fn dev_token(State(state): State<AppState>) -> Result<Json<SessionResp
     // Create a development user in the database first
     sqlx::query(
         r#"
-        INSERT OR IGNORE INTO users (id, public_id, email, display_name, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT OR IGNORE INTO users (id, public_id, email, display_name, username, avatar_url, bio, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         "#,
     )
     .bind(1i64)
     .bind("dev-user-123")
     .bind("dev@example.com")
     .bind("Dev User")
+    .bind("devuser")
+    .bind::<Option<&str>>(None)
+    .bind::<Option<&str>>(None)
     .bind(chrono::Utc::now().to_rfc3339())
     .bind(chrono::Utc::now().to_rfc3339())
     .execute(state.db_pool())
@@ -195,7 +207,10 @@ pub async fn dev_token(State(state): State<AppState>) -> Result<Json<SessionResp
         id: 1,
         public_id: "dev-user-123".to_string(),
         email: Some("dev@example.com".to_string()),
+        username: Some("devuser".to_string()),
         display_name: Some("Dev User".to_string()),
+        bio: None,
+        avatar_url: None,
     };
 
     Ok(Json(SessionResponse::new(session, user)))

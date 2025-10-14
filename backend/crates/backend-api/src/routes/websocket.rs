@@ -42,7 +42,10 @@ pub async fn websocket_handler(
                         id: 1,
                         public_id: "dev-user-123".to_string(),
                         email: Some("dev@example.com".to_string()),
+                        username: Some("devuser".to_string()),
                         display_name: Some("Dev User".to_string()),
+                        bio: None,
+                        avatar_url: None,
                     }
                 }
             }
@@ -54,7 +57,10 @@ pub async fn websocket_handler(
                 id: 1,
                 public_id: "dev-user-123".to_string(),
                 email: Some("dev@example.com".to_string()),
+                username: Some("devuser".to_string()),
                 display_name: Some("Dev User".to_string()),
+                bio: None,
+                avatar_url: None,
             }
         }
     };

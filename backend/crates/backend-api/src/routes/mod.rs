@@ -8,4 +8,5 @@ pub mod messages;
 pub mod models;
 pub mod notifications;
 pub mod permissions;
+pub mod users;
 pub mod websocket;

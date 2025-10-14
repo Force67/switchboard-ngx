@@ -15,9 +15,9 @@ use oauth2::{
 };
 use once_cell::sync::Lazy;
 use rand::RngCore;
-use reqwest::header::ACCEPT;
+use reqwest::{header::ACCEPT, Url};
 use serde::{Deserialize, Serialize};
-use sqlx::{Row, SqlitePool, Transaction};
+use sqlx::{QueryBuilder, Row, Sqlite, SqlitePool, Transaction};
 use switchboard_config::{AuthConfig, GithubAuthConfig};
 use thiserror::Error;
 use tracing::{debug, info};
@@ -25,6 +25,11 @@ use tracing::{debug, info};
 const GITHUB_USER_API: &str = "https://api.github.com/user";
 
 static CUID: Lazy<CuidConstructor> = Lazy::new(CuidConstructor::new);
+
+const MAX_DISPLAY_NAME_LEN: usize = 64;
+const MAX_USERNAME_LEN: usize = 64;
+const MAX_BIO_LEN: usize = 512;
+const MAX_AVATAR_URL_LEN: usize = 2048;
 
 #[derive(Clone)]
 pub struct Authenticator {
@@ -53,6 +58,8 @@ pub enum AuthError {
     SessionExpired,
     #[error("invalid session token")]
     InvalidSession,
+    #[error("invalid profile: {0}")]
+    InvalidProfile(String),
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -61,7 +68,30 @@ pub struct User {
     pub id: i64,
     pub public_id: String,
     pub email: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub username: Option<String>,
     pub display_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bio: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub avatar_url: Option<String>,
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct UpdateUserProfile {
+    pub username: Option<Option<String>>,
+    pub display_name: Option<Option<String>>,
+    pub bio: Option<Option<String>>,
+    pub avatar_url: Option<Option<String>>,
+}
+
+impl UpdateUserProfile {
+    pub fn is_empty(&self) -> bool {
+        self.username.is_none()
+            && self.display_name.is_none()
+            && self.bio.is_none()
+            && self.avatar_url.is_none()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -76,6 +106,9 @@ pub struct GithubProfile {
     pub id: String,
     pub email: Option<String>,
     pub name: Option<String>,
+    pub login: Option<String>,
+    pub avatar_url: Option<String>,
+    pub bio: Option<String>,
 }
 
 impl Authenticator {
@@ -129,7 +162,7 @@ impl Authenticator {
         let password_hash = self.hash_password(password)?;
 
         let user = self
-            .insert_user(&mut tx, Some(email.to_owned()), None)
+            .insert_user(&mut tx, Some(email.to_owned()), None, None, None, None)
             .await?;
 
         sqlx::query(
@@ -198,7 +231,7 @@ impl Authenticator {
     ) -> Result<AuthSession, AuthError> {
         let mut tx = self.pool.begin().await?;
 
-        if let Some(row) = sqlx::query(
+        let user_id = if let Some(row) = sqlx::query(
             "SELECT user_id FROM user_identities WHERE provider = 'github' AND provider_uid = ?",
         )
         .bind(&profile.id)
@@ -207,47 +240,61 @@ impl Authenticator {
         {
             let user_id: i64 = row.try_get("user_id")?;
             tx.commit().await?;
-            return self.issue_session(user_id).await;
-        }
-
-        let (user, email) = if let Some(email) = profile.email.as_ref() {
-            if let Some(row) = sqlx::query("SELECT id FROM users WHERE email = ?")
-                .bind(email)
-                .fetch_optional(&mut *tx)
-                .await?
-            {
-                let user_id: i64 = row.try_get("id")?;
-                let user = self.fetch_user(user_id).await?;
-                (user, Some(email.clone()))
+            user_id
+        } else {
+            let user_id = if let Some(email) = profile.email.as_ref() {
+                if let Some(row) = sqlx::query("SELECT id FROM users WHERE email = ?")
+                    .bind(email)
+                    .fetch_optional(&mut *tx)
+                    .await?
+                {
+                    row.try_get("id")?
+                } else {
+                    let user = self
+                        .insert_user(
+                            &mut tx,
+                            Some(email.clone()),
+                            profile.name.clone(),
+                            profile.login.clone(),
+                            profile.avatar_url.clone(),
+                            profile.bio.clone(),
+                        )
+                        .await?;
+                    user.id
+                }
             } else {
                 let user = self
-                    .insert_user(&mut tx, Some(email.clone()), profile.name.clone())
+                    .insert_user(
+                        &mut tx,
+                        None,
+                        profile.name.clone(),
+                        profile.login.clone(),
+                        profile.avatar_url.clone(),
+                        profile.bio.clone(),
+                    )
                     .await?;
-                (user, Some(email.clone()))
-            }
-        } else {
-            let user = self
-                .insert_user(&mut tx, None, profile.name.clone())
-                .await?;
-            (user, None)
+                user.id
+            };
+
+            let now = Utc::now().to_rfc3339();
+            sqlx::query(
+                "INSERT INTO user_identities (user_id, provider, provider_uid, secret, created_at, updated_at) VALUES (?, ?, ?, NULL, ?, ?)",
+            )
+            .bind(user_id)
+            .bind("github")
+            .bind(&profile.id)
+            .bind(&now)
+            .bind(&now)
+            .execute(&mut *tx)
+            .await?;
+
+            tx.commit().await?;
+            user_id
         };
 
-        let now = Utc::now().to_rfc3339();
-        sqlx::query(
-            "INSERT INTO user_identities (user_id, provider, provider_uid, secret, created_at, updated_at) VALUES (?, ?, ?, NULL, ?, ?)",
-        )
-        .bind(user.id)
-        .bind("github")
-        .bind(&profile.id)
-        .bind(&now)
-        .bind(&now)
-        .execute(&mut *tx)
-        .await?;
-
-        tx.commit().await?;
-
-        info!(user = %user.public_id, email = ?email, "linked github identity");
-        self.issue_session(user.id).await
+        let user = self.apply_github_profile(user_id, &profile).await?;
+        info!(user = %user.public_id, email = ?user.email, "linked github identity");
+        self.issue_session(user_id).await
     }
 
     pub async fn authenticate_token(&self, token: &str) -> Result<(User, AuthSession), AuthError> {
@@ -289,21 +336,78 @@ impl Authenticator {
         self.fetch_user(user_id).await
     }
 
+    pub async fn update_user_profile(
+        &self,
+        user_id: i64,
+        changes: UpdateUserProfile,
+    ) -> Result<User, AuthError> {
+        let username = sanitize_username(changes.username)?;
+        let display_name = sanitize_display_name(changes.display_name)?;
+        let bio = sanitize_bio(changes.bio)?;
+        let avatar_url = sanitize_avatar_url(changes.avatar_url)?;
+
+        if username.is_none() && display_name.is_none() && bio.is_none() && avatar_url.is_none() {
+            return self.fetch_user(user_id).await;
+        }
+
+        let now = Utc::now().to_rfc3339();
+        let mut query = QueryBuilder::<Sqlite>::new("UPDATE users SET ");
+        {
+            let mut assignments = query.separated(", ");
+
+            if let Some(value) = username {
+                assignments.push("username = ");
+                assignments.push_bind(value);
+            }
+
+            if let Some(value) = display_name {
+                assignments.push("display_name = ");
+                assignments.push_bind(value);
+            }
+
+            if let Some(value) = bio {
+                assignments.push("bio = ");
+                assignments.push_bind(value);
+            }
+
+            if let Some(value) = avatar_url {
+                assignments.push("avatar_url = ");
+                assignments.push_bind(value);
+            }
+
+            assignments.push("updated_at = ");
+            assignments.push_bind(&now);
+        }
+
+        query.push(" WHERE id = ");
+        query.push_bind(user_id);
+
+        query.build().execute(&self.pool).await?;
+
+        self.fetch_user(user_id).await
+    }
+
     async fn insert_user(
         &self,
         tx: &mut Transaction<'_, sqlx::Sqlite>,
         email: Option<String>,
         display_name: Option<String>,
+        username: Option<String>,
+        avatar_url: Option<String>,
+        bio: Option<String>,
     ) -> Result<User, AuthError> {
         let now = Utc::now().to_rfc3339();
         let public_id = new_public_id();
 
         sqlx::query(
-            "INSERT INTO users (public_id, email, display_name, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO users (public_id, email, display_name, username, avatar_url, bio, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(&public_id)
         .bind(email.as_ref().map(|value| value.as_str()))
         .bind(display_name.as_ref().map(|value| value.as_str()))
+        .bind(username.as_ref().map(|value| value.as_str()))
+        .bind(avatar_url.as_ref().map(|value| value.as_str()))
+        .bind(bio.as_ref().map(|value| value.as_str()))
         .bind(&now)
         .bind(&now)
         .execute(&mut **tx)
@@ -318,17 +422,20 @@ impl Authenticator {
             id: row.try_get("id")?,
             public_id,
             email,
+            username,
             display_name,
+            bio,
+            avatar_url,
         })
     }
 
     async fn fetch_user(&self, id: i64) -> Result<User, AuthError> {
         let row = sqlx::query(
-            "SELECT id, public_id, email, display_name, \n                CASE WHEN email IS NULL THEN 0 ELSE 1 END AS email_present,\n                CASE WHEN display_name IS NULL THEN 0 ELSE 1 END AS display_name_present\n             FROM users WHERE id = ?",
+            "SELECT id, public_id, email, display_name, username, bio, avatar_url,\n                CASE WHEN email IS NULL THEN 0 ELSE 1 END AS email_present,\n                CASE WHEN display_name IS NULL THEN 0 ELSE 1 END AS display_name_present,\n                CASE WHEN username IS NULL THEN 0 ELSE 1 END AS username_present,\n                CASE WHEN bio IS NULL THEN 0 ELSE 1 END AS bio_present,\n                CASE WHEN avatar_url IS NULL THEN 0 ELSE 1 END AS avatar_url_present\n             FROM users WHERE id = ?",
         )
-            .bind(id)
-            .fetch_one(&self.pool)
-            .await?;
+        .bind(id)
+        .fetch_one(&self.pool)
+        .await?;
 
         let email_present: i64 = row.try_get("email_present")?;
         let email = if email_present != 0 {
@@ -344,11 +451,35 @@ impl Authenticator {
             None
         };
 
+        let username_present: i64 = row.try_get("username_present")?;
+        let username = if username_present != 0 {
+            Some(row.try_get::<String, _>("username")?)
+        } else {
+            None
+        };
+
+        let bio_present: i64 = row.try_get("bio_present")?;
+        let bio = if bio_present != 0 {
+            Some(row.try_get::<String, _>("bio")?)
+        } else {
+            None
+        };
+
+        let avatar_url_present: i64 = row.try_get("avatar_url_present")?;
+        let avatar_url = if avatar_url_present != 0 {
+            Some(row.try_get::<String, _>("avatar_url")?)
+        } else {
+            None
+        };
+
         Ok(User {
             id,
             public_id: row.try_get("public_id")?,
             email,
+            username,
             display_name,
+            bio,
+            avatar_url,
         })
     }
 
@@ -385,10 +516,148 @@ impl Authenticator {
         rand::thread_rng().fill_bytes(&mut bytes);
         URL_SAFE_NO_PAD.encode(bytes)
     }
+
+    async fn apply_github_profile(
+        &self,
+        user_id: i64,
+        profile: &GithubProfile,
+    ) -> Result<User, AuthError> {
+        if let Some(email) = profile.email.as_ref() {
+            sqlx::query("UPDATE users SET email = ? WHERE id = ? AND email IS NULL")
+                .bind(email)
+                .bind(user_id)
+                .execute(&self.pool)
+                .await?;
+        }
+
+        let current = self.fetch_user(user_id).await?;
+        let mut update = UpdateUserProfile::default();
+
+        if let Some(name) = profile.name.as_ref() {
+            if !name.trim().is_empty() {
+                update.display_name = Some(Some(name.clone()));
+            }
+        }
+
+        if let Some(login) = profile.login.as_ref() {
+            if !login.trim().is_empty() {
+                update.username = Some(Some(login.clone()));
+                if update.display_name.is_none() && current.display_name.is_none() {
+                    update.display_name = Some(Some(login.clone()));
+                }
+            }
+        }
+
+        if let Some(avatar) = profile.avatar_url.as_ref() {
+            if !avatar.trim().is_empty() {
+                update.avatar_url = Some(Some(avatar.clone()));
+            }
+        }
+
+        if let Some(bio) = profile.bio.as_ref() {
+            if !bio.trim().is_empty() {
+                update.bio = Some(Some(bio.clone()));
+            }
+        }
+
+        if update.is_empty() {
+            Ok(current)
+        } else {
+            self.update_user_profile(user_id, update).await
+        }
+    }
 }
 
 fn new_public_id() -> String {
     CUID.create_id()
+}
+
+fn sanitize_display_name(
+    value: Option<Option<String>>,
+) -> Result<Option<Option<String>>, AuthError> {
+    sanitize_optional_text(value, MAX_DISPLAY_NAME_LEN, "display_name")
+}
+
+fn sanitize_username(value: Option<Option<String>>) -> Result<Option<Option<String>>, AuthError> {
+    match value {
+        Some(Some(raw)) => {
+            let trimmed = raw.trim();
+            if trimmed.is_empty() {
+                Ok(Some(None))
+            } else if trimmed.len() > MAX_USERNAME_LEN {
+                Err(AuthError::InvalidProfile(format!(
+                    "username must be at most {MAX_USERNAME_LEN} characters"
+                )))
+            } else if !trimmed
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
+            {
+                Err(AuthError::InvalidProfile(
+                    "username may only contain letters, numbers, '.', '-' or '_'".to_string(),
+                ))
+            } else {
+                Ok(Some(Some(trimmed.to_string())))
+            }
+        }
+        Some(None) => Ok(Some(None)),
+        None => Ok(None),
+    }
+}
+
+fn sanitize_bio(value: Option<Option<String>>) -> Result<Option<Option<String>>, AuthError> {
+    sanitize_optional_text(value, MAX_BIO_LEN, "bio")
+}
+
+fn sanitize_optional_text(
+    value: Option<Option<String>>,
+    max_len: usize,
+    field: &str,
+) -> Result<Option<Option<String>>, AuthError> {
+    match value {
+        Some(Some(raw)) => {
+            let trimmed = raw.trim();
+            if trimmed.is_empty() {
+                Ok(Some(None))
+            } else if trimmed.len() > max_len {
+                Err(AuthError::InvalidProfile(format!(
+                    "{field} must be at most {max_len} characters"
+                )))
+            } else {
+                Ok(Some(Some(trimmed.to_string())))
+            }
+        }
+        Some(None) => Ok(Some(None)),
+        None => Ok(None),
+    }
+}
+
+fn sanitize_avatar_url(value: Option<Option<String>>) -> Result<Option<Option<String>>, AuthError> {
+    match value {
+        Some(Some(raw)) => {
+            let trimmed = raw.trim();
+            if trimmed.is_empty() {
+                return Ok(Some(None));
+            }
+            if trimmed.len() > MAX_AVATAR_URL_LEN {
+                return Err(AuthError::InvalidProfile(format!(
+                    "avatar_url must be at most {MAX_AVATAR_URL_LEN} characters"
+                )));
+            }
+
+            let parsed = Url::parse(trimmed).map_err(|_| {
+                AuthError::InvalidProfile("avatar_url must be a valid URL".to_string())
+            })?;
+
+            match parsed.scheme() {
+                "http" | "https" => Ok(Some(Some(trimmed.to_string()))),
+                _ => Err(AuthError::InvalidProfile(
+                    "avatar_url must use http or https".to_string(),
+                )),
+            }
+        }
+        Some(None) => Ok(Some(None)),
+        None => Ok(None),
+    }
 }
 
 #[derive(Clone)]
@@ -476,6 +745,9 @@ impl GithubOAuth {
             id: user.id.to_string(),
             email: user.email,
             name: user.name,
+            login: Some(user.login),
+            avatar_url: user.avatar_url,
+            bio: user.bio,
         })
     }
 }
@@ -486,4 +758,6 @@ struct GithubUserResponse {
     login: String,
     name: Option<String>,
     email: Option<String>,
+    avatar_url: Option<String>,
+    bio: Option<String>,
 }

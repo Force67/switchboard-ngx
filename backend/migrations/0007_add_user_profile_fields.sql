@@ -1,0 +1,3 @@
+ALTER TABLE users ADD COLUMN username TEXT;
+ALTER TABLE users ADD COLUMN avatar_url TEXT;
+ALTER TABLE users ADD COLUMN bio TEXT;

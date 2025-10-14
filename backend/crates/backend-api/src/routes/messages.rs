@@ -10,6 +10,7 @@ use crate::{
         CreateMessageRequest, Message, MessageEdit, MessageEditsResponse, MessageResponse,
         MessagesResponse, UpdateMessageRequest,
     },
+    state::ServerEvent,
     util::require_bearer,
     ApiError, AppState,
 };
@@ -76,6 +77,26 @@ pub async fn get_messages(
     })?;
 
     Ok(Json(MessagesResponse { messages }))
+}
+
+async fn fetch_chat_member_ids(state: &AppState, chat_db_id: i64) -> Result<Vec<i64>, ApiError> {
+    sqlx::query_scalar::<_, i64>(
+        r#"
+        SELECT user_id FROM chat_members
+        WHERE chat_id = ?
+        "#,
+    )
+    .bind(chat_db_id)
+    .fetch_all(state.db_pool())
+    .await
+    .map_err(|e| {
+        tracing::error!(
+            "Failed to fetch chat members for chat {}: {}",
+            chat_db_id,
+            e
+        );
+        ApiError::internal_server_error("Failed to fetch chat members")
+    })
 }
 
 // Create a new message
@@ -203,6 +224,19 @@ pub async fn create_message(
         ApiError::internal_server_error("Failed to fetch created message")
     })?
     .ok_or_else(|| ApiError::internal_server_error("Failed to fetch created message"))?;
+
+    let member_ids = fetch_chat_member_ids(&state, chat_db_id).await?;
+    let event = ServerEvent::Message {
+        chat_id: chat_id.clone(),
+        message_id: message.public_id.clone(),
+        user_id: message.user_id,
+        content: message.content.clone(),
+        model: message.model.clone(),
+        timestamp: message.created_at.clone(),
+        message_type: message.message_type.clone(),
+    };
+    state.broadcast_to_chat(&chat_id, &event).await;
+    state.broadcast_to_users(member_ids, &event).await;
 
     Ok(Json(MessageResponse { message }))
 }
@@ -359,6 +393,14 @@ pub async fn update_message(
     })?
     .ok_or_else(|| ApiError::internal_server_error("Failed to fetch updated message"))?;
 
+    let member_ids = fetch_chat_member_ids(&state, chat_db_id).await?;
+    let event = ServerEvent::MessageUpdated {
+        chat_id: chat_id.clone(),
+        message: message.clone(),
+    };
+    state.broadcast_to_chat(&chat_id, &event).await;
+    state.broadcast_to_users(member_ids, &event).await;
+
     Ok(Json(MessageResponse { message }))
 }
 
@@ -408,17 +450,16 @@ pub async fn delete_message(
     let chat_db_id = chat_db_id.ok_or_else(|| ApiError::forbidden("Not a member of this chat"))?;
 
     // Get the message details
-    let message_details: Option<(i64, i64)> = sqlx::query_as(
-        "SELECT id, user_id FROM messages WHERE public_id = ? AND chat_id = ?",
-    )
-    .bind(&message_public_id)
-    .bind(chat_db_id)
-    .fetch_optional(state.db_pool())
-    .await
-    .map_err(|e| {
-        tracing::error!("Failed to fetch message details: {}", e);
-        ApiError::internal_server_error("Failed to fetch message details")
-    })?;
+    let message_details: Option<(i64, i64)> =
+        sqlx::query_as("SELECT id, user_id FROM messages WHERE public_id = ? AND chat_id = ?")
+            .bind(&message_public_id)
+            .bind(chat_db_id)
+            .fetch_optional(state.db_pool())
+            .await
+            .map_err(|e| {
+                tracing::error!("Failed to fetch message details: {}", e);
+                ApiError::internal_server_error("Failed to fetch message details")
+            })?;
 
     let (message_db_id, message_user_id) =
         message_details.ok_or_else(|| ApiError::not_found("Message not found"))?;
@@ -467,6 +508,8 @@ pub async fn delete_message(
         ApiError::internal_server_error("Failed to create message deletion audit")
     })?;
 
+    let member_ids = fetch_chat_member_ids(&state, chat_db_id).await?;
+
     // Delete the message (cascade will handle related records)
     sqlx::query("DELETE FROM messages WHERE id = ?")
         .bind(message_db_id)
@@ -476,6 +519,13 @@ pub async fn delete_message(
             tracing::error!("Failed to delete message: {}", e);
             ApiError::internal_server_error("Failed to delete message")
         })?;
+
+    let event = ServerEvent::MessageDeleted {
+        chat_id: chat_id.clone(),
+        message_id: message_public_id.clone(),
+    };
+    state.broadcast_to_chat(&chat_id, &event).await;
+    state.broadcast_to_users(member_ids, &event).await;
 
     Ok(())
 }

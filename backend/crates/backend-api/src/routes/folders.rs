@@ -9,6 +9,7 @@ use uuid::Uuid;
 
 use crate::{
     routes::models::{CreateFolderRequest, Folder, UpdateFolderRequest},
+    state::ServerEvent,
     util::require_bearer,
     ApiError, AppState,
 };
@@ -141,6 +142,11 @@ pub async fn create_folder(
         updated_at: now.clone(),
     };
 
+    let event = ServerEvent::FolderCreated {
+        folder: folder.clone(),
+    };
+    state.broadcast_to_user(user.id, &event).await;
+
     Ok(Json(FolderResponse { folder }))
 }
 
@@ -255,6 +261,11 @@ pub async fn update_folder(
     })?
     .ok_or_else(|| ApiError::not_found("Folder not found"))?;
 
+    let event = ServerEvent::FolderUpdated {
+        folder: folder.clone(),
+    };
+    state.broadcast_to_user(user.id, &event).await;
+
     Ok(Json(FolderResponse { folder }))
 }
 
@@ -281,7 +292,7 @@ pub async fn delete_folder(
     let token = require_bearer(&headers)?;
     let (user, _) = state.authenticate(&token).await?;
 
-    sqlx::query("DELETE FROM folders WHERE public_id = ? AND user_id = ?")
+    let result = sqlx::query("DELETE FROM folders WHERE public_id = ? AND user_id = ?")
         .bind(&folder_id)
         .bind(user.id)
         .execute(state.db_pool())
@@ -290,6 +301,15 @@ pub async fn delete_folder(
             tracing::error!("Failed to delete folder: {}", e);
             ApiError::internal_server_error("Failed to delete folder")
         })?;
+
+    if result.rows_affected() == 0 {
+        return Err(ApiError::not_found("Folder not found"));
+    }
+
+    let event = ServerEvent::FolderDeleted {
+        folder_id: folder_id.clone(),
+    };
+    state.broadcast_to_user(user.id, &event).await;
 
     Ok(())
 }

@@ -15,6 +15,7 @@ use crate::{
         InvitesResponse, MemberResponse, MembersResponse, UpdateChatRequest,
         UpdateMemberRoleRequest,
     },
+    state::ServerEvent,
     util::require_bearer,
     ApiError, AppState,
 };
@@ -94,6 +95,26 @@ async fn fetch_chat_messages(
     serde_json::to_string(&messages).map(Some).map_err(|e| {
         tracing::error!("Failed to serialize messages for chat {}: {}", chat_id, e);
         ApiError::internal_server_error("Failed to serialize chat messages")
+    })
+}
+
+async fn fetch_chat_member_ids(state: &AppState, chat_db_id: i64) -> Result<Vec<i64>, ApiError> {
+    sqlx::query_scalar::<_, i64>(
+        r#"
+        SELECT user_id FROM chat_members
+        WHERE chat_id = ?
+        "#,
+    )
+    .bind(chat_db_id)
+    .fetch_all(state.db_pool())
+    .await
+    .map_err(|e| {
+        tracing::error!(
+            "Failed to fetch chat members for chat {}: {}",
+            chat_db_id,
+            e
+        );
+        ApiError::internal_server_error("Failed to fetch chat members")
     })
 }
 
@@ -289,6 +310,9 @@ pub async fn create_chat(
         updated_at: now.clone(),
     };
 
+    let event = ServerEvent::ChatCreated { chat: chat.clone() };
+    state.broadcast_to_user(user.id, &event).await;
+
     Ok(Json(ChatDetailResponse { chat }))
 }
 
@@ -445,6 +469,11 @@ pub async fn update_chat(
     })?
     .ok_or_else(|| ApiError::not_found("Chat not found"))?;
 
+    let member_ids = fetch_chat_member_ids(&state, chat.id).await?;
+    let event = ServerEvent::ChatUpdated { chat: chat.clone() };
+    state.broadcast_to_chat(&chat_id, &event).await;
+    state.broadcast_to_users(member_ids, &event).await;
+
     Ok(Json(ChatDetailResponse { chat }))
 }
 
@@ -473,9 +502,9 @@ pub async fn delete_chat(
     let (user, _) = state.authenticate(&token).await?;
 
     // Check if user is owner of the chat before deleting
-    let chat_role: Option<String> = sqlx::query_scalar(
+    let chat_info: Option<(i64, String)> = sqlx::query_as(
         r#"
-        SELECT cm.role FROM chats c
+        SELECT c.id, cm.role FROM chats c
         JOIN chat_members cm ON c.id = cm.chat_id
         WHERE c.public_id = ? AND cm.user_id = ?
         "#,
@@ -489,11 +518,13 @@ pub async fn delete_chat(
         ApiError::internal_server_error("Failed to delete chat")
     })?;
 
-    let chat_role = chat_role.ok_or_else(|| ApiError::not_found("Chat not found"))?;
+    let (chat_db_id, chat_role) = chat_info.ok_or_else(|| ApiError::not_found("Chat not found"))?;
 
     if chat_role != "owner" {
         return Err(ApiError::forbidden("Only chat owners can delete chats"));
     }
+
+    let member_ids = fetch_chat_member_ids(&state, chat_db_id).await?;
 
     sqlx::query("DELETE FROM chats WHERE public_id = ?")
         .bind(&chat_id)
@@ -503,6 +534,17 @@ pub async fn delete_chat(
             tracing::error!("Failed to delete chat: {}", e);
             ApiError::internal_server_error("Failed to delete chat")
         })?;
+
+    let event = ServerEvent::ChatDeleted {
+        chat_id: chat_id.clone(),
+    };
+    state.broadcast_to_chat(&chat_id, &event).await;
+    state.broadcast_to_users(member_ids, &event).await;
+
+    {
+        let mut broadcasters = state.chat_broadcasters.lock().await;
+        broadcasters.remove(&chat_id);
+    }
 
     Ok(())
 }
@@ -598,6 +640,14 @@ pub async fn create_invite(
         updated_at: now,
     };
 
+    let member_ids = fetch_chat_member_ids(&state, chat_db_id).await?;
+    let event = ServerEvent::InviteCreated {
+        chat_id: chat_id.clone(),
+        invite: invite.clone(),
+    };
+    state.broadcast_to_chat(&chat_id, &event).await;
+    state.broadcast_to_users(member_ids, &event).await;
+
     Ok(Json(InviteResponse { invite }))
 }
 
@@ -688,8 +738,13 @@ pub async fn accept_invite(
     let (user, _) = state.authenticate(&token).await?;
 
     // Get the invite and check if the email matches
-    let invite: Option<(i64, String)> = sqlx::query_as(
-        "SELECT chat_id, invitee_email FROM chat_invites WHERE id = ? AND status = 'pending'",
+    let invite: Option<(i64, String, String)> = sqlx::query_as(
+        r#"
+        SELECT ci.chat_id, ci.invitee_email, c.public_id
+        FROM chat_invites ci
+        JOIN chats c ON c.id = ci.chat_id
+        WHERE ci.id = ? AND ci.status = 'pending'
+        "#,
     )
     .bind(invite_id)
     .fetch_optional(state.db_pool())
@@ -699,7 +754,7 @@ pub async fn accept_invite(
         ApiError::internal_server_error("Failed to fetch invite")
     })?;
 
-    let (chat_db_id, invitee_email) =
+    let (chat_db_id, invitee_email, chat_public_id) =
         invite.ok_or_else(|| ApiError::not_found("Invite not found"))?;
 
     // Check if the user's email matches
@@ -736,6 +791,30 @@ pub async fn accept_invite(
         tracing::error!("Failed to add user to chat: {}", e);
         ApiError::internal_server_error("Failed to accept invite")
     })?;
+
+    let member = sqlx::query_as::<_, ChatMember>(
+        r#"
+        SELECT id, chat_id, user_id, role, joined_at
+        FROM chat_members
+        WHERE chat_id = ? AND user_id = ?
+        "#,
+    )
+    .bind(chat_db_id)
+    .bind(user.id)
+    .fetch_one(state.db_pool())
+    .await
+    .map_err(|e| {
+        tracing::error!("Failed to fetch new member: {}", e);
+        ApiError::internal_server_error("Failed to accept invite")
+    })?;
+
+    let member_ids = fetch_chat_member_ids(&state, chat_db_id).await?;
+    let event = ServerEvent::MemberUpdated {
+        chat_id: chat_public_id.clone(),
+        member: member.clone(),
+    };
+    state.broadcast_to_chat(&chat_public_id, &event).await;
+    state.broadcast_to_users(member_ids, &event).await;
 
     Ok(())
 }
@@ -990,6 +1069,14 @@ pub async fn update_member_role(
     })?
     .ok_or_else(|| ApiError::not_found("Member not found"))?;
 
+    let member_ids = fetch_chat_member_ids(&state, member.chat_id).await?;
+    let event = ServerEvent::MemberUpdated {
+        chat_id: chat_id.clone(),
+        member: member.clone(),
+    };
+    state.broadcast_to_chat(&chat_id, &event).await;
+    state.broadcast_to_users(member_ids, &event).await;
+
     Ok(Json(MemberResponse { member }))
 }
 
@@ -1018,10 +1105,10 @@ pub async fn remove_member(
     let token = require_bearer(&headers)?;
     let (user, _) = state.authenticate(&token).await?;
 
-    // Check if user is an owner/admin of the chat
-    let user_role: Option<String> = sqlx::query_scalar(
+    // Check if user is an owner/admin of the chat and capture chat id
+    let chat_info: Option<(i64, String)> = sqlx::query_as(
         r#"
-        SELECT cm.role FROM chats c
+        SELECT c.id, cm.role FROM chats c
         JOIN chat_members cm ON c.id = cm.chat_id
         WHERE c.public_id = ? AND cm.user_id = ?
         "#,
@@ -1035,7 +1122,8 @@ pub async fn remove_member(
         ApiError::internal_server_error("Failed to check user role")
     })?;
 
-    let user_role = user_role.ok_or_else(|| ApiError::forbidden("Not a member of this chat"))?;
+    let (chat_db_id, user_role) =
+        chat_info.ok_or_else(|| ApiError::forbidden("Not a member of this chat"))?;
 
     if user_role != "owner" && user_role != "admin" {
         return Err(ApiError::forbidden("Insufficient permissions"));
@@ -1044,13 +1132,9 @@ pub async fn remove_member(
     // Prevent removing the last owner
     if user_role == "owner" || user_role == "admin" {
         let owner_count: i64 = sqlx::query_scalar(
-            r#"
-            SELECT COUNT(*) FROM chat_members cm
-            JOIN chats c ON c.id = cm.chat_id
-            WHERE c.public_id = ? AND cm.role = 'owner'
-            "#,
+            "SELECT COUNT(*) FROM chat_members WHERE chat_id = ? AND role = 'owner'",
         )
-        .bind(&chat_id)
+        .bind(chat_db_id)
         .fetch_one(state.db_pool())
         .await
         .map_err(|e| {
@@ -1058,38 +1142,41 @@ pub async fn remove_member(
             ApiError::internal_server_error("Failed to validate removal")
         })?;
 
-        let target_role: Option<String> = sqlx::query_scalar(
-            "SELECT role FROM chat_members cm JOIN chats c ON c.id = cm.chat_id WHERE c.public_id = ? AND cm.user_id = ?"
-        )
-        .bind(&chat_id)
-        .bind(member_user_id)
-        .fetch_optional(state.db_pool())
-        .await
-        .map_err(|e| {
-            tracing::error!("Failed to get target role: {}", e);
-            ApiError::internal_server_error("Failed to validate removal")
-        })?;
+        let target_role: Option<String> =
+            sqlx::query_scalar("SELECT role FROM chat_members WHERE chat_id = ? AND user_id = ?")
+                .bind(chat_db_id)
+                .bind(member_user_id)
+                .fetch_optional(state.db_pool())
+                .await
+                .map_err(|e| {
+                    tracing::error!("Failed to get target role: {}", e);
+                    ApiError::internal_server_error("Failed to validate removal")
+                })?;
 
         if target_role.as_deref() == Some("owner") && owner_count <= 1 {
             return Err(ApiError::bad_request("Cannot remove the last owner"));
         }
     }
 
+    let member_ids = fetch_chat_member_ids(&state, chat_db_id).await?;
+
     // Remove the member
-    sqlx::query(
-        r#"
-        DELETE FROM chat_members
-        WHERE chat_id = (SELECT id FROM chats WHERE public_id = ?) AND user_id = ?
-        "#,
-    )
-    .bind(&chat_id)
-    .bind(member_user_id)
-    .execute(state.db_pool())
-    .await
-    .map_err(|e| {
-        tracing::error!("Failed to remove member: {}", e);
-        ApiError::internal_server_error("Failed to remove member")
-    })?;
+    sqlx::query("DELETE FROM chat_members WHERE chat_id = ? AND user_id = ?")
+        .bind(chat_db_id)
+        .bind(member_user_id)
+        .execute(state.db_pool())
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to remove member: {}", e);
+            ApiError::internal_server_error("Failed to remove member")
+        })?;
+
+    let event = ServerEvent::MemberRemoved {
+        chat_id: chat_id.clone(),
+        user_id: member_user_id,
+    };
+    state.broadcast_to_chat(&chat_id, &event).await;
+    state.broadcast_to_users(member_ids, &event).await;
 
     Ok(())
 }

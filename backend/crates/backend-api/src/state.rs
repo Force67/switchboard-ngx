@@ -1,10 +1,11 @@
 use std::{collections::HashMap, sync::Arc, time::Duration as StdDuration, time::Instant};
 
+use chrono::{Duration, Utc};
 use rand::{distributions::Alphanumeric, Rng};
 use redis::aio::ConnectionManager;
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
-use switchboard_auth::{AuthSession, Authenticator, User};
+use switchboard_auth::{AuthError, AuthSession, Authenticator, User};
 use switchboard_orchestrator::Orchestrator;
 use tokio::sync::{broadcast, Mutex};
 
@@ -222,27 +223,89 @@ impl AppState {
         }
     }
 
+    async fn ensure_dev_session(&self, token: &str) -> Result<(User, AuthSession), ApiError> {
+        let now = Utc::now();
+        let expires_at = now + Duration::hours(24);
+        let now_str = now.to_rfc3339();
+        let expires_at_str = expires_at.to_rfc3339();
+
+        sqlx::query(
+            r#"
+            INSERT OR IGNORE INTO users (id, public_id, email, display_name, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            "#,
+        )
+        .bind(1i64)
+        .bind("dev-user-123")
+        .bind("dev@example.com")
+        .bind("Dev User")
+        .bind(&now_str)
+        .bind(&now_str)
+        .execute(self.db_pool())
+        .await
+        .map_err(|error| {
+            tracing::error!("failed to ensure development user: {}", error);
+            ApiError::internal_server_error("failed to ensure development user")
+        })?;
+
+        sqlx::query(
+            r#"
+            INSERT INTO sessions (token, user_id, expires_at, created_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(token) DO UPDATE SET
+                user_id = excluded.user_id,
+                expires_at = excluded.expires_at
+            "#,
+        )
+        .bind(token)
+        .bind(1i64)
+        .bind(&expires_at_str)
+        .bind(&now_str)
+        .execute(self.db_pool())
+        .await
+        .map_err(|error| {
+            tracing::error!("failed to upsert development session: {}", error);
+            ApiError::internal_server_error("failed to ensure development session")
+        })?;
+
+        let user = self
+            .authenticator()
+            .user_profile(1)
+            .await
+            .map_err(ApiError::from)?;
+
+        let session = AuthSession {
+            token: token.to_string(),
+            user_id: 1,
+            expires_at,
+        };
+
+        Ok((user, session))
+    }
+
     pub async fn authenticate(&self, token: &str) -> Result<(User, AuthSession), ApiError> {
-        // Temporary test token for development
-        if token == "test-token" {
-            let user = User {
-                id: 1,
-                public_id: "test-user".to_string(),
-                email: Some("test@example.com".to_string()),
-                display_name: Some("Test User".to_string()),
-            };
-            let session = AuthSession {
-                token: "test-token".to_string(),
-                user_id: 1,
-                expires_at: chrono::Utc::now() + chrono::Duration::hours(24),
-            };
-            return Ok((user, session));
+        if cfg!(debug_assertions) && token == "test-token" {
+            return self.ensure_dev_session(token).await;
         }
 
-        self.authenticator
-            .authenticate_token(token)
-            .await
-            .map_err(ApiError::from)
+        match self.authenticator.authenticate_token(token).await {
+            Ok(result) => Ok(result),
+            Err(auth_error @ (AuthError::SessionNotFound
+            | AuthError::SessionExpired
+            | AuthError::InvalidSession)) => {
+                if cfg!(debug_assertions) {
+                    tracing::warn!(
+                        "development session for token {} missing ({}), recreating",
+                        token,
+                        auth_error
+                    );
+                    self.ensure_dev_session(token).await
+                } else {
+                    Err(ApiError::from(auth_error))
+                }
+            }
+            Err(other) => Err(ApiError::from(other)),
+        }
     }
 }
 

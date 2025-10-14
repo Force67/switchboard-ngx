@@ -7,15 +7,30 @@ use uuid::Uuid;
 
 use crate::{
     routes::models::{
-        Message, MessageEdit, CreateMessageRequest, UpdateMessageRequest, MessageEditsResponse,
-        MessagesResponse, MessageResponse,
+        CreateMessageRequest, Message, MessageEdit, MessageEditsResponse, MessageResponse,
+        MessagesResponse, UpdateMessageRequest,
     },
     util::require_bearer,
     ApiError, AppState,
 };
 
-
 // Get messages for a chat
+#[utoipa::path(
+    get,
+    path = "/api/chats/{chat_id}/messages",
+    tag = "Messages",
+    security(("bearerAuth" = [])),
+    params(
+        ("chat_id" = String, Path, description = "Chat public identifier")
+    ),
+    responses(
+        (status = 200, description = "List chat messages", body = MessagesResponse),
+        (status = 401, description = "Authentication required", body = crate::error::ErrorResponse),
+        (status = 403, description = "Forbidden", body = crate::error::ErrorResponse),
+        (status = 404, description = "Chat not found", body = crate::error::ErrorResponse),
+        (status = 500, description = "Failed to fetch messages", body = crate::error::ErrorResponse)
+    )
+)]
 pub async fn get_messages(
     State(state): State<AppState>,
     Path(chat_id): Path<String>,
@@ -30,7 +45,7 @@ pub async fn get_messages(
         SELECT c.id FROM chats c
         JOIN chat_members cm ON c.id = cm.chat_id
         WHERE c.public_id = ? AND cm.user_id = ?
-        "#
+        "#,
     )
     .bind(&chat_id)
     .bind(user.id)
@@ -50,7 +65,7 @@ pub async fn get_messages(
         FROM messages
         WHERE chat_id = ?
         ORDER BY created_at ASC
-        "#
+        "#,
     )
     .bind(chat_db_id)
     .fetch_all(state.db_pool())
@@ -64,6 +79,24 @@ pub async fn get_messages(
 }
 
 // Create a new message
+#[utoipa::path(
+    post,
+    path = "/api/chats/{chat_id}/messages",
+    tag = "Messages",
+    security(("bearerAuth" = [])),
+    params(
+        ("chat_id" = String, Path, description = "Chat public identifier")
+    ),
+    request_body = CreateMessageRequest,
+    responses(
+        (status = 200, description = "Message created", body = MessageResponse),
+        (status = 400, description = "Invalid message payload", body = crate::error::ErrorResponse),
+        (status = 401, description = "Authentication required", body = crate::error::ErrorResponse),
+        (status = 403, description = "Forbidden", body = crate::error::ErrorResponse),
+        (status = 404, description = "Chat not found", body = crate::error::ErrorResponse),
+        (status = 500, description = "Failed to create message", body = crate::error::ErrorResponse)
+    )
+)]
 pub async fn create_message(
     State(state): State<AppState>,
     Path(chat_id): Path<String>,
@@ -79,7 +112,7 @@ pub async fn create_message(
         SELECT c.id FROM chats c
         JOIN chat_members cm ON c.id = cm.chat_id
         WHERE c.public_id = ? AND cm.user_id = ?
-        "#
+        "#,
     )
     .bind(&chat_id)
     .bind(user.id)
@@ -160,7 +193,7 @@ pub async fn create_message(
                thread_id, reply_to_id, created_at, updated_at
         FROM messages
         WHERE id = ?
-        "#
+        "#,
     )
     .bind(message_db_id)
     .fetch_optional(state.db_pool())
@@ -175,6 +208,25 @@ pub async fn create_message(
 }
 
 // Update a message (with audit trail)
+#[utoipa::path(
+    put,
+    path = "/api/chats/{chat_id}/messages/{message_id}",
+    tag = "Messages",
+    security(("bearerAuth" = [])),
+    params(
+        ("chat_id" = String, Path, description = "Chat public identifier"),
+        ("message_id" = String, Path, description = "Message public identifier")
+    ),
+    request_body = UpdateMessageRequest,
+    responses(
+        (status = 200, description = "Message updated", body = MessageResponse),
+        (status = 400, description = "Invalid update payload", body = crate::error::ErrorResponse),
+        (status = 401, description = "Authentication required", body = crate::error::ErrorResponse),
+        (status = 403, description = "Forbidden", body = crate::error::ErrorResponse),
+        (status = 404, description = "Message not found", body = crate::error::ErrorResponse),
+        (status = 500, description = "Failed to update message", body = crate::error::ErrorResponse)
+    )
+)]
 pub async fn update_message(
     State(state): State<AppState>,
     Path((chat_id, message_public_id)): Path<(String, String)>,
@@ -190,7 +242,7 @@ pub async fn update_message(
         SELECT c.id FROM chats c
         JOIN chat_members cm ON c.id = cm.chat_id
         WHERE c.public_id = ? AND cm.user_id = ?
-        "#
+        "#,
     )
     .bind(&chat_id)
     .bind(user.id)
@@ -204,35 +256,35 @@ pub async fn update_message(
     let chat_db_id = chat_db_id.ok_or_else(|| ApiError::forbidden("Not a member of this chat"))?;
 
     // Get the original message
-    let original_message: Option<(i64, String)> = sqlx::query_as(
-        "SELECT id, content FROM messages WHERE public_id = ? AND chat_id = ?"
-    )
-    .bind(&message_public_id)
-    .bind(chat_db_id)
-    .fetch_optional(state.db_pool())
-    .await
-    .map_err(|e| {
-        tracing::error!("Failed to fetch original message: {}", e);
-        ApiError::internal_server_error("Failed to fetch original message")
-    })?;
+    let original_message: Option<(i64, String)> =
+        sqlx::query_as("SELECT id, content FROM messages WHERE public_id = ? AND chat_id = ?")
+            .bind(&message_public_id)
+            .bind(chat_db_id)
+            .fetch_optional(state.db_pool())
+            .await
+            .map_err(|e| {
+                tracing::error!("Failed to fetch original message: {}", e);
+                ApiError::internal_server_error("Failed to fetch original message")
+            })?;
 
-    let (message_db_id, original_content) = original_message
-        .ok_or_else(|| ApiError::not_found("Message not found"))?;
+    let (message_db_id, original_content) =
+        original_message.ok_or_else(|| ApiError::not_found("Message not found"))?;
 
     // Check if user can edit this message (owner or admin)
-    let can_edit: bool = if user.id == sqlx::query_scalar::<_, i64>("SELECT user_id FROM messages WHERE id = ?")
-        .bind(message_db_id)
-        .fetch_one(state.db_pool())
-        .await
-        .map_err(|e| {
-            tracing::error!("Failed to check message ownership: {}", e);
-            ApiError::internal_server_error("Failed to check message ownership")
-        })? {
+    let can_edit: bool = if user.id
+        == sqlx::query_scalar::<_, i64>("SELECT user_id FROM messages WHERE id = ?")
+            .bind(message_db_id)
+            .fetch_one(state.db_pool())
+            .await
+            .map_err(|e| {
+                tracing::error!("Failed to check message ownership: {}", e);
+                ApiError::internal_server_error("Failed to check message ownership")
+            })? {
         true
     } else {
         // Check if user is admin or owner of the chat
         let user_role: Option<String> = sqlx::query_scalar(
-            "SELECT cm.role FROM chat_members cm WHERE cm.chat_id = ? AND cm.user_id = ?"
+            "SELECT cm.role FROM chat_members cm WHERE cm.chat_id = ? AND cm.user_id = ?",
         )
         .bind(chat_db_id)
         .bind(user.id)
@@ -277,7 +329,7 @@ pub async fn update_message(
         UPDATE messages
         SET content = ?, updated_at = ?
         WHERE id = ?
-        "#
+        "#,
     )
     .bind(&req.content)
     .bind(&now)
@@ -296,7 +348,7 @@ pub async fn update_message(
                thread_id, reply_to_id, created_at, updated_at
         FROM messages
         WHERE id = ?
-        "#
+        "#,
     )
     .bind(message_db_id)
     .fetch_optional(state.db_pool())
@@ -311,6 +363,23 @@ pub async fn update_message(
 }
 
 // Delete a message (with audit trail)
+#[utoipa::path(
+    delete,
+    path = "/api/chats/{chat_id}/messages/{message_id}",
+    tag = "Messages",
+    security(("bearerAuth" = [])),
+    params(
+        ("chat_id" = String, Path, description = "Chat public identifier"),
+        ("message_id" = String, Path, description = "Message public identifier")
+    ),
+    responses(
+        (status = 200, description = "Message deleted"),
+        (status = 401, description = "Authentication required", body = crate::error::ErrorResponse),
+        (status = 403, description = "Forbidden", body = crate::error::ErrorResponse),
+        (status = 404, description = "Message not found", body = crate::error::ErrorResponse),
+        (status = 500, description = "Failed to delete message", body = crate::error::ErrorResponse)
+    )
+)]
 pub async fn delete_message(
     State(state): State<AppState>,
     Path((chat_id, message_public_id)): Path<(String, String)>,
@@ -325,7 +394,7 @@ pub async fn delete_message(
         SELECT c.id FROM chats c
         JOIN chat_members cm ON c.id = cm.chat_id
         WHERE c.public_id = ? AND cm.user_id = ?
-        "#
+        "#,
     )
     .bind(&chat_id)
     .bind(user.id)
@@ -340,7 +409,7 @@ pub async fn delete_message(
 
     // Get the message details
     let message_details: Option<(i64, String, i64)> = sqlx::query_as(
-        "SELECT id, content, user_id FROM messages WHERE public_id = ? AND chat_id = ?"
+        "SELECT id, content, user_id FROM messages WHERE public_id = ? AND chat_id = ?",
     )
     .bind(&message_public_id)
     .bind(chat_db_id)
@@ -351,8 +420,8 @@ pub async fn delete_message(
         ApiError::internal_server_error("Failed to fetch message details")
     })?;
 
-    let (message_db_id, content, message_user_id) = message_details
-        .ok_or_else(|| ApiError::not_found("Message not found"))?;
+    let (message_db_id, content, message_user_id) =
+        message_details.ok_or_else(|| ApiError::not_found("Message not found"))?;
 
     // Check if user can delete this message
     let can_delete = if user.id == message_user_id {
@@ -360,7 +429,7 @@ pub async fn delete_message(
     } else {
         // Check if user is admin or owner of the chat
         let user_role: Option<String> = sqlx::query_scalar(
-            "SELECT cm.role FROM chat_members cm WHERE cm.chat_id = ? AND cm.user_id = ?"
+            "SELECT cm.role FROM chat_members cm WHERE cm.chat_id = ? AND cm.user_id = ?",
         )
         .bind(chat_db_id)
         .bind(user.id)
@@ -385,7 +454,7 @@ pub async fn delete_message(
         r#"
         INSERT INTO message_deletions (message_id, deleted_by_user_id, reason, deleted_at)
         VALUES (?, ?, ?, ?)
-        "#
+        "#,
     )
     .bind(message_db_id)
     .bind(user.id)
@@ -412,6 +481,23 @@ pub async fn delete_message(
 }
 
 // Get message edit history
+#[utoipa::path(
+    get,
+    path = "/api/chats/{chat_id}/messages/{message_id}/edits",
+    tag = "Messages",
+    security(("bearerAuth" = [])),
+    params(
+        ("chat_id" = String, Path, description = "Chat public identifier"),
+        ("message_id" = String, Path, description = "Message public identifier")
+    ),
+    responses(
+        (status = 200, description = "Message edit history", body = MessageEditsResponse),
+        (status = 401, description = "Authentication required", body = crate::error::ErrorResponse),
+        (status = 403, description = "Forbidden", body = crate::error::ErrorResponse),
+        (status = 404, description = "Message not found", body = crate::error::ErrorResponse),
+        (status = 500, description = "Failed to fetch message edits", body = crate::error::ErrorResponse)
+    )
+)]
 pub async fn get_message_edits(
     State(state): State<AppState>,
     Path((chat_id, message_public_id)): Path<(String, String)>,
@@ -426,7 +512,7 @@ pub async fn get_message_edits(
         SELECT c.id FROM chats c
         JOIN chat_members cm ON c.id = cm.chat_id
         WHERE c.public_id = ? AND cm.user_id = ?
-        "#
+        "#,
     )
     .bind(&chat_id)
     .bind(user.id)
@@ -440,17 +526,16 @@ pub async fn get_message_edits(
     let chat_db_id = chat_db_id.ok_or_else(|| ApiError::forbidden("Not a member of this chat"))?;
 
     // Get the message ID
-    let message_db_id: Option<i64> = sqlx::query_scalar(
-        "SELECT id FROM messages WHERE public_id = ? AND chat_id = ?"
-    )
-    .bind(&message_public_id)
-    .bind(chat_db_id)
-    .fetch_optional(state.db_pool())
-    .await
-    .map_err(|e| {
-        tracing::error!("Failed to get message ID: {}", e);
-        ApiError::internal_server_error("Failed to get message ID")
-    })?;
+    let message_db_id: Option<i64> =
+        sqlx::query_scalar("SELECT id FROM messages WHERE public_id = ? AND chat_id = ?")
+            .bind(&message_public_id)
+            .bind(chat_db_id)
+            .fetch_optional(state.db_pool())
+            .await
+            .map_err(|e| {
+                tracing::error!("Failed to get message ID: {}", e);
+                ApiError::internal_server_error("Failed to get message ID")
+            })?;
 
     let message_db_id = message_db_id.ok_or_else(|| ApiError::not_found("Message not found"))?;
 
@@ -461,7 +546,7 @@ pub async fn get_message_edits(
         FROM message_edits
         WHERE message_id = ?
         ORDER BY edited_at DESC
-        "#
+        "#,
     )
     .bind(message_db_id)
     .fetch_all(state.db_pool())

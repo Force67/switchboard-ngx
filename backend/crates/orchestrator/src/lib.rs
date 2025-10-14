@@ -208,11 +208,13 @@ impl Orchestrator {
             .map(|model| {
                 // Parse pricing directly from JSON - be more flexible with field names
                 let pricing = model.pricing.as_ref().map(|p| {
-                    let input = p.prompt
+                    let input = p
+                        .prompt
                         .as_ref()
                         .or_else(|| p.input.as_ref())
                         .and_then(|s| s.parse::<f64>().ok());
-                    let output = p.completion
+                    let output = p
+                        .completion
                         .as_ref()
                         .or_else(|| p.output.as_ref())
                         .and_then(|s| s.parse::<f64>().ok());
@@ -223,20 +225,23 @@ impl Orchestrator {
                 let caps = model.capabilities.unwrap_or_default();
 
                 // Get input modalities from the array (preferred)
-                let input_modalities = model.architecture
+                let input_modalities = model
+                    .architecture
                     .as_ref()
                     .and_then(|a| a.input_modalities.clone())
                     .unwrap_or_default();
 
                 // Fallback: parse string modality if input_modalities is empty
                 let modalities = if input_modalities.is_empty() {
-                    model.architecture
+                    model
+                        .architecture
                         .as_ref()
                         .and_then(|a| a.modality.as_ref())
                         .map(|m| {
                             // Parse "text+image->text" or "text->text" format
                             if m.contains("->") {
-                                m.split("->").next()
+                                m.split("->")
+                                    .next()
                                     .unwrap_or("")
                                     .split("+")
                                     .map(|s| s.trim().to_string())
@@ -260,12 +265,16 @@ impl Orchestrator {
                     pricing,
                     supports_reasoning: supported_params.contains(&"reasoning".to_string()),
                     supports_images: modalities.contains(&"image".to_string()),
-                    supports_tools: supported_params.contains(&"tools".to_string()) || supported_params.contains(&"tool_choice".to_string()),
+                    supports_tools: supported_params.contains(&"tools".to_string())
+                        || supported_params.contains(&"tool_choice".to_string()),
                     supports_agents: caps.contains(&"agents".to_string()), // Only if explicitly marked as agent
-                    supports_function_calling: supported_params.contains(&"tool_choice".to_string()) || supported_params.contains(&"tools".to_string()),
+                    supports_function_calling: supported_params
+                        .contains(&"tool_choice".to_string())
+                        || supported_params.contains(&"tools".to_string()),
                     supports_vision: modalities.contains(&"image".to_string()),
                     supports_tool_use: supported_params.contains(&"tools".to_string()),
-                    supports_structured_outputs: supported_params.contains(&"structured_outputs".to_string()),
+                    supports_structured_outputs: supported_params
+                        .contains(&"structured_outputs".to_string()),
                     supports_streaming: supported_params.contains(&"streaming".to_string()) || true, // Default true for modern models
                 }
             })
@@ -449,7 +458,7 @@ struct OpenRouterModelEntry {
 #[derive(Debug, Deserialize)]
 struct OpenRouterArchitecture {
     #[serde(default)]
-    modality: Option<String>,  // Keep as string for now
+    modality: Option<String>, // Keep as string for now
     #[serde(default)]
     input_modalities: Option<Vec<String>>,
     #[serde(default)]

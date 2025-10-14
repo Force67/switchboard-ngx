@@ -18,14 +18,15 @@ use crate::{
     util::require_bearer,
     ApiError, AppState,
 };
+use utoipa::ToSchema;
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct ChatsResponse {
     pub chats: Vec<Chat>,
 }
 
-#[derive(Debug, Serialize)]
-pub struct ChatResponse {
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ChatDetailResponse {
     pub chat: Chat,
 }
 
@@ -77,6 +78,17 @@ async fn fetch_chat_messages(
     })
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/chats",
+    tag = "Chats",
+    security(("bearerAuth" = [])),
+    responses(
+        (status = 200, description = "List chats for the authenticated user", body = ChatsResponse),
+        (status = 401, description = "Authentication required", body = crate::error::ErrorResponse),
+        (status = 500, description = "Failed to fetch chats", body = crate::error::ErrorResponse)
+    )
+)]
 pub async fn list_chats(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -106,9 +118,7 @@ pub async fn list_chats(
     let mut chats_with_messages = Vec::new();
     for chat in chats {
         let _messages_json = fetch_chat_messages(chat.id, state.db_pool()).await?;
-        let chat_with_messages = Chat {
-            ..chat
-        };
+        let chat_with_messages = Chat { ..chat };
         chats_with_messages.push(chat_with_messages);
     }
 
@@ -117,11 +127,24 @@ pub async fn list_chats(
     }))
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/chats",
+    tag = "Chats",
+    security(("bearerAuth" = [])),
+    request_body = CreateChatRequest,
+    responses(
+        (status = 200, description = "Chat created", body = ChatDetailResponse),
+        (status = 400, description = "Invalid chat payload", body = crate::error::ErrorResponse),
+        (status = 401, description = "Authentication required", body = crate::error::ErrorResponse),
+        (status = 500, description = "Failed to create chat", body = crate::error::ErrorResponse)
+    )
+)]
 pub async fn create_chat(
     State(state): State<AppState>,
     headers: HeaderMap,
     Json(req): Json<CreateChatRequest>,
-) -> Result<Json<ChatResponse>, ApiError> {
+) -> Result<Json<ChatDetailResponse>, ApiError> {
     let token = require_bearer(&headers)?;
     let (user, _) = state.authenticate(&token).await?;
 
@@ -151,7 +174,7 @@ pub async fn create_chat(
         "#,
     )
     .bind(&public_id)
-    .bind(user.id)  // Set user_id for backwards compatibility
+    .bind(user.id) // Set user_id for backwards compatibility
     .bind(folder_db_id)
     .bind(&req.title)
     .bind(&req.chat_type)
@@ -235,14 +258,30 @@ pub async fn create_chat(
         updated_at: now.clone(),
     };
 
-    Ok(Json(ChatResponse { chat }))
+    Ok(Json(ChatDetailResponse { chat }))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/chats/{chat_id}",
+    tag = "Chats",
+    security(("bearerAuth" = [])),
+    params(
+        ("chat_id" = String, Path, description = "Chat public identifier")
+    ),
+    responses(
+        (status = 200, description = "Chat retrieved", body = ChatDetailResponse),
+        (status = 401, description = "Authentication required", body = crate::error::ErrorResponse),
+        (status = 403, description = "Forbidden", body = crate::error::ErrorResponse),
+        (status = 404, description = "Chat not found", body = crate::error::ErrorResponse),
+        (status = 500, description = "Failed to fetch chat", body = crate::error::ErrorResponse)
+    )
+)]
 pub async fn get_chat(
     State(state): State<AppState>,
     Path(chat_id): Path<String>,
     headers: HeaderMap,
-) -> Result<Json<ChatResponse>, ApiError> {
+) -> Result<Json<ChatDetailResponse>, ApiError> {
     let token = require_bearer(&headers)?;
     let (user, _) = state.authenticate(&token).await?;
 
@@ -264,21 +303,37 @@ pub async fn get_chat(
     })?
     .ok_or_else(|| ApiError::not_found("Chat not found"))?;
 
-    let chat_with_messages = Chat {
-        ..chat
-    };
+    let chat_with_messages = Chat { ..chat };
 
-    Ok(Json(ChatResponse {
+    Ok(Json(ChatDetailResponse {
         chat: chat_with_messages,
     }))
 }
 
+#[utoipa::path(
+    put,
+    path = "/api/chats/{chat_id}",
+    tag = "Chats",
+    security(("bearerAuth" = [])),
+    params(
+        ("chat_id" = String, Path, description = "Chat public identifier")
+    ),
+    request_body = UpdateChatRequest,
+    responses(
+        (status = 200, description = "Chat updated", body = ChatDetailResponse),
+        (status = 400, description = "Invalid update payload", body = crate::error::ErrorResponse),
+        (status = 401, description = "Authentication required", body = crate::error::ErrorResponse),
+        (status = 403, description = "Forbidden", body = crate::error::ErrorResponse),
+        (status = 404, description = "Chat not found", body = crate::error::ErrorResponse),
+        (status = 500, description = "Failed to update chat", body = crate::error::ErrorResponse)
+    )
+)]
 pub async fn update_chat(
     State(state): State<AppState>,
     Path(chat_id): Path<String>,
     headers: HeaderMap,
     Json(req): Json<UpdateChatRequest>,
-) -> Result<Json<ChatResponse>, ApiError> {
+) -> Result<Json<ChatDetailResponse>, ApiError> {
     let token = require_bearer(&headers)?;
     let (user, _) = state.authenticate(&token).await?;
 
@@ -359,9 +414,25 @@ pub async fn update_chat(
     })?
     .ok_or_else(|| ApiError::not_found("Chat not found"))?;
 
-    Ok(Json(ChatResponse { chat }))
+    Ok(Json(ChatDetailResponse { chat }))
 }
 
+#[utoipa::path(
+    delete,
+    path = "/api/chats/{chat_id}",
+    tag = "Chats",
+    security(("bearerAuth" = [])),
+    params(
+        ("chat_id" = String, Path, description = "Chat public identifier")
+    ),
+    responses(
+        (status = 200, description = "Chat deleted"),
+        (status = 401, description = "Authentication required", body = crate::error::ErrorResponse),
+        (status = 403, description = "Forbidden", body = crate::error::ErrorResponse),
+        (status = 404, description = "Chat not found", body = crate::error::ErrorResponse),
+        (status = 500, description = "Failed to delete chat", body = crate::error::ErrorResponse)
+    )
+)]
 pub async fn delete_chat(
     State(state): State<AppState>,
     Path(chat_id): Path<String>,
@@ -376,7 +447,7 @@ pub async fn delete_chat(
         SELECT cm.role FROM chats c
         JOIN chat_members cm ON c.id = cm.chat_id
         WHERE c.public_id = ? AND cm.user_id = ?
-        "#
+        "#,
     )
     .bind(&chat_id)
     .bind(user.id)
@@ -405,6 +476,23 @@ pub async fn delete_chat(
     Ok(())
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/chats/{chat_id}/invites",
+    tag = "Chat Invites",
+    security(("bearerAuth" = [])),
+    params(
+        ("chat_id" = String, Path, description = "Chat public identifier")
+    ),
+    request_body = CreateInviteRequest,
+    responses(
+        (status = 200, description = "Invite created", body = InviteResponse),
+        (status = 401, description = "Authentication required", body = crate::error::ErrorResponse),
+        (status = 403, description = "Insufficient permissions", body = crate::error::ErrorResponse),
+        (status = 404, description = "Chat not found", body = crate::error::ErrorResponse),
+        (status = 500, description = "Failed to create invite", body = crate::error::ErrorResponse)
+    )
+)]
 pub async fn create_invite(
     State(state): State<AppState>,
     Path(chat_id): Path<String>,
@@ -436,7 +524,9 @@ pub async fn create_invite(
 
     // Check if user has permission to invite (owner or admin)
     if user_role != "owner" && user_role != "admin" {
-        return Err(ApiError::forbidden("Only owners and admins can invite members"));
+        return Err(ApiError::forbidden(
+            "Only owners and admins can invite members",
+        ));
     }
 
     let now = chrono::Utc::now().to_rfc3339();
@@ -480,6 +570,22 @@ pub async fn create_invite(
     Ok(Json(InviteResponse { invite }))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/chats/{chat_id}/invites",
+    tag = "Chat Invites",
+    security(("bearerAuth" = [])),
+    params(
+        ("chat_id" = String, Path, description = "Chat public identifier")
+    ),
+    responses(
+        (status = 200, description = "List pending chat invites", body = InvitesResponse),
+        (status = 401, description = "Authentication required", body = crate::error::ErrorResponse),
+        (status = 403, description = "Forbidden", body = crate::error::ErrorResponse),
+        (status = 404, description = "Chat not found", body = crate::error::ErrorResponse),
+        (status = 500, description = "Failed to fetch invites", body = crate::error::ErrorResponse)
+    )
+)]
 pub async fn list_invites(
     State(state): State<AppState>,
     Path(chat_id): Path<String>,
@@ -526,6 +632,22 @@ pub async fn list_invites(
     Ok(Json(InvitesResponse { invites }))
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/invites/{invite_id}/accept",
+    tag = "Chat Invites",
+    security(("bearerAuth" = [])),
+    params(
+        ("invite_id" = i64, Path, description = "Invite identifier")
+    ),
+    responses(
+        (status = 200, description = "Invite accepted"),
+        (status = 401, description = "Authentication required", body = crate::error::ErrorResponse),
+        (status = 403, description = "Invite not valid for user", body = crate::error::ErrorResponse),
+        (status = 404, description = "Invite not found", body = crate::error::ErrorResponse),
+        (status = 500, description = "Failed to accept invite", body = crate::error::ErrorResponse)
+    )
+)]
 pub async fn accept_invite(
     State(state): State<AppState>,
     Path(invite_id): Path<i64>,
@@ -587,6 +709,22 @@ pub async fn accept_invite(
     Ok(())
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/invites/{invite_id}/reject",
+    tag = "Chat Invites",
+    security(("bearerAuth" = [])),
+    params(
+        ("invite_id" = i64, Path, description = "Invite identifier")
+    ),
+    responses(
+        (status = 200, description = "Invite rejected"),
+        (status = 401, description = "Authentication required", body = crate::error::ErrorResponse),
+        (status = 403, description = "Invite not valid for user", body = crate::error::ErrorResponse),
+        (status = 404, description = "Invite not found", body = crate::error::ErrorResponse),
+        (status = 500, description = "Failed to reject invite", body = crate::error::ErrorResponse)
+    )
+)]
 pub async fn reject_invite(
     State(state): State<AppState>,
     Path(invite_id): Path<i64>,
@@ -630,6 +768,22 @@ pub async fn reject_invite(
     Ok(())
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/chats/{chat_id}/members",
+    tag = "Chat Members",
+    security(("bearerAuth" = [])),
+    params(
+        ("chat_id" = String, Path, description = "Chat public identifier")
+    ),
+    responses(
+        (status = 200, description = "List chat members", body = MembersResponse),
+        (status = 401, description = "Authentication required", body = crate::error::ErrorResponse),
+        (status = 403, description = "Forbidden", body = crate::error::ErrorResponse),
+        (status = 404, description = "Chat not found", body = crate::error::ErrorResponse),
+        (status = 500, description = "Failed to fetch members", body = crate::error::ErrorResponse)
+    )
+)]
 pub async fn list_members(
     State(state): State<AppState>,
     Path(chat_id): Path<String>,
@@ -676,6 +830,25 @@ pub async fn list_members(
     Ok(Json(MembersResponse { members }))
 }
 
+#[utoipa::path(
+    put,
+    path = "/api/chats/{chat_id}/members/{member_user_id}",
+    tag = "Chat Members",
+    security(("bearerAuth" = [])),
+    params(
+        ("chat_id" = String, Path, description = "Chat public identifier"),
+        ("member_user_id" = i64, Path, description = "Target user identifier")
+    ),
+    request_body = UpdateMemberRoleRequest,
+    responses(
+        (status = 200, description = "Member role updated", body = MemberResponse),
+        (status = 400, description = "Invalid role update", body = crate::error::ErrorResponse),
+        (status = 401, description = "Authentication required", body = crate::error::ErrorResponse),
+        (status = 403, description = "Forbidden", body = crate::error::ErrorResponse),
+        (status = 404, description = "Member not found", body = crate::error::ErrorResponse),
+        (status = 500, description = "Failed to update member role", body = crate::error::ErrorResponse)
+    )
+)]
 pub async fn update_member_role(
     State(state): State<AppState>,
     Path((chat_id, member_user_id)): Path<(String, i64)>,
@@ -789,6 +962,23 @@ pub async fn update_member_role(
     Ok(Json(MemberResponse { member }))
 }
 
+#[utoipa::path(
+    delete,
+    path = "/api/chats/{chat_id}/members/{member_user_id}",
+    tag = "Chat Members",
+    security(("bearerAuth" = [])),
+    params(
+        ("chat_id" = String, Path, description = "Chat public identifier"),
+        ("member_user_id" = i64, Path, description = "Target user identifier")
+    ),
+    responses(
+        (status = 200, description = "Member removed"),
+        (status = 401, description = "Authentication required", body = crate::error::ErrorResponse),
+        (status = 403, description = "Forbidden", body = crate::error::ErrorResponse),
+        (status = 404, description = "Member not found", body = crate::error::ErrorResponse),
+        (status = 500, description = "Failed to remove member", body = crate::error::ErrorResponse)
+    )
+)]
 pub async fn remove_member(
     State(state): State<AppState>,
     Path((chat_id, member_user_id)): Path<(String, i64)>,

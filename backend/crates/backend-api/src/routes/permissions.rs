@@ -6,7 +6,7 @@ use axum::{
 
 use crate::{
     routes::models::{
-        Permission, CreatePermissionRequest, PermissionsResponse, PermissionResponse,
+        CreatePermissionRequest, Permission, PermissionResponse, PermissionsResponse,
     },
     util::require_bearer,
     ApiError, AppState,
@@ -41,7 +41,7 @@ impl PermissionsService {
                     ELSE 4
                 END
             LIMIT 1
-            "#
+            "#,
         )
         .bind(user_id)
         .bind(resource_type)
@@ -106,7 +106,7 @@ impl PermissionsService {
         resource_id: i64,
     ) -> Result<(), ApiError> {
         let result = sqlx::query(
-            "DELETE FROM permissions WHERE user_id = ? AND resource_type = ? AND resource_id = ?"
+            "DELETE FROM permissions WHERE user_id = ? AND resource_type = ? AND resource_id = ?",
         )
         .bind(user_id)
         .bind(resource_type)
@@ -133,78 +133,70 @@ impl PermissionsService {
         resource_id: Option<i64>,
     ) -> Result<Vec<Permission>, ApiError> {
         let permissions = match (resource_type, resource_id) {
-            (Some(rt), Some(rid)) => {
-                sqlx::query_as::<_, Permission>(
-                    r#"
+            (Some(rt), Some(rid)) => sqlx::query_as::<_, Permission>(
+                r#"
                     SELECT id, user_id, resource_type, resource_id, permission_level, granted_at
                     FROM permissions
                     WHERE user_id = ? AND resource_type = ? AND resource_id = ?
                     ORDER BY granted_at DESC
-                    "#
-                )
-                .bind(user_id)
-                .bind(rt)
-                .bind(rid)
-                .fetch_all(pool)
-                .await
-                .map_err(|e| {
-                    tracing::error!("Failed to fetch user permissions: {}", e);
-                    ApiError::internal_server_error("Failed to fetch user permissions")
-                })?
-            },
-            (Some(rt), None) => {
-                sqlx::query_as::<_, Permission>(
-                    r#"
+                    "#,
+            )
+            .bind(user_id)
+            .bind(rt)
+            .bind(rid)
+            .fetch_all(pool)
+            .await
+            .map_err(|e| {
+                tracing::error!("Failed to fetch user permissions: {}", e);
+                ApiError::internal_server_error("Failed to fetch user permissions")
+            })?,
+            (Some(rt), None) => sqlx::query_as::<_, Permission>(
+                r#"
                     SELECT id, user_id, resource_type, resource_id, permission_level, granted_at
                     FROM permissions
                     WHERE user_id = ? AND resource_type = ?
                     ORDER BY granted_at DESC
-                    "#
-                )
-                .bind(user_id)
-                .bind(rt)
-                .fetch_all(pool)
-                .await
-                .map_err(|e| {
-                    tracing::error!("Failed to fetch user permissions: {}", e);
-                    ApiError::internal_server_error("Failed to fetch user permissions")
-                })?
-            },
-            (None, Some(rid)) => {
-                sqlx::query_as::<_, Permission>(
-                    r#"
+                    "#,
+            )
+            .bind(user_id)
+            .bind(rt)
+            .fetch_all(pool)
+            .await
+            .map_err(|e| {
+                tracing::error!("Failed to fetch user permissions: {}", e);
+                ApiError::internal_server_error("Failed to fetch user permissions")
+            })?,
+            (None, Some(rid)) => sqlx::query_as::<_, Permission>(
+                r#"
                     SELECT id, user_id, resource_type, resource_id, permission_level, granted_at
                     FROM permissions
                     WHERE user_id = ? AND resource_id = ?
                     ORDER BY granted_at DESC
-                    "#
-                )
-                .bind(user_id)
-                .bind(rid)
-                .fetch_all(pool)
-                .await
-                .map_err(|e| {
-                    tracing::error!("Failed to fetch user permissions: {}", e);
-                    ApiError::internal_server_error("Failed to fetch user permissions")
-                })?
-            },
-            (None, None) => {
-                sqlx::query_as::<_, Permission>(
-                    r#"
+                    "#,
+            )
+            .bind(user_id)
+            .bind(rid)
+            .fetch_all(pool)
+            .await
+            .map_err(|e| {
+                tracing::error!("Failed to fetch user permissions: {}", e);
+                ApiError::internal_server_error("Failed to fetch user permissions")
+            })?,
+            (None, None) => sqlx::query_as::<_, Permission>(
+                r#"
                     SELECT id, user_id, resource_type, resource_id, permission_level, granted_at
                     FROM permissions
                     WHERE user_id = ?
                     ORDER BY granted_at DESC
-                    "#
-                )
-                .bind(user_id)
-                .fetch_all(pool)
-                .await
-                .map_err(|e| {
-                    tracing::error!("Failed to fetch user permissions: {}", e);
-                    ApiError::internal_server_error("Failed to fetch user permissions")
-                })?
-            },
+                    "#,
+            )
+            .bind(user_id)
+            .fetch_all(pool)
+            .await
+            .map_err(|e| {
+                tracing::error!("Failed to fetch user permissions: {}", e);
+                ApiError::internal_server_error("Failed to fetch user permissions")
+            })?,
         };
 
         Ok(permissions)
@@ -222,7 +214,7 @@ impl PermissionsService {
             FROM permissions
             WHERE resource_type = ? AND resource_id = ?
             ORDER BY granted_at DESC
-            "#
+            "#,
         )
         .bind(resource_type)
         .bind(resource_id)
@@ -244,7 +236,7 @@ impl PermissionsService {
         required_permission: &str,
     ) -> Result<bool, ApiError> {
         let role = sqlx::query_scalar::<_, String>(
-            "SELECT role FROM chat_members WHERE chat_id = ? AND user_id = ?"
+            "SELECT role FROM chat_members WHERE chat_id = ? AND user_id = ?",
         )
         .bind(chat_id)
         .bind(user_id)
@@ -257,7 +249,7 @@ impl PermissionsService {
 
         if let Some(role) = role {
             match required_permission {
-                "read" => Ok(true), // All chat members can read
+                "read" => Ok(true),  // All chat members can read
                 "write" => Ok(true), // All chat members can write messages
                 "admin" => Ok(matches!(role.as_str(), "admin" | "owner")),
                 "owner" => Ok(role == "owner"),
@@ -276,16 +268,15 @@ impl PermissionsService {
         folder_id: i64,
         required_permission: &str,
     ) -> Result<bool, ApiError> {
-        let folder_user_id = sqlx::query_scalar::<_, i64>(
-            "SELECT user_id FROM folders WHERE id = ?"
-        )
-        .bind(folder_id)
-        .fetch_optional(pool)
-        .await
-        .map_err(|e| {
-            tracing::error!("Failed to check folder ownership: {}", e);
-            ApiError::internal_server_error("Failed to check folder ownership")
-        })?;
+        let folder_user_id =
+            sqlx::query_scalar::<_, i64>("SELECT user_id FROM folders WHERE id = ?")
+                .bind(folder_id)
+                .fetch_optional(pool)
+                .await
+                .map_err(|e| {
+                    tracing::error!("Failed to check folder ownership: {}", e);
+                    ApiError::internal_server_error("Failed to check folder ownership")
+                })?;
 
         if let Some(owner_id) = folder_user_id {
             if owner_id == user_id {
@@ -301,6 +292,22 @@ impl PermissionsService {
 // API Handlers
 
 // Get user permissions
+#[utoipa::path(
+    get,
+    path = "/api/users/{user_id}/permissions",
+    tag = "Permissions",
+    security(("bearerAuth" = [])),
+    params(
+        ("user_id" = String, Path, description = "User public identifier")
+    ),
+    responses(
+        (status = 200, description = "Permissions for the specified user", body = PermissionsResponse),
+        (status = 401, description = "Authentication required", body = crate::error::ErrorResponse),
+        (status = 403, description = "Forbidden", body = crate::error::ErrorResponse),
+        (status = 404, description = "User not found", body = crate::error::ErrorResponse),
+        (status = 500, description = "Failed to fetch permissions", body = crate::error::ErrorResponse)
+    )
+)]
 pub async fn get_user_permissions(
     State(state): State<AppState>,
     Path(user_public_id): Path<String>,
@@ -310,16 +317,15 @@ pub async fn get_user_permissions(
     let (current_user, _) = state.authenticate(&token).await?;
 
     // Get the target user
-    let target_user_id: Option<i64> = sqlx::query_scalar(
-        "SELECT id FROM users WHERE public_id = ?"
-    )
-    .bind(&user_public_id)
-    .fetch_optional(state.db_pool())
-    .await
-    .map_err(|e| {
-        tracing::error!("Failed to get user ID: {}", e);
-        ApiError::internal_server_error("Failed to get user ID")
-    })?;
+    let target_user_id: Option<i64> =
+        sqlx::query_scalar("SELECT id FROM users WHERE public_id = ?")
+            .bind(&user_public_id)
+            .fetch_optional(state.db_pool())
+            .await
+            .map_err(|e| {
+                tracing::error!("Failed to get user ID: {}", e);
+                ApiError::internal_server_error("Failed to get user ID")
+            })?;
 
     let target_user_id = target_user_id.ok_or_else(|| ApiError::not_found("User not found"))?;
 
@@ -329,17 +335,32 @@ pub async fn get_user_permissions(
         return Err(ApiError::forbidden("Cannot view other users' permissions"));
     }
 
-    let permissions = PermissionsService::get_user_permissions(
-        state.db_pool(),
-        target_user_id,
-        None,
-        None,
-    ).await?;
+    let permissions =
+        PermissionsService::get_user_permissions(state.db_pool(), target_user_id, None, None)
+            .await?;
 
     Ok(Json(PermissionsResponse { permissions }))
 }
 
 // Get resource permissions
+#[utoipa::path(
+    get,
+    path = "/api/permissions/{resource_type}/{resource_id}",
+    tag = "Permissions",
+    security(("bearerAuth" = [])),
+    params(
+        ("resource_type" = String, Path, description = "Type of resource (chat, folder, workspace)"),
+        ("resource_id" = String, Path, description = "Resource public identifier")
+    ),
+    responses(
+        (status = 200, description = "Permissions on the resource", body = PermissionsResponse),
+        (status = 400, description = "Invalid resource type", body = crate::error::ErrorResponse),
+        (status = 401, description = "Authentication required", body = crate::error::ErrorResponse),
+        (status = 403, description = "Admin permission required", body = crate::error::ErrorResponse),
+        (status = 404, description = "Resource not found", body = crate::error::ErrorResponse),
+        (status = 500, description = "Failed to fetch permissions", body = crate::error::ErrorResponse)
+    )
+)]
 pub async fn get_resource_permissions(
     State(state): State<AppState>,
     Path((resource_type, resource_public_id)): Path<(String, String)>,
@@ -350,26 +371,22 @@ pub async fn get_resource_permissions(
 
     // Resolve resource ID from public ID
     let resource_id = match resource_type.as_str() {
-        "chat" => {
-            sqlx::query_scalar::<_, i64>("SELECT id FROM chats WHERE public_id = ?")
-                .bind(&resource_public_id)
-                .fetch_optional(state.db_pool())
-                .await
-                .map_err(|e| {
-                    tracing::error!("Failed to resolve chat ID: {}", e);
-                    ApiError::internal_server_error("Failed to resolve chat ID")
-                })?
-        },
-        "folder" => {
-            sqlx::query_scalar::<_, i64>("SELECT id FROM folders WHERE public_id = ?")
-                .bind(&resource_public_id)
-                .fetch_optional(state.db_pool())
-                .await
-                .map_err(|e| {
-                    tracing::error!("Failed to resolve folder ID: {}", e);
-                    ApiError::internal_server_error("Failed to resolve folder ID")
-                })?
-        },
+        "chat" => sqlx::query_scalar::<_, i64>("SELECT id FROM chats WHERE public_id = ?")
+            .bind(&resource_public_id)
+            .fetch_optional(state.db_pool())
+            .await
+            .map_err(|e| {
+                tracing::error!("Failed to resolve chat ID: {}", e);
+                ApiError::internal_server_error("Failed to resolve chat ID")
+            })?,
+        "folder" => sqlx::query_scalar::<_, i64>("SELECT id FROM folders WHERE public_id = ?")
+            .bind(&resource_public_id)
+            .fetch_optional(state.db_pool())
+            .await
+            .map_err(|e| {
+                tracing::error!("Failed to resolve folder ID: {}", e);
+                ApiError::internal_server_error("Failed to resolve folder ID")
+            })?,
         _ => return Err(ApiError::bad_request("Invalid resource type")),
     };
 
@@ -382,20 +399,39 @@ pub async fn get_resource_permissions(
         &resource_type,
         resource_id,
         "admin",
-    ).await? {
+    )
+    .await?
+    {
         return Err(ApiError::forbidden("Admin permission required"));
     }
 
-    let permissions = PermissionsService::get_resource_permissions(
-        state.db_pool(),
-        &resource_type,
-        resource_id,
-    ).await?;
+    let permissions =
+        PermissionsService::get_resource_permissions(state.db_pool(), &resource_type, resource_id)
+            .await?;
 
     Ok(Json(PermissionsResponse { permissions }))
 }
 
 // Grant permission to user
+#[utoipa::path(
+    post,
+    path = "/api/permissions/{resource_type}/{resource_id}",
+    tag = "Permissions",
+    security(("bearerAuth" = [])),
+    params(
+        ("resource_type" = String, Path, description = "Type of resource (chat, folder, workspace)"),
+        ("resource_id" = String, Path, description = "Resource public identifier")
+    ),
+    request_body = CreatePermissionRequest,
+    responses(
+        (status = 200, description = "Permission granted", body = PermissionResponse),
+        (status = 400, description = "Invalid request payload", body = crate::error::ErrorResponse),
+        (status = 401, description = "Authentication required", body = crate::error::ErrorResponse),
+        (status = 403, description = "Admin permission required", body = crate::error::ErrorResponse),
+        (status = 404, description = "Resource or user not found", body = crate::error::ErrorResponse),
+        (status = 500, description = "Failed to grant permission", body = crate::error::ErrorResponse)
+    )
+)]
 pub async fn grant_permission(
     State(state): State<AppState>,
     Path((resource_type, resource_public_id)): Path<(String, String)>,
@@ -407,26 +443,22 @@ pub async fn grant_permission(
 
     // Resolve resource ID
     let resource_id = match resource_type.as_str() {
-        "chat" => {
-            sqlx::query_scalar::<_, i64>("SELECT id FROM chats WHERE public_id = ?")
-                .bind(&resource_public_id)
-                .fetch_optional(state.db_pool())
-                .await
-                .map_err(|e| {
-                    tracing::error!("Failed to resolve chat ID: {}", e);
-                    ApiError::internal_server_error("Failed to resolve chat ID")
-                })?
-        },
-        "folder" => {
-            sqlx::query_scalar::<_, i64>("SELECT id FROM folders WHERE public_id = ?")
-                .bind(&resource_public_id)
-                .fetch_optional(state.db_pool())
-                .await
-                .map_err(|e| {
-                    tracing::error!("Failed to resolve folder ID: {}", e);
-                    ApiError::internal_server_error("Failed to resolve folder ID")
-                })?
-        },
+        "chat" => sqlx::query_scalar::<_, i64>("SELECT id FROM chats WHERE public_id = ?")
+            .bind(&resource_public_id)
+            .fetch_optional(state.db_pool())
+            .await
+            .map_err(|e| {
+                tracing::error!("Failed to resolve chat ID: {}", e);
+                ApiError::internal_server_error("Failed to resolve chat ID")
+            })?,
+        "folder" => sqlx::query_scalar::<_, i64>("SELECT id FROM folders WHERE public_id = ?")
+            .bind(&resource_public_id)
+            .fetch_optional(state.db_pool())
+            .await
+            .map_err(|e| {
+                tracing::error!("Failed to resolve folder ID: {}", e);
+                ApiError::internal_server_error("Failed to resolve folder ID")
+            })?,
         _ => return Err(ApiError::bad_request("Invalid resource type")),
     };
 
@@ -439,23 +471,25 @@ pub async fn grant_permission(
         &resource_type,
         resource_id,
         "admin",
-    ).await? {
+    )
+    .await?
+    {
         return Err(ApiError::forbidden("Admin permission required"));
     }
 
     // Resolve target user ID
-    let target_user_id: Option<i64> = sqlx::query_scalar(
-        "SELECT id FROM users WHERE public_id = ?"
-    )
-    .bind(&req.user_id)
-    .fetch_optional(state.db_pool())
-    .await
-    .map_err(|e| {
-        tracing::error!("Failed to resolve target user ID: {}", e);
-        ApiError::internal_server_error("Failed to resolve target user ID")
-    })?;
+    let target_user_id: Option<i64> =
+        sqlx::query_scalar("SELECT id FROM users WHERE public_id = ?")
+            .bind(&req.user_id)
+            .fetch_optional(state.db_pool())
+            .await
+            .map_err(|e| {
+                tracing::error!("Failed to resolve target user ID: {}", e);
+                ApiError::internal_server_error("Failed to resolve target user ID")
+            })?;
 
-    let target_user_id = target_user_id.ok_or_else(|| ApiError::not_found("Target user not found"))?;
+    let target_user_id =
+        target_user_id.ok_or_else(|| ApiError::not_found("Target user not found"))?;
 
     // Grant the permission
     PermissionsService::grant_permission(
@@ -465,7 +499,8 @@ pub async fn grant_permission(
         resource_id,
         &req.permission_level,
         user.id,
-    ).await?;
+    )
+    .await?;
 
     // Fetch the created/updated permission
     let permission = sqlx::query_as::<_, Permission>(
@@ -473,7 +508,7 @@ pub async fn grant_permission(
         SELECT id, user_id, resource_type, resource_id, permission_level, granted_at
         FROM permissions
         WHERE user_id = ? AND resource_type = ? AND resource_id = ?
-        "#
+        "#,
     )
     .bind(target_user_id)
     .bind(&req.resource_type)
@@ -490,6 +525,25 @@ pub async fn grant_permission(
 }
 
 // Revoke permission from user
+#[utoipa::path(
+    delete,
+    path = "/api/permissions/{resource_type}/{resource_id}/{user_id}",
+    tag = "Permissions",
+    security(("bearerAuth" = [])),
+    params(
+        ("resource_type" = String, Path, description = "Type of resource (chat, folder, workspace)"),
+        ("resource_id" = String, Path, description = "Resource public identifier"),
+        ("user_id" = String, Path, description = "User public identifier")
+    ),
+    responses(
+        (status = 200, description = "Permission revoked"),
+        (status = 400, description = "Invalid resource type", body = crate::error::ErrorResponse),
+        (status = 401, description = "Authentication required", body = crate::error::ErrorResponse),
+        (status = 403, description = "Admin permission required", body = crate::error::ErrorResponse),
+        (status = 404, description = "Resource or user not found", body = crate::error::ErrorResponse),
+        (status = 500, description = "Failed to revoke permission", body = crate::error::ErrorResponse)
+    )
+)]
 pub async fn revoke_permission(
     State(state): State<AppState>,
     Path((resource_type, resource_public_id, user_public_id)): Path<(String, String, String)>,
@@ -500,26 +554,22 @@ pub async fn revoke_permission(
 
     // Resolve resource ID
     let resource_id = match resource_type.as_str() {
-        "chat" => {
-            sqlx::query_scalar::<_, i64>("SELECT id FROM chats WHERE public_id = ?")
-                .bind(&resource_public_id)
-                .fetch_optional(state.db_pool())
-                .await
-                .map_err(|e| {
-                    tracing::error!("Failed to resolve chat ID: {}", e);
-                    ApiError::internal_server_error("Failed to resolve chat ID")
-                })?
-        },
-        "folder" => {
-            sqlx::query_scalar::<_, i64>("SELECT id FROM folders WHERE public_id = ?")
-                .bind(&resource_public_id)
-                .fetch_optional(state.db_pool())
-                .await
-                .map_err(|e| {
-                    tracing::error!("Failed to resolve folder ID: {}", e);
-                    ApiError::internal_server_error("Failed to resolve folder ID")
-                })?
-        },
+        "chat" => sqlx::query_scalar::<_, i64>("SELECT id FROM chats WHERE public_id = ?")
+            .bind(&resource_public_id)
+            .fetch_optional(state.db_pool())
+            .await
+            .map_err(|e| {
+                tracing::error!("Failed to resolve chat ID: {}", e);
+                ApiError::internal_server_error("Failed to resolve chat ID")
+            })?,
+        "folder" => sqlx::query_scalar::<_, i64>("SELECT id FROM folders WHERE public_id = ?")
+            .bind(&resource_public_id)
+            .fetch_optional(state.db_pool())
+            .await
+            .map_err(|e| {
+                tracing::error!("Failed to resolve folder ID: {}", e);
+                ApiError::internal_server_error("Failed to resolve folder ID")
+            })?,
         _ => return Err(ApiError::bad_request("Invalid resource type")),
     };
 
@@ -532,23 +582,25 @@ pub async fn revoke_permission(
         &resource_type,
         resource_id,
         "admin",
-    ).await? {
+    )
+    .await?
+    {
         return Err(ApiError::forbidden("Admin permission required"));
     }
 
     // Resolve target user ID
-    let target_user_id: Option<i64> = sqlx::query_scalar(
-        "SELECT id FROM users WHERE public_id = ?"
-    )
-    .bind(&user_public_id)
-    .fetch_optional(state.db_pool())
-    .await
-    .map_err(|e| {
-        tracing::error!("Failed to resolve target user ID: {}", e);
-        ApiError::internal_server_error("Failed to resolve target user ID")
-    })?;
+    let target_user_id: Option<i64> =
+        sqlx::query_scalar("SELECT id FROM users WHERE public_id = ?")
+            .bind(&user_public_id)
+            .fetch_optional(state.db_pool())
+            .await
+            .map_err(|e| {
+                tracing::error!("Failed to resolve target user ID: {}", e);
+                ApiError::internal_server_error("Failed to resolve target user ID")
+            })?;
 
-    let target_user_id = target_user_id.ok_or_else(|| ApiError::not_found("Target user not found"))?;
+    let target_user_id =
+        target_user_id.ok_or_else(|| ApiError::not_found("Target user not found"))?;
 
     // Revoke the permission
     PermissionsService::revoke_permission(
@@ -556,7 +608,8 @@ pub async fn revoke_permission(
         target_user_id,
         &resource_type,
         resource_id,
-    ).await?;
+    )
+    .await?;
 
     Ok(())
 }

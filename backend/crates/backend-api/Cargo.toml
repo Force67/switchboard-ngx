@@ -26,3 +26,5 @@ switchboard-orchestrator = { path = "../orchestrator" }
 tokio-tungstenite = { workspace = true }
 redis = { workspace = true }
 futures-util = { workspace = true }
+utoipa = { version = "4.2", features = ["axum_extras", "chrono", "uuid"] }
+utoipa-swagger-ui = { version = "7.0", features = ["axum"] }

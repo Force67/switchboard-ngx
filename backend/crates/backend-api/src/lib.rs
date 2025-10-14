@@ -1,9 +1,11 @@
+mod docs;
 mod error;
 mod state;
 mod util;
 
 pub mod routes;
 
+pub use docs::ApiDoc;
 pub use error::ApiError;
 pub use state::{AppState, OAuthStateStore};
 
@@ -13,8 +15,12 @@ use axum::{
     Router,
 };
 use tower_http::cors::{Any, CorsLayer};
+use utoipa::OpenApi;
+use utoipa_swagger_ui::SwaggerUi;
 
 pub fn build_router(state: AppState) -> Router {
+    let docs = SwaggerUi::new("/docs").url("/docs/openapi.json", docs::ApiDoc::openapi());
+
     Router::new()
         .route("/health", get(routes::health::health_check))
         .route("/api/auth/github/login", get(routes::auth::github_login))
@@ -147,6 +153,7 @@ pub fn build_router(state: AppState) -> Router {
         )
         // WebSocket route
         .route("/ws", get(routes::websocket::websocket_handler))
+        .merge(docs)
         .with_state(state)
         .layer(cors_layer())
 }

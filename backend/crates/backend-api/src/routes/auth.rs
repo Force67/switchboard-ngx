@@ -4,27 +4,28 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use switchboard_auth::{AuthSession, User};
+use utoipa::{IntoParams, ToSchema};
 
 use crate::{ApiError, AppState};
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct GithubLoginResponse {
     pub authorize_url: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, IntoParams)]
 pub struct GithubLoginQuery {
     pub redirect_uri: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct GithubCallbackRequest {
     pub code: String,
     pub state: String,
     pub redirect_uri: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct SessionResponse {
     pub token: String,
     pub user: UserResponse,
@@ -41,7 +42,7 @@ impl SessionResponse {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct UserResponse {
     pub id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -60,6 +61,16 @@ impl From<User> for UserResponse {
     }
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/auth/github/login",
+    tag = "Auth",
+    params(GithubLoginQuery),
+    responses(
+        (status = 200, description = "GitHub OAuth authorization URL", body = GithubLoginResponse),
+        (status = 503, description = "GitHub OAuth not configured", body = crate::error::ErrorResponse)
+    )
+)]
 pub async fn github_login(
     State(state): State<AppState>,
     Query(params): Query<GithubLoginQuery>,
@@ -86,6 +97,18 @@ pub async fn github_login(
     Ok(Json(GithubLoginResponse { authorize_url }))
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/auth/github/callback",
+    tag = "Auth",
+    request_body = GithubCallbackRequest,
+    responses(
+        (status = 200, description = "GitHub OAuth callback succeeded", body = SessionResponse),
+        (status = 400, description = "Invalid OAuth payload", body = crate::error::ErrorResponse),
+        (status = 401, description = "Authentication failed", body = crate::error::ErrorResponse),
+        (status = 503, description = "GitHub OAuth not configured", body = crate::error::ErrorResponse)
+    )
+)]
 pub async fn github_callback(
     State(state): State<AppState>,
     Json(payload): Json<GithubCallbackRequest>,
@@ -110,6 +133,15 @@ pub async fn github_callback(
 
 // Development endpoint to create a test token
 #[cfg(debug_assertions)]
+#[utoipa::path(
+    get,
+    path = "/api/auth/dev/token",
+    tag = "Auth",
+    responses(
+        (status = 200, description = "Development session issued", body = SessionResponse),
+        (status = 500, description = "Failed to create development session", body = crate::error::ErrorResponse)
+    )
+)]
 pub async fn dev_token(State(state): State<AppState>) -> Result<Json<SessionResponse>, ApiError> {
     // Create a development user in the database first
     sqlx::query(

@@ -2,15 +2,53 @@ use axum::{extract::State, Json};
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use switchboard_orchestrator::OpenRouterModelSummary;
+use utoipa::ToSchema;
 
 use crate::{ApiError, AppState};
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct ModelsResponse {
+    #[schema(value_type = Vec<ModelSummary>)]
     pub models: Vec<OpenRouterModelSummary>,
 }
 
-#[derive(Debug, Serialize, FromRow)]
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ModelSummary {
+    pub id: String,
+    pub label: String,
+    #[schema(nullable)]
+    pub description: Option<String>,
+    #[schema(nullable)]
+    pub pricing: Option<ModelPricing>,
+    #[schema(default)]
+    pub supports_reasoning: bool,
+    #[schema(default)]
+    pub supports_images: bool,
+    #[schema(default)]
+    pub supports_tools: bool,
+    #[schema(default)]
+    pub supports_agents: bool,
+    #[schema(default)]
+    pub supports_function_calling: bool,
+    #[schema(default)]
+    pub supports_vision: bool,
+    #[schema(default)]
+    pub supports_tool_use: bool,
+    #[schema(default)]
+    pub supports_structured_outputs: bool,
+    #[schema(default)]
+    pub supports_streaming: bool,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ModelPricing {
+    #[schema(nullable)]
+    pub input: Option<f64>,
+    #[schema(nullable)]
+    pub output: Option<f64>,
+}
+
+#[derive(Debug, Serialize, FromRow, ToSchema)]
 pub struct Folder {
     pub id: i64,
     pub public_id: String,
@@ -23,7 +61,7 @@ pub struct Folder {
     pub updated_at: String,
 }
 
-#[derive(Debug, Serialize, FromRow)]
+#[derive(Debug, Serialize, FromRow, ToSchema)]
 pub struct Chat {
     pub id: i64,
     pub public_id: String,
@@ -35,7 +73,7 @@ pub struct Chat {
     pub updated_at: String,
 }
 
-#[derive(Debug, Serialize, FromRow)]
+#[derive(Debug, Serialize, FromRow, ToSchema)]
 pub struct User {
     pub id: i64,
     pub public_id: String,
@@ -45,7 +83,7 @@ pub struct User {
     pub updated_at: String,
 }
 
-#[derive(Debug, Serialize, FromRow)]
+#[derive(Debug, Serialize, FromRow, ToSchema)]
 pub struct Message {
     pub id: i64,
     pub public_id: String,
@@ -61,7 +99,7 @@ pub struct Message {
     pub updated_at: String,
 }
 
-#[derive(Debug, Serialize, FromRow)]
+#[derive(Debug, Serialize, FromRow, ToSchema)]
 pub struct MessageEdit {
     pub id: i64,
     pub message_id: i64,
@@ -71,7 +109,7 @@ pub struct MessageEdit {
     pub edited_at: String,
 }
 
-#[derive(Debug, Serialize, FromRow)]
+#[derive(Debug, Serialize, FromRow, ToSchema)]
 pub struct MessageDeletion {
     pub id: i64,
     pub message_id: i64,
@@ -80,7 +118,7 @@ pub struct MessageDeletion {
     pub deleted_at: String,
 }
 
-#[derive(Debug, Serialize, FromRow)]
+#[derive(Debug, Serialize, FromRow, ToSchema)]
 pub struct MessageAttachment {
     pub id: i64,
     pub message_id: i64,
@@ -91,7 +129,7 @@ pub struct MessageAttachment {
     pub created_at: String,
 }
 
-#[derive(Debug, Serialize, FromRow)]
+#[derive(Debug, Serialize, FromRow, ToSchema)]
 pub struct Notification {
     pub id: i64,
     pub user_id: i64,
@@ -102,7 +140,7 @@ pub struct Notification {
     pub created_at: String,
 }
 
-#[derive(Debug, Serialize, FromRow)]
+#[derive(Debug, Serialize, FromRow, ToSchema)]
 pub struct Permission {
     pub id: i64,
     pub user_id: i64,
@@ -112,21 +150,21 @@ pub struct Permission {
     pub granted_at: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateFolderRequest {
     pub name: String,
     pub color: Option<String>,
     pub parent_id: Option<String>, // public_id
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct UpdateFolderRequest {
     pub name: Option<String>,
     pub color: Option<String>,
     pub collapsed: Option<bool>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateChatRequest {
     pub title: String,
     #[serde(default)]
@@ -140,14 +178,14 @@ fn default_chat_type() -> String {
     "direct".to_string()
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct UpdateChatRequest {
     pub title: Option<String>,
     pub messages: Option<Vec<ChatMessage>>,
     pub folder_id: Option<String>, // public_id
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct ChatMessage {
     pub role: String,
     pub content: String,
@@ -156,14 +194,14 @@ pub struct ChatMessage {
     pub reasoning: Option<Vec<String>>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct TokenUsage {
     pub prompt_tokens: u32,
     pub completion_tokens: u32,
     pub total_tokens: u32,
 }
 
-#[derive(Debug, Serialize, FromRow)]
+#[derive(Debug, Serialize, FromRow, ToSchema)]
 pub struct ChatInvite {
     pub id: i64,
     pub chat_id: i64,
@@ -174,22 +212,22 @@ pub struct ChatInvite {
     pub updated_at: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateInviteRequest {
     pub email: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct InvitesResponse {
     pub invites: Vec<ChatInvite>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct InviteResponse {
     pub invite: ChatInvite,
 }
 
-#[derive(Debug, Serialize, FromRow)]
+#[derive(Debug, Serialize, FromRow, ToSchema)]
 pub struct ChatMember {
     pub id: i64,
     pub chat_id: i64,
@@ -198,38 +236,38 @@ pub struct ChatMember {
     pub joined_at: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct UpdateMemberRoleRequest {
     pub role: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct MembersResponse {
     pub members: Vec<ChatMember>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct MemberResponse {
     pub member: ChatMember,
 }
 
 // New DTOs for message features
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateMessageRequest {
     pub content: String,
     pub role: String,
     pub model: Option<String>,
     pub message_type: Option<String>,
-    pub thread_id: Option<String>, // public_id
+    pub thread_id: Option<String>,   // public_id
     pub reply_to_id: Option<String>, // public_id
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct UpdateMessageRequest {
     pub content: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateAttachmentRequest {
     pub file_name: String,
     pub file_type: String,
@@ -238,7 +276,7 @@ pub struct CreateAttachmentRequest {
 }
 
 // Notification DTOs
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateNotificationRequest {
     pub user_id: String, // public_id
     pub r#type: String,
@@ -246,23 +284,23 @@ pub struct CreateNotificationRequest {
     pub body: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct MarkNotificationReadRequest {
     pub read: bool,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct NotificationsResponse {
     pub notifications: Vec<Notification>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct NotificationResponse {
     pub notification: Notification,
 }
 
 // Permission DTOs
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct CreatePermissionRequest {
     pub user_id: String, // public_id
     pub resource_type: String,
@@ -270,44 +308,54 @@ pub struct CreatePermissionRequest {
     pub permission_level: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct PermissionsResponse {
     pub permissions: Vec<Permission>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct PermissionResponse {
     pub permission: Permission,
 }
 
 // Message edit history
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct MessageEditsResponse {
     pub edits: Vec<MessageEdit>,
 }
 
 // Attachment response structs
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct AttachmentResponse {
     pub attachment: MessageAttachment,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct AttachmentsResponse {
     pub attachments: Vec<MessageAttachment>,
 }
 
 // Message response structs
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct MessageResponse {
     pub message: Message,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct MessagesResponse {
     pub messages: Vec<Message>,
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/models",
+    tag = "Models",
+    responses(
+        (status = 200, description = "List available language models", body = ModelsResponse),
+        (status = 503, description = "Model provider unavailable", body = crate::error::ErrorResponse),
+        (status = 500, description = "Failed to list models", body = crate::error::ErrorResponse)
+    )
+)]
 pub async fn list_models(State(state): State<AppState>) -> Result<Json<ModelsResponse>, ApiError> {
     let models = state.orchestrator().list_openrouter_models().await?;
     Ok(Json(ModelsResponse { models }))

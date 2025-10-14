@@ -6,13 +6,30 @@ use axum::{
 
 use crate::{
     routes::models::{
-        MessageAttachment, CreateAttachmentRequest, AttachmentResponse, AttachmentsResponse,
+        AttachmentResponse, AttachmentsResponse, CreateAttachmentRequest, MessageAttachment,
     },
     util::require_bearer,
     ApiError, AppState,
 };
 
 // Get attachments for a message
+#[utoipa::path(
+    get,
+    path = "/api/chats/{chat_id}/messages/{message_id}/attachments",
+    tag = "Attachments",
+    security(("bearerAuth" = [])),
+    params(
+        ("chat_id" = String, Path, description = "Chat public identifier"),
+        ("message_id" = String, Path, description = "Message public identifier")
+    ),
+    responses(
+        (status = 200, description = "List message attachments", body = AttachmentsResponse),
+        (status = 401, description = "Authentication required", body = crate::error::ErrorResponse),
+        (status = 403, description = "Forbidden", body = crate::error::ErrorResponse),
+        (status = 404, description = "Message not found", body = crate::error::ErrorResponse),
+        (status = 500, description = "Failed to fetch attachments", body = crate::error::ErrorResponse)
+    )
+)]
 pub async fn get_message_attachments(
     State(state): State<AppState>,
     Path((chat_id, message_public_id)): Path<(String, String)>,
@@ -27,7 +44,7 @@ pub async fn get_message_attachments(
         SELECT c.id FROM chats c
         JOIN chat_members cm ON c.id = cm.chat_id
         WHERE c.public_id = ? AND cm.user_id = ?
-        "#
+        "#,
     )
     .bind(&chat_id)
     .bind(user.id)
@@ -41,17 +58,16 @@ pub async fn get_message_attachments(
     let chat_db_id = chat_db_id.ok_or_else(|| ApiError::forbidden("Not a member of this chat"))?;
 
     // Get the message ID
-    let message_db_id: Option<i64> = sqlx::query_scalar(
-        "SELECT id FROM messages WHERE public_id = ? AND chat_id = ?"
-    )
-    .bind(&message_public_id)
-    .bind(chat_db_id)
-    .fetch_optional(state.db_pool())
-    .await
-    .map_err(|e| {
-        tracing::error!("Failed to get message ID: {}", e);
-        ApiError::internal_server_error("Failed to get message ID")
-    })?;
+    let message_db_id: Option<i64> =
+        sqlx::query_scalar("SELECT id FROM messages WHERE public_id = ? AND chat_id = ?")
+            .bind(&message_public_id)
+            .bind(chat_db_id)
+            .fetch_optional(state.db_pool())
+            .await
+            .map_err(|e| {
+                tracing::error!("Failed to get message ID: {}", e);
+                ApiError::internal_server_error("Failed to get message ID")
+            })?;
 
     let message_db_id = message_db_id.ok_or_else(|| ApiError::not_found("Message not found"))?;
 
@@ -62,7 +78,7 @@ pub async fn get_message_attachments(
         FROM message_attachments
         WHERE message_id = ?
         ORDER BY created_at ASC
-        "#
+        "#,
     )
     .bind(message_db_id)
     .fetch_all(state.db_pool())
@@ -76,6 +92,25 @@ pub async fn get_message_attachments(
 }
 
 // Create attachment for a message
+#[utoipa::path(
+    post,
+    path = "/api/chats/{chat_id}/messages/{message_id}/attachments",
+    tag = "Attachments",
+    security(("bearerAuth" = [])),
+    params(
+        ("chat_id" = String, Path, description = "Chat public identifier"),
+        ("message_id" = String, Path, description = "Message public identifier")
+    ),
+    request_body = CreateAttachmentRequest,
+    responses(
+        (status = 200, description = "Attachment created", body = AttachmentResponse),
+        (status = 400, description = "Invalid attachment payload", body = crate::error::ErrorResponse),
+        (status = 401, description = "Authentication required", body = crate::error::ErrorResponse),
+        (status = 403, description = "Forbidden", body = crate::error::ErrorResponse),
+        (status = 404, description = "Message not found", body = crate::error::ErrorResponse),
+        (status = 500, description = "Failed to create attachment", body = crate::error::ErrorResponse)
+    )
+)]
 pub async fn create_message_attachment(
     State(state): State<AppState>,
     Path((chat_id, message_public_id)): Path<(String, String)>,
@@ -91,7 +126,7 @@ pub async fn create_message_attachment(
         SELECT c.id FROM chats c
         JOIN chat_members cm ON c.id = cm.chat_id
         WHERE c.public_id = ? AND cm.user_id = ?
-        "#
+        "#,
     )
     .bind(&chat_id)
     .bind(user.id)
@@ -105,17 +140,16 @@ pub async fn create_message_attachment(
     let chat_db_id = chat_db_id.ok_or_else(|| ApiError::forbidden("Not a member of this chat"))?;
 
     // Get the message ID
-    let message_db_id: Option<i64> = sqlx::query_scalar(
-        "SELECT id FROM messages WHERE public_id = ? AND chat_id = ?"
-    )
-    .bind(&message_public_id)
-    .bind(chat_db_id)
-    .fetch_optional(state.db_pool())
-    .await
-    .map_err(|e| {
-        tracing::error!("Failed to get message ID: {}", e);
-        ApiError::internal_server_error("Failed to get message ID")
-    })?;
+    let message_db_id: Option<i64> =
+        sqlx::query_scalar("SELECT id FROM messages WHERE public_id = ? AND chat_id = ?")
+            .bind(&message_public_id)
+            .bind(chat_db_id)
+            .fetch_optional(state.db_pool())
+            .await
+            .map_err(|e| {
+                tracing::error!("Failed to get message ID: {}", e);
+                ApiError::internal_server_error("Failed to get message ID")
+            })?;
 
     let message_db_id = message_db_id.ok_or_else(|| ApiError::not_found("Message not found"))?;
 
@@ -148,7 +182,7 @@ pub async fn create_message_attachment(
         SELECT id, message_id, file_name, file_type, file_url, file_size_bytes, created_at
         FROM message_attachments
         WHERE id = ?
-        "#
+        "#,
     )
     .bind(attachment_db_id)
     .fetch_optional(state.db_pool())
@@ -163,6 +197,24 @@ pub async fn create_message_attachment(
 }
 
 // Delete an attachment
+#[utoipa::path(
+    delete,
+    path = "/api/chats/{chat_id}/messages/{message_id}/attachments/{attachment_id}",
+    tag = "Attachments",
+    security(("bearerAuth" = [])),
+    params(
+        ("chat_id" = String, Path, description = "Chat public identifier"),
+        ("message_id" = String, Path, description = "Message public identifier"),
+        ("attachment_id" = i64, Path, description = "Attachment identifier")
+    ),
+    responses(
+        (status = 200, description = "Attachment deleted"),
+        (status = 401, description = "Authentication required", body = crate::error::ErrorResponse),
+        (status = 403, description = "Forbidden", body = crate::error::ErrorResponse),
+        (status = 404, description = "Attachment not found", body = crate::error::ErrorResponse),
+        (status = 500, description = "Failed to delete attachment", body = crate::error::ErrorResponse)
+    )
+)]
 pub async fn delete_attachment(
     State(state): State<AppState>,
     Path((chat_id, message_public_id, attachment_id)): Path<(String, String, i64)>,
@@ -177,7 +229,7 @@ pub async fn delete_attachment(
         SELECT c.id FROM chats c
         JOIN chat_members cm ON c.id = cm.chat_id
         WHERE c.public_id = ? AND cm.user_id = ?
-        "#
+        "#,
     )
     .bind(&chat_id)
     .bind(user.id)
@@ -197,7 +249,7 @@ pub async fn delete_attachment(
         FROM message_attachments ma
         JOIN messages m ON ma.id = ? AND ma.message_id = m.id
         WHERE m.public_id = ? AND m.chat_id = ?
-        "#
+        "#,
     )
     .bind(attachment_id)
     .bind(&message_public_id)
@@ -214,24 +266,23 @@ pub async fn delete_attachment(
     // Check if user can delete attachments from this message
     let can_delete = {
         // Check if user owns the message
-        let message_user_id: Option<i64> = sqlx::query_scalar(
-            "SELECT user_id FROM messages WHERE public_id = ? AND chat_id = ?"
-        )
-        .bind(&message_public_id)
-        .bind(chat_db_id)
-        .fetch_optional(state.db_pool())
-        .await
-        .map_err(|e| {
-            tracing::error!("Failed to check message ownership: {}", e);
-            ApiError::internal_server_error("Failed to check message ownership")
-        })?;
+        let message_user_id: Option<i64> =
+            sqlx::query_scalar("SELECT user_id FROM messages WHERE public_id = ? AND chat_id = ?")
+                .bind(&message_public_id)
+                .bind(chat_db_id)
+                .fetch_optional(state.db_pool())
+                .await
+                .map_err(|e| {
+                    tracing::error!("Failed to check message ownership: {}", e);
+                    ApiError::internal_server_error("Failed to check message ownership")
+                })?;
 
         if message_user_id == Some(user.id) {
             true
         } else {
             // Check if user is admin or owner of the chat
             let user_role: Option<String> = sqlx::query_scalar(
-                "SELECT cm.role FROM chat_members cm WHERE cm.chat_id = ? AND cm.user_id = ?"
+                "SELECT cm.role FROM chat_members cm WHERE cm.chat_id = ? AND cm.user_id = ?",
             )
             .bind(chat_db_id)
             .bind(user.id)

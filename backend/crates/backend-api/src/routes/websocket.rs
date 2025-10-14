@@ -7,14 +7,24 @@ use futures_util::{SinkExt, StreamExt};
 use serde::Deserialize;
 use std::collections::HashMap;
 use tokio::sync::{broadcast, mpsc};
+use utoipa::IntoParams;
 
 use crate::state::{AppState, ClientEvent, ServerEvent};
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, IntoParams)]
 pub struct WebSocketQuery {
     token: Option<String>,
 }
 
+#[utoipa::path(
+    get,
+    path = "/ws",
+    tag = "WebSocket",
+    params(WebSocketQuery),
+    responses(
+        (status = 101, description = "WebSocket handshake successful")
+    )
+)]
 pub async fn websocket_handler(
     ws: WebSocketUpgrade,
     Query(params): Query<WebSocketQuery>,

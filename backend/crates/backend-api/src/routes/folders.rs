@@ -12,17 +12,29 @@ use crate::{
     util::require_bearer,
     ApiError, AppState,
 };
+use utoipa::ToSchema;
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct FoldersResponse {
     pub folders: Vec<Folder>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct FolderResponse {
     pub folder: Folder,
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/folders",
+    tag = "Folders",
+    security(("bearerAuth" = [])),
+    responses(
+        (status = 200, description = "List folders for the current user", body = FoldersResponse),
+        (status = 401, description = "Authentication required", body = crate::error::ErrorResponse),
+        (status = 500, description = "Failed to fetch folders", body = crate::error::ErrorResponse)
+    )
+)]
 pub async fn list_folders(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -49,6 +61,19 @@ pub async fn list_folders(
     Ok(Json(FoldersResponse { folders }))
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/folders",
+    tag = "Folders",
+    security(("bearerAuth" = [])),
+    request_body = CreateFolderRequest,
+    responses(
+        (status = 200, description = "Folder created", body = FolderResponse),
+        (status = 400, description = "Invalid folder payload", body = crate::error::ErrorResponse),
+        (status = 401, description = "Authentication required", body = crate::error::ErrorResponse),
+        (status = 500, description = "Failed to create folder", body = crate::error::ErrorResponse)
+    )
+)]
 pub async fn create_folder(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -119,6 +144,21 @@ pub async fn create_folder(
     Ok(Json(FolderResponse { folder }))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/folders/{folder_id}",
+    tag = "Folders",
+    security(("bearerAuth" = [])),
+    params(
+        ("folder_id" = String, Path, description = "Folder public identifier")
+    ),
+    responses(
+        (status = 200, description = "Folder fetched", body = FolderResponse),
+        (status = 401, description = "Authentication required", body = crate::error::ErrorResponse),
+        (status = 404, description = "Folder not found", body = crate::error::ErrorResponse),
+        (status = 500, description = "Failed to fetch folder", body = crate::error::ErrorResponse)
+    )
+)]
 pub async fn get_folder(
     State(state): State<AppState>,
     Path(folder_id): Path<String>,
@@ -147,6 +187,23 @@ pub async fn get_folder(
     Ok(Json(FolderResponse { folder }))
 }
 
+#[utoipa::path(
+    put,
+    path = "/api/folders/{folder_id}",
+    tag = "Folders",
+    security(("bearerAuth" = [])),
+    params(
+        ("folder_id" = String, Path, description = "Folder public identifier")
+    ),
+    request_body = UpdateFolderRequest,
+    responses(
+        (status = 200, description = "Folder updated", body = FolderResponse),
+        (status = 400, description = "Invalid update payload", body = crate::error::ErrorResponse),
+        (status = 401, description = "Authentication required", body = crate::error::ErrorResponse),
+        (status = 404, description = "Folder not found", body = crate::error::ErrorResponse),
+        (status = 500, description = "Failed to update folder", body = crate::error::ErrorResponse)
+    )
+)]
 pub async fn update_folder(
     State(state): State<AppState>,
     Path(folder_id): Path<String>,
@@ -201,6 +258,21 @@ pub async fn update_folder(
     Ok(Json(FolderResponse { folder }))
 }
 
+#[utoipa::path(
+    delete,
+    path = "/api/folders/{folder_id}",
+    tag = "Folders",
+    security(("bearerAuth" = [])),
+    params(
+        ("folder_id" = String, Path, description = "Folder public identifier")
+    ),
+    responses(
+        (status = 200, description = "Folder deleted"),
+        (status = 401, description = "Authentication required", body = crate::error::ErrorResponse),
+        (status = 404, description = "Folder not found", body = crate::error::ErrorResponse),
+        (status = 500, description = "Failed to delete folder", body = crate::error::ErrorResponse)
+    )
+)]
 pub async fn delete_folder(
     State(state): State<AppState>,
     Path(folder_id): Path<String>,

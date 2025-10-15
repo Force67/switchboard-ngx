@@ -20,17 +20,21 @@ export interface Message {
   created_at?: string;
   updated_at?: string;
   pending?: boolean;
+  timestamp?: string;
 }
 
 export interface Chat {
   id: string;
   public_id: string;
   title: string;
-  chat_type: "direct" | "group" | "system";
+  chat_type?: "direct" | "group" | "system";
   messages?: Message[];
-  created_at: string;
-  updated_at: string;
+  created_at?: string;
+  updated_at?: string;
+  createdAt?: Date | string;
+  updatedAt?: string;
   folderId?: string;
+  isGroup?: boolean;
 }
 
 export interface User {
@@ -38,6 +42,9 @@ export interface User {
   public_id: string;
   email?: string;
   display_name?: string;
+  username?: string;
+  bio?: string | null;
+  avatar_url?: string | null;
   created_at: string;
   updated_at: string;
 }

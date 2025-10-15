@@ -4,6 +4,7 @@ import "./app.css";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Sidebar from "./components/Sidebar";
 import MainArea from "./components/MainArea";
+import UserProfileDialog from "./components/UserProfileDialog";
 import { apiService } from "./api";
 import type { ApiChat } from "./api";
 import {
@@ -17,6 +18,7 @@ import type { Actions } from "./components/sidebarTypes";
 import type { SidebarBootstrapData } from "./components/sidebarStore";
 import { useSocket } from "./hooks/useSocket";
 import type { Chat, Message, TokenUsage } from "./types/chat";
+import type { SessionData, SessionUser } from "./types/session";
 
 const DEFAULT_API_BASE =
   typeof window !== "undefined" ? window.location.origin : "http://localhost:7070";
@@ -27,18 +29,6 @@ const GITHUB_REDIRECT_PATH =
 const SESSION_KEY = "switchboard.session";
 const AUTO_DEV_SESSION_ENABLED =
   import.meta.env.DEV && import.meta.env.VITE_ENABLE_DEV_LOGIN === "true";
-
-interface UserProfile {
-  id: string;
-  email?: string | null;
-  display_name?: string | null;
-}
-
-interface SessionData {
-  token: string;
-  user: UserProfile;
-  expires_at: string;
-}
 
 interface ChatResponse {
   model: string;
@@ -104,6 +94,9 @@ const fetchDevSession = async (): Promise<SessionData | null> => {
         id: data.user.id,
         email: data.user.email,
         display_name: data.user.display_name,
+        username: data.user.username ?? data.user.display_name,
+        bio: data.user.bio ?? null,
+        avatar_url: data.user.avatar_url ?? null,
       },
       expires_at: data.expires_at,
     };
@@ -133,10 +126,13 @@ export default function App() {
   const [modelPickerOpen, setModelPickerOpen] = createSignal(false);
   const [testLoading, setTestLoading] = createSignal(false);
   const [modelStatuses, setModelStatuses] = createSignal<Record<string, "idle" | "pending">>({});
+  const [profileDialogOpen, setProfileDialogOpen] = createSignal(false);
 
   // WebSocket integration
   const socket = useSocket(() => session()?.token || null);
   let devSessionBootstrapInFlight = false;
+  let lastProfileRefreshToken: string | null = null;
+  let lastDataLoadToken: string | null = null;
 
   const redirectUri = () => `${window.location.origin}${GITHUB_REDIRECT_PATH}`;
 
@@ -177,8 +173,23 @@ export default function App() {
       console.error("Failed to bootstrap development session:", error);
     } finally {
       devSessionBootstrapInFlight = false;
-    }
   }
+}
+
+  const openProfileDialog = () => setProfileDialogOpen(true);
+  const closeProfileDialog = () => setProfileDialogOpen(false);
+
+  const handleProfileUpdated = (user: SessionUser) => {
+    const current = session();
+    if (!current) {
+      return;
+    }
+    const next: SessionData = {
+      ...current,
+      user,
+    };
+    persistSession(next, { suppressAutoBootstrap: true });
+  };
 
   const finalizeGithubLogin = async (code: string, state: string) => {
     setAuthError(null);
@@ -315,6 +326,9 @@ export default function App() {
     setChats([]);
     setCurrentChatId(null);
     setPrompt("");
+    setProfileDialogOpen(false);
+    lastProfileRefreshToken = null;
+    lastDataLoadToken = null;
   };
 
   const newChat = async (folderId?: string, isGroup: boolean = false) => {
@@ -638,6 +652,8 @@ export default function App() {
     const updatedChat = chats().find(c => c.id === currentId);
     if (!updatedChat) return;
 
+    const existingMessages = updatedChat.messages ?? [];
+
     const userMessage: Message = {
       role: "user",
       content: trimmedPrompt,
@@ -656,18 +672,23 @@ export default function App() {
       pending: true,
     }));
 
-    const newMessages = [...updatedChat.messages, userMessage, ...placeholderMessages];
-    const newTitle = updatedChat.messages.length === 0 ? trimmedPrompt.slice(0, 30) + (trimmedPrompt.length > 30 ? "..." : "") : updatedChat.title;
+    const newMessages = [...existingMessages, userMessage, ...placeholderMessages];
+    const newTitle =
+      existingMessages.length === 0
+        ? trimmedPrompt.slice(0, 30) + (trimmedPrompt.length > 30 ? "..." : "")
+        : updatedChat.title;
 
-    setChats(prev => prev.map(chat =>
-      chat.id === currentId
-        ? {
-            ...chat,
-            messages: newMessages,
-            title: newTitle
-          }
-        : chat
-    ));
+    setChats((prev) =>
+      prev.map((chat) =>
+        chat.id === currentId
+          ? {
+              ...chat,
+              messages: newMessages,
+              title: newTitle,
+            }
+          : chat,
+      ),
+    );
     setPrompt("");
     setAttachedImages([]);
     setSelectedModels(targetModels);
@@ -744,13 +765,18 @@ export default function App() {
         console.log("✅ Message chat ID matches current chat ID - processing message");
       // Check if this message already exists in the chat (user messages are added immediately)
       const currentChat = chats().find(c => c.id === currentId);
+      if (!currentChat) {
+        console.log("❌ Current chat missing, skipping message");
+        return;
+      }
+      const chatMessages = currentChat.messages ?? [];
       console.log("🔍 Current chat found:", !!currentChat);
-      console.log("📊 Current chat messages count:", currentChat?.messages.length || 0);
+      console.log("📊 Current chat messages count:", chatMessages.length || 0);
 
-      const messageExists = currentChat?.messages.some(m => m.id === message.message_id);
+      const messageExists = chatMessages.some(m => m.id === message.message_id);
       console.log("🔍 Message exists in chat:", messageExists);
       console.log("🔍 Looking for message ID:", message.message_id);
-      console.log("🔍 Current chat message IDs:", currentChat?.messages.map(m => m.id));
+      console.log("🔍 Current chat message IDs:", chatMessages.map(m => m.id));
 
       if (messageExists) {
         // This is a user message that was already added to UI, skip
@@ -759,7 +785,7 @@ export default function App() {
       }
 
       // Check if this looks like a user message by comparing with the last user message
-      const lastUserMessage = currentChat?.messages
+      const lastUserMessage = chatMessages
         .filter(m => m.role === 'user')
         .pop();
 
@@ -859,20 +885,49 @@ export default function App() {
 
   createEffect(() => {
     const current = session();
-    if (current) {
-      void loadModels(current);
-      void loadChatsAndFolders(current.token);
-      // Connect WebSocket with auth token
-      socket.connect();
-    } else {
+    if (!current) {
+      lastProfileRefreshToken = null;
+      return;
+    }
+
+    if (lastProfileRefreshToken === current.token) {
+      return;
+    }
+
+    lastProfileRefreshToken = current.token;
+
+    void (async () => {
+      try {
+        const freshUser = await apiService.getCurrentUser(current.token);
+        handleProfileUpdated(freshUser);
+      } catch (error) {
+        console.warn("Failed to refresh user profile", error);
+      }
+    })();
+  });
+
+  createEffect(() => {
+    const current = session();
+    if (!current) {
+      lastDataLoadToken = null;
       setModels([]);
       setSelectedModels([]);
       setModelStatuses({});
       setChats([]);
       setCurrentChatId(null);
-      // Disconnect WebSocket
       socket.disconnect();
+      return;
     }
+
+    socket.connect();
+
+    if (lastDataLoadToken === current.token) {
+      return;
+    }
+
+    lastDataLoadToken = current.token;
+    void loadModels(current);
+    void loadChatsAndFolders(current.token);
   });
 
   // Track current subscription to avoid spam
@@ -1006,6 +1061,7 @@ export default function App() {
           currentChatId={currentChatId}
           onLogin={beginGithubLogin}
           onLogout={logout}
+          onEditProfile={openProfileDialog}
           onNewChat={newChat}
           onNewGroupChat={newGroupChat}
           onSelectChat={selectChat}
@@ -1041,7 +1097,7 @@ export default function App() {
             currentMessages={createMemo(() => {
               const currentId = currentChatId();
               const currentChat = chats().find(c => c.id === currentId);
-              const messages = currentChat ? currentChat.messages : [];
+              const messages = currentChat?.messages ?? [];
               console.log("🔄 currentMessages memo recalculated:", { currentId, messagesCount: messages.length, messages });
               return messages;
             })}
@@ -1051,7 +1107,14 @@ export default function App() {
             })}
             onSend={handleSubmit}
             onLogout={logout}
+            onEditProfile={openProfileDialog}
           />
+        <UserProfileDialog
+          open={profileDialogOpen}
+          session={session}
+          onClose={closeProfileDialog}
+          onUpdated={handleProfileUpdated}
+        />
       </div>
     </ThemeProvider>
   );

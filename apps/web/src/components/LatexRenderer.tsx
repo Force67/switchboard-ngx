@@ -60,19 +60,19 @@ export default function LatexRenderer(props: Props) {
 
   return (
     <div style="white-space: pre-wrap;">
-      {renderedContent().map((part, index) => {
-        if (typeof part === 'string') {
-          return <span key={index} innerHTML={part.replace(/\n/g, '<br>')} />;
-        } else {
-          try {
-            const html = katex.renderToString(part.math, {
-              displayMode: part.type === 'display',
-              throwOnError: false,
-            });
-            return <span key={index} innerHTML={html} />;
-          } catch (error) {
-            return <span key={index}>${part.type === 'display' ? '$' : ''}${part.math}${part.type === 'display' ? '$' : ''}</span>;
-          }
+      {renderedContent().map((part) => {
+        if (typeof part === "string") {
+          return <span innerHTML={part.replace(/\n/g, "<br>")} />;
+        }
+        try {
+          const html = katex.renderToString(part.math, {
+            displayMode: part.type === "display",
+            throwOnError: false,
+          });
+          return <span innerHTML={html} />;
+        } catch (error) {
+          const delimiter = part.type === "display" ? "$$" : "$";
+          return <span>{`${delimiter}${part.math}${delimiter}`}</span>;
         }
       })}
     </div>

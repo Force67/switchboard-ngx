@@ -128,16 +128,9 @@ export default function Composer(props: Props) {
           onKeyDown={handleKeyDown}
           onInputCustom={handleInputChange}
           placeholder="Type your message..."
-          style={{
-            width: "100%",
-            minHeight: "44px",
-            maxHeight: "120px",
-            border: "none",
-            outline: "none",
-            fontSize: "14px",
-            fontFamily: "inherit",
-            lineHeight: "1.5",
-          }}
+          style={
+            "width: 100%; min-height: 44px; max-height: 120px; border: none; outline: none; font-size: 14px; font-family: inherit; line-height: 1.5;"
+          }
           ref={(el) => textareaRef = el}
         />
         <Show when={showModelPicker()}>

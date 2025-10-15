@@ -3,20 +3,12 @@ import OnlineIndicator from "./OnlineIndicator";
 import UserPill from "./UserPill";
 import WebSocketStatusIndicator from "./WebSocketStatusIndicator";
 import ThemeToggle from "./ThemeToggle";
-
-interface SessionData {
-  token: string;
-  user: {
-    id: string;
-    email?: string | null;
-    display_name?: string | null;
-  };
-  expires_at: string;
-}
+import type { SessionData } from "../types/session";
 
 interface Props {
   session: Accessor<SessionData | null>;
   onLogout: () => void;
+  onEditProfile: () => void;
   connectionStatus?: Accessor<{ status: string; error?: string }>;
 }
 
@@ -35,7 +27,11 @@ export default function TopRightControls(props: Props) {
           <WebSocketStatusIndicator status={props.connectionStatus} />
         )}
         <OnlineIndicator />
-        <UserPill session={props.session} onLogout={props.onLogout} />
+        <UserPill
+          session={props.session}
+          onLogout={props.onLogout}
+          onEditProfile={props.onEditProfile}
+        />
       </div>
     </div>
   );

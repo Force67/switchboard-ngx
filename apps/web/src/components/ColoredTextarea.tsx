@@ -1,5 +1,5 @@
-import { createSignal, createEffect, onMount, splitProps, Component, For } from "solid-js";
-import { Accessor, Setter } from "solid-js";
+import { createEffect, onMount, splitProps, Component } from "solid-js";
+import type { Accessor, Setter, JSX } from "solid-js";
 
 interface Props {
   value: Accessor<string>;
@@ -7,14 +7,41 @@ interface Props {
   onKeyDown?: (e: KeyboardEvent) => void;
   onInputCustom?: (e: InputEvent) => void;
   placeholder?: string;
-  style?: any;
-  ref?: HTMLTextAreaElement;
+  style?: JSX.CSSProperties | string;
+  ref?: (el: HTMLTextAreaElement) => void;
 }
 
 const ColoredTextarea: Component<Props> = (props) => {
-  const [local, others] = splitProps(props, ["value", "onInput", "onKeyDown", "onInputCustom", "placeholder", "style", "ref"]);
-  let textareaRef: HTMLTextAreaElement;
-  let overlayRef: HTMLDivElement;
+  const [local, others] = splitProps(props, [
+    "value",
+    "onInput",
+    "onKeyDown",
+    "onInputCustom",
+    "placeholder",
+    "style",
+    "ref",
+  ]);
+  let textareaRef: HTMLTextAreaElement | undefined;
+  let overlayRef: HTMLDivElement | undefined;
+
+  const resolveContainerStyle = () => {
+    if (!local.style) {
+      return "position: relative;";
+    }
+    if (typeof local.style === "string") {
+      return `position: relative; ${local.style}`;
+    }
+    return `position: relative; ${Object.entries(local.style)
+      .map(([key, value]) => `${key}: ${value}`)
+      .join("; ")}`;
+  };
+
+  const resolveTextareaStyle = (): JSX.CSSProperties => {
+    if (local.style && typeof local.style === "object") {
+      return local.style;
+    }
+    return {};
+  };
 
   const updateOverlay = () => {
     if (!textareaRef || !overlayRef) return;
@@ -41,7 +68,7 @@ const ColoredTextarea: Component<Props> = (props) => {
       parts.push(`<span style="color: #fff;">${remainingText}</span>`);
     }
 
-    const displayText = parts.length > 0 ? parts.join('') : `<span style="color: #999;">${local.placeholder || ''}</span>`;
+    const displayText = parts.length > 0 ? parts.join("") : `<span style="color: #999;">${local.placeholder || ""}</span>`;
     overlayRef.innerHTML = displayText;
 
     // Copy textarea styles to overlay
@@ -54,22 +81,22 @@ const ColoredTextarea: Component<Props> = (props) => {
     overlayRef.style.borderRadius = computedStyle.borderRadius;
     overlayRef.style.width = computedStyle.width;
     overlayRef.style.height = computedStyle.height;
-    overlayRef.style.whiteSpace = 'pre-wrap';
-    overlayRef.style.wordWrap = 'break-word';
-    overlayRef.style.overflow = 'hidden';
-    overlayRef.style.pointerEvents = 'none';
-    overlayRef.style.position = 'absolute';
-    overlayRef.style.top = '0';
-    overlayRef.style.left = '0';
-    overlayRef.style.background = 'transparent';
-    overlayRef.style.zIndex = '1';
-    overlayRef.style.color = 'inherit';
+    overlayRef.style.whiteSpace = "pre-wrap";
+    overlayRef.style.wordWrap = "break-word";
+    overlayRef.style.overflow = "hidden";
+    overlayRef.style.pointerEvents = "none";
+    overlayRef.style.position = "absolute";
+    overlayRef.style.top = "0";
+    overlayRef.style.left = "0";
+    overlayRef.style.background = "transparent";
+    overlayRef.style.zIndex = "1";
+    overlayRef.style.color = "inherit";
 
-    textareaRef.style.background = 'transparent';
-    textareaRef.style.zIndex = '2';
-    textareaRef.style.position = 'relative';
-    textareaRef.style.color = 'transparent';
-    textareaRef.style.caretColor = '#fff';
+    textareaRef.style.background = "transparent";
+    textareaRef.style.zIndex = "2";
+    textareaRef.style.position = "relative";
+    textareaRef.style.color = "transparent";
+    textareaRef.style.setProperty("caret-color", "#fff");
   };
 
   createEffect(updateOverlay);
@@ -79,16 +106,16 @@ const ColoredTextarea: Component<Props> = (props) => {
 
     // Handle scroll events
     const handleScroll = () => {
-      if (overlayRef) {
+      if (overlayRef && textareaRef) {
         overlayRef.scrollTop = textareaRef.scrollTop;
         overlayRef.scrollLeft = textareaRef.scrollLeft;
       }
     };
 
-    textareaRef.addEventListener('scroll', handleScroll);
+    textareaRef?.addEventListener("scroll", handleScroll);
 
     return () => {
-      textareaRef.removeEventListener('scroll', handleScroll);
+      textareaRef?.removeEventListener("scroll", handleScroll);
     };
   });
 
@@ -102,25 +129,29 @@ const ColoredTextarea: Component<Props> = (props) => {
   };
 
   return (
-    <div style={`position: relative; ${local.style ? Object.entries(local.style).map(([k, v]) => `${k}: ${v}`).join('; ') : ''}`}>
+    <div style={resolveContainerStyle()}>
       <div
-        ref={overlayRef!}
-        style={{
-          color: 'transparent',
-          caretColor: 'transparent',
+        ref={(el) => {
+          overlayRef = el;
         }}
+        style="color: transparent; caret-color: transparent;"
       />
       <textarea
-        ref={textareaRef!}
+        ref={(el) => {
+          textareaRef = el;
+          if (typeof local.ref === "function" && el) {
+            local.ref(el);
+          }
+        }}
         value={local.value()}
         onInput={handleInput}
         onKeyDown={local.onKeyDown}
         placeholder=""
         style={{
-          background: 'transparent',
-          resize: 'none',
+          background: "transparent",
+          resize: "none",
           width: "100%",
-          ...local.style,
+          ...resolveTextareaStyle(),
         }}
         {...others}
       />

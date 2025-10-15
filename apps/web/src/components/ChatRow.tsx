@@ -1,6 +1,6 @@
 import { createEffect, createSignal, onMount } from "solid-js";
 import type { Actions, ID, Folder, Chat } from "./sidebarTypes";
-import ContextMenu from "./ContextMenu";
+import ContextMenu, { type MenuItem } from "./ContextMenu";
 import MoveToPopover from "./MoveToPopover";
 
 interface Props {
@@ -45,7 +45,7 @@ export default function ChatRow(props: Props) {
     setContextMenu({ x: rect.left, y: rect.bottom + 4 });
   };
 
-  const getContextMenuItems = () => [
+  const getContextMenuItems = (): MenuItem[] => [
     {
       label: "Open in new tab",
       action: () => {
@@ -72,7 +72,7 @@ export default function ChatRow(props: Props) {
       },
       icon: "M1.5 1.5A.5.5 0 0 1 2 1h4.586a.5.5 0 0 1 .353.146l4.394 4.394a.5.5 0 0 1 .146.353V14a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V2a.5.5 0 0 1 .5-.5zm.5 1v12a.5.5 0 0 0 .5.5h8a.5.5 0 0 0 .5-.5V6.707A.5.5 0 0 0 10.293 6L6 1.707A.5.5 0 0 0 5.707 1H2.5a.5.5 0 0 0-.5.5z"
     },
-    { label: "---" },
+    { label: "separator", separator: true },
     {
       label: "Duplicate",
       action: () => {

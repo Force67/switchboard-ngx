@@ -1,4 +1,5 @@
 import { createContext, useContext, createSignal, Accessor, onMount } from 'solid-js';
+import type { JSX } from 'solid-js';
 
 export type Theme = 'light' | 'dark' | 'system';
 

@@ -25,6 +25,14 @@ export default function OnlineIndicator() {
     }
   };
 
+  const lastSyncLabel = () => {
+    const value = connectionState().lastSyncISO;
+    if (!value) {
+      return "—";
+    }
+    return new Date(value).toLocaleTimeString();
+  };
+
   return (
     <div style="position:relative">
       <button
@@ -45,7 +53,7 @@ export default function OnlineIndicator() {
         <div class="status-pop" role="dialog" aria-label="Connection details">
           <div class="row"><span>Status</span><strong>{label()}</strong></div>
           <div class="row"><span>Latency</span><span>{connectionState().latencyMs ?? "—"} ms</span></div>
-          <div class="row"><span>Last sync</span><span>{connectionState().lastSyncISO ? new Date(connectionState().lastSyncISO).toLocaleTimeString() : "—"}</span></div>
+          <div class="row"><span>Last sync</span><span>{lastSyncLabel()}</span></div>
         </div>
       </Show>
     </div>

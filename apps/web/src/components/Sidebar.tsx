@@ -8,16 +8,7 @@ import { sidebarState } from "./sidebarStore";
 import type { Chat } from "../types/chat";
 import type { Actions } from "./sidebarTypes";
 import "./sidebar-folders.css";
-
-interface SessionData {
-  token: string;
-  user: {
-    id: string;
-    email?: string | null;
-    display_name?: string | null;
-  };
-  expires_at: string;
-}
+import type { SessionData } from "../types/session";
 
 interface Props {
   session: Accessor<SessionData | null>;
@@ -25,6 +16,7 @@ interface Props {
   currentChatId: Accessor<string | null>;
   onLogin: () => void;
   onLogout: () => void;
+  onEditProfile: () => void;
   onNewChat: (folderId?: string) => void;
   onNewGroupChat?: (folderId?: string) => void;
   onSelectChat: (chatId: string) => void;
@@ -66,6 +58,7 @@ export default function Sidebar(props: Props) {
         session={props.session}
         onLogin={props.onLogin}
         onLogout={props.onLogout}
+        onEditProfile={props.onEditProfile}
       />
     </div>
   );

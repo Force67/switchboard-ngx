@@ -7,6 +7,7 @@ import { ModelMeta } from "./model-picker/models";
 import LatexRenderer from "./LatexRenderer";
 import GroupChatManager from "./GroupChatManager";
 import type { Chat, Message } from "../types/chat";
+import type { SessionData } from "../types/session";
 
 interface ModelOption {
   id: string;
@@ -18,16 +19,6 @@ interface ModelOption {
   };
   supports_reasoning?: boolean;
   supports_images?: boolean;
-}
-
-interface SessionData {
-  token: string;
-  user: {
-    id: string;
-    email?: string | null;
-    display_name?: string | null;
-  };
-  expires_at: string;
 }
 
 interface Props {
@@ -51,6 +42,7 @@ interface Props {
   session: Accessor<SessionData | null>;
   onSend: (event: Event) => void;
   onLogout: () => void;
+  onEditProfile: () => void;
 }
 
 export default function MainArea(props: Props) {
@@ -119,24 +111,17 @@ export default function MainArea(props: Props) {
 
   return (
     <div class="main">
-      <TopRightControls session={props.session} onLogout={props.onLogout} connectionStatus={props.connectionStatus} />
+      <TopRightControls
+        session={props.session}
+        onLogout={props.onLogout}
+        onEditProfile={props.onEditProfile}
+        connectionStatus={props.connectionStatus}
+      />
       {props.currentChat?.()?.isGroup && (
-        <div style={{
-          padding: "8px 20px",
-          background: "var(--bg-2)",
-          borderBottom: "1px solid rgba(255,255,255,0.05)"
-        }}>
+        <div style="padding: 8px 20px; background: var(--bg-2); border-bottom: 1px solid rgba(255,255,255,0.05);">
           <button
             onClick={() => setShowGroupManager(true)}
-            style={{
-              padding: "6px 12px",
-              borderRadius: "6px",
-              border: "1px solid rgba(255,255,255,0.2)",
-              background: "var(--bg-3)",
-              color: "var(--text-0)",
-              cursor: "pointer",
-              fontSize: "12px"
-            }}
+            style="padding: 6px 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.2); background: var(--bg-3); color: var(--text-0); cursor: pointer; font-size: 12px;"
           >
             👥 Manage Group
           </button>

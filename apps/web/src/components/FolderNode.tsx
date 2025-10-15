@@ -1,7 +1,7 @@
 import { For, createSignal, Show } from "solid-js";
 import type { Folder, Actions, ID, Chat } from "./sidebarTypes";
 import ChatRow from "./ChatRow";
-import ContextMenu from "./ContextMenu";
+import ContextMenu, { type MenuItem } from "./ContextMenu";
 import MoveToPopover from "./MoveToPopover";
 import ColorPicker from "./ColorPicker";
 
@@ -54,8 +54,8 @@ export default function FolderNode(props: Props) {
     props.actions.setCollapsed(props.folder.id, !isCollapsed());
   };
 
-  const getContextMenuItems = () => {
-    const items = [];
+  const getContextMenuItems = (): MenuItem[] => {
+    const items: MenuItem[] = [];
 
     items.push({
       label: "New chat here",
@@ -130,7 +130,7 @@ export default function FolderNode(props: Props) {
       });
     }
 
-    items.push({ label: "---" });
+    items.push({ label: "separator", separator: true });
 
     items.push({
       label: "Delete…",

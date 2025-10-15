@@ -1,10 +1,11 @@
 import { For, createSignal, onMount, onCleanup } from "solid-js";
 
-interface MenuItem {
+export interface MenuItem {
   label: string;
-  action: () => void;
+  action?: () => void;
   icon?: string;
   disabled?: boolean;
+  separator?: boolean;
 }
 
 interface Props {
@@ -40,7 +41,7 @@ export default function ContextMenu(props: Props) {
   });
 
   const handleItemClick = (item: MenuItem) => {
-    if (!item.disabled) {
+    if (!item.disabled && item.action) {
       item.action();
       props.onClose();
     }
@@ -56,26 +57,24 @@ export default function ContextMenu(props: Props) {
       }}
     >
       <For each={props.items}>
-        {(item, index) => (
-          <>
-            {index() > 0 && item.label.startsWith("---") ? (
-              <div class="sep" />
-            ) : (
-              <div
-                class={`mi ${item.disabled ? "disabled" : ""}`}
-                onClick={() => handleItemClick(item)}
-                style={item.disabled ? { opacity: 0.5, cursor: "not-allowed" } : {}}
-              >
-                {item.icon && (
-                  <svg viewBox="0 0 16 16" width="14" height="14">
-                    <path d={item.icon} fill="currentColor" />
-                  </svg>
-                )}
-                <span>{item.label.replace(/^---/, "")}</span>
-              </div>
-            )}
-          </>
-        )}
+        {(item) =>
+          item.separator ? (
+            <div class="sep" />
+          ) : (
+            <div
+              class={`mi ${item.disabled ? "disabled" : ""}`}
+              onClick={() => handleItemClick(item)}
+              style={item.disabled ? { opacity: 0.5, cursor: "not-allowed" } : {}}
+            >
+              {item.icon && (
+                <svg viewBox="0 0 16 16" width="14" height="14">
+                  <path d={item.icon} fill="currentColor" />
+                </svg>
+              )}
+              <span>{item.label}</span>
+            </div>
+          )
+        }
       </For>
     </div>
   );

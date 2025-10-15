@@ -38,17 +38,7 @@ const Badge: Component<Props> = (props) => {
     <div
       class={`badge ${props.disabled ? 'dim' : ''} ${props.type}`}
       title={titles[props.type]}
-      style={{
-        width: "24px",
-        height: "24px",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        fontSize: "14px",
-        position: "relative",
-        zIndex: 10,
-        color: props.disabled ? "#999" : "#666"
-      }}
+      style={`width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-size: 14px; position: relative; z-index: 10; color: ${props.disabled ? "#999" : "#666"};`}
     >
       {getSimpleIcon()}
     </div>

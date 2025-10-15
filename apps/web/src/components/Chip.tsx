@@ -1,3 +1,5 @@
+import type { JSX } from "solid-js";
+
 interface Props {
   label?: string;
   icon?: JSX.Element;

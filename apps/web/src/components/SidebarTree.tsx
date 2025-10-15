@@ -3,7 +3,7 @@ import type { SidebarState, Actions, ID, Chat } from "./sidebarTypes";
 import FolderNode from "./FolderNode";
 import ChatRow from "./ChatRow";
 import CreateInline from "./CreateInline";
-import ContextMenu from "./ContextMenu";
+import ContextMenu, { type MenuItem } from "./ContextMenu";
 import { DragManager } from "./dnd";
 import { sidebarState, setSidebarState, isLoading, error, setError } from "./sidebarStore";
 
@@ -40,18 +40,19 @@ export default function SidebarTree(props: Props) {
     },
     onDragEnd: (target) => {
       // Apply the move
-      if (target && sidebarState().drag) {
-        const { kind, id } = sidebarState().drag;
-        if (kind === 'chat') {
-          if (target.type === 'folder') {
+      const dragState = sidebarState().drag;
+      if (target && dragState) {
+        const { kind, id } = dragState;
+        if (kind === "chat") {
+          if (target.type === "folder") {
             props.actions.moveChat(id, { folderId: target.id });
-          } else if (target.type === 'root') {
+          } else if (target.type === "root") {
             props.actions.moveChat(id, {});
           }
-        } else if (kind === 'folder') {
-          if (target.type === 'folder') {
+        } else if (kind === "folder") {
+          if (target.type === "folder") {
             props.actions.moveFolder(id, { parentId: target.id });
-          } else if (target.type === 'root') {
+          } else if (target.type === "root") {
             props.actions.moveFolder(id, {});
           }
         }
@@ -102,7 +103,7 @@ export default function SidebarTree(props: Props) {
     setContextMenu({ x: e.clientX, y: e.clientY });
   };
 
-  const getRootContextMenuItems = () => [
+  const getRootContextMenuItems = (): MenuItem[] => [
     {
       label: "New chat",
       action: () => {

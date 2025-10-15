@@ -1,4 +1,5 @@
 import type { TokenUsage } from "./types/chat";
+import type { SessionUser } from "./types/session";
 
 const DEFAULT_API_BASE =
   typeof window !== "undefined" ? window.location.origin : "http://localhost:7070";
@@ -87,12 +88,56 @@ export interface UpdateMemberRoleRequest {
   role: string;
 }
 
+export interface UpdateUserProfilePayload {
+  username?: string | null;
+  display_name?: string | null;
+  bio?: string | null;
+  avatar_url?: string | null;
+}
+
 class ApiService {
   private getAuthHeaders(token: string) {
     return {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     };
+  }
+
+  async getCurrentUser(token: string): Promise<SessionUser> {
+    const response = await fetch(`${API_BASE}/api/users/me`, {
+      headers: this.getAuthHeaders(token),
+    });
+
+    if (!response.ok) {
+      const body = (await response.json().catch(() => null)) as
+        | { error?: string }
+        | null;
+      throw new Error(body?.error ?? response.statusText);
+    }
+
+    const data = await response.json();
+    return data.user as SessionUser;
+  }
+
+  async updateCurrentUser(
+    token: string,
+    req: UpdateUserProfilePayload,
+  ): Promise<SessionUser> {
+    const response = await fetch(`${API_BASE}/api/users/me`, {
+      method: "PATCH",
+      headers: this.getAuthHeaders(token),
+      body: JSON.stringify(req),
+    });
+
+    if (!response.ok) {
+      const body = (await response.json().catch(() => null)) as
+        | { error?: string }
+        | null;
+      throw new Error(body?.error ?? response.statusText);
+    }
+
+    const data = await response.json();
+    return data.user as SessionUser;
   }
 
   // Folder API methods

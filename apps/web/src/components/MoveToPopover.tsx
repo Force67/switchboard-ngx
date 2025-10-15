@@ -70,22 +70,16 @@ export default function MoveToPopover(props: Props) {
     <div
       ref={setPopoverRef}
       class="cmenu"
-      style={{
-        left: `${props.position.x}px`,
-        top: `${props.position.y}px`,
-        minWidth: "180px",
-      }}
+      style={`left: ${props.position.x}px; top: ${props.position.y}px; min-width: 180px;`}
     >
       <For each={getFolderItems()}>
         {(item) => (
           <div
             class="mi"
             onClick={() => handleSelect(item.id)}
-            style={{
-              paddingLeft: `${8 + item.depth * 12}px`,
-              opacity: item.id === props.currentFolderId ? 0.5 : 1,
-              cursor: item.id === props.currentFolderId ? "not-allowed" : "pointer"
-            }}
+            style={`padding-left: ${8 + item.depth * 12}px; opacity: ${
+              item.id === props.currentFolderId ? 0.5 : 1
+            }; cursor: ${item.id === props.currentFolderId ? "not-allowed" : "pointer"};`}
           >
             {item.depth > 0 && (
               <svg viewBox="0 0 16 16" width="14" height="14" style="margin-right: 4px;">

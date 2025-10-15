@@ -89,7 +89,6 @@ export interface UpdateMemberRoleRequest {
 }
 
 export interface UpdateUserProfilePayload {
-  username?: string | null;
   display_name?: string | null;
   bio?: string | null;
   avatar_url?: string | null;

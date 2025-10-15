@@ -17,9 +17,6 @@ pub struct UpdateUserProfileRequest {
     pub display_name: Option<Option<String>>,
     #[serde(default)]
     #[schema(value_type = Option<String>)]
-    pub username: Option<Option<String>>,
-    #[serde(default)]
-    #[schema(value_type = Option<String>)]
     pub bio: Option<Option<String>>,
     #[serde(default)]
     #[schema(value_type = Option<String>)]
@@ -29,7 +26,7 @@ pub struct UpdateUserProfileRequest {
 impl UpdateUserProfileRequest {
     fn into_update(self) -> UpdateUserProfile {
         UpdateUserProfile {
-            username: self.username,
+            username: None,
             display_name: self.display_name,
             bio: self.bio,
             avatar_url: self.avatar_url,

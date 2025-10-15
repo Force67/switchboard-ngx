@@ -22,7 +22,6 @@ const sanitizeField = (value: string): string | null => {
 
 export default function UserProfileDialog(props: Props) {
   const [displayName, setDisplayName] = createSignal("");
-  const [username, setUsername] = createSignal("");
   const [bio, setBio] = createSignal("");
   const [avatarUrl, setAvatarUrl] = createSignal("");
   const [saving, setSaving] = createSignal(false);
@@ -41,7 +40,6 @@ export default function UserProfileDialog(props: Props) {
 
     const user = current.user;
     setDisplayName(user.display_name ?? "");
-    setUsername(user.username ?? "");
     setBio(user.bio ?? "");
     setAvatarUrl(user.avatar_url ?? "");
     setError(null);
@@ -73,11 +71,11 @@ export default function UserProfileDialog(props: Props) {
     setError(null);
 
     try {
-      const cleanedUsername = sanitizeField(username());
       const cleanedDisplayName =
-        sanitizeField(displayName()) ?? cleanedUsername;
+        sanitizeField(displayName()) ??
+        sanitizeField(current.user.username ?? "") ??
+        null;
       const payload = {
-        username: cleanedUsername,
         display_name: cleanedDisplayName,
         bio: sanitizeField(bio()),
         avatar_url: sanitizeField(avatarUrl()),
@@ -147,14 +145,13 @@ export default function UserProfileDialog(props: Props) {
               <span class="profile-field-label">Username</span>
               <input
                 type="text"
-                value={username()}
-                onInput={(event) => setUsername(event.currentTarget.value)}
+                value={sessionUser()?.username ?? ""}
+                readOnly
                 placeholder="username"
                 maxLength={64}
               />
               <span class="profile-hint">
-                Usernames help teammates recognise you. Letters, numbers,{" "}
-                underscores and dashes are welcome.
+                Usernames come from your sign-in provider and cannot be changed.
               </span>
             </label>
 

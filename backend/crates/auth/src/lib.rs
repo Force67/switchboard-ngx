@@ -352,32 +352,46 @@ impl Authenticator {
 
         let now = Utc::now().to_rfc3339();
         let mut query = QueryBuilder::<Sqlite>::new("UPDATE users SET ");
-        {
-            let mut assignments = query.separated(", ");
+        let mut is_first_assignment = true;
 
-            if let Some(value) = username {
-                assignments.push("username = ");
-                assignments.push_bind(value);
+        let mut push_assignment = |column: &str, value: Option<String>| {
+            if !is_first_assignment {
+                query.push(", ");
             }
-
-            if let Some(value) = display_name {
-                assignments.push("display_name = ");
-                assignments.push_bind(value);
+            query.push(column);
+            query.push(" = ");
+            match value {
+                Some(value) => {
+                    query.push_bind(value);
+                }
+                None => {
+                    query.push_bind::<Option<String>>(None);
+                }
             }
+            is_first_assignment = false;
+        };
 
-            if let Some(value) = bio {
-                assignments.push("bio = ");
-                assignments.push_bind(value);
-            }
-
-            if let Some(value) = avatar_url {
-                assignments.push("avatar_url = ");
-                assignments.push_bind(value);
-            }
-
-            assignments.push("updated_at = ");
-            assignments.push_bind(&now);
+        if let Some(value) = username {
+            push_assignment("username", value);
         }
+
+        if let Some(value) = display_name {
+            push_assignment("display_name", value);
+        }
+
+        if let Some(value) = bio {
+            push_assignment("bio", value);
+        }
+
+        if let Some(value) = avatar_url {
+            push_assignment("avatar_url", value);
+        }
+
+        if !is_first_assignment {
+            query.push(", ");
+        }
+        query.push("updated_at = ");
+        query.push_bind(&now);
 
         query.push(" WHERE id = ");
         query.push_bind(user_id);

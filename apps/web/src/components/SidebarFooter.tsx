@@ -1,4 +1,4 @@
-import { Accessor, Show } from "solid-js";
+import { Accessor, Show, createMemo } from "solid-js";
 import type { SessionData } from "../types/session";
 
 interface Props {
@@ -10,6 +10,34 @@ interface Props {
 
 export default function SidebarFooter(props: Props) {
   const session = () => props.session();
+  const user = createMemo(() => session()?.user ?? null);
+  const displayName = createMemo(() => {
+    const current = user();
+    if (!current) {
+      return "User";
+    }
+    return (
+      current.display_name ||
+      current.username ||
+      current.email ||
+      "User"
+    );
+  });
+  const avatarUrl = createMemo(() => user()?.avatar_url ?? undefined);
+  const usernameForBadge = createMemo(() => {
+    const current = user();
+    if (!current?.username) {
+      return null;
+    }
+    return current.username !== displayName() ? current.username : null;
+  });
+  const emailForBadge = createMemo(() => {
+    const current = user();
+    if (!current?.email) {
+      return null;
+    }
+    return current.email !== displayName() ? current.email : null;
+  });
 
   return (
     <>
@@ -24,41 +52,56 @@ export default function SidebarFooter(props: Props) {
 
       <Show when={session()}>
         {(active) => {
-          const user = active().user;
-          const displayName =
-            user.display_name || user.username || user.email || "User";
-          const avatarUrl = user.avatar_url || undefined;
           return (
             <div class="sidebar-account">
               <div class="sidebar-account-card">
-                {avatarUrl ? (
-                  <img src={avatarUrl} alt="Profile" class="sidebar-account-avatar" />
-                ) : (
-                  <div class="sidebar-account-avatar fallback">
-                    {displayName.slice(0, 1).toUpperCase()}
+                <Show
+                  when={avatarUrl()}
+                  fallback={
+                    <div class="sidebar-account-avatar fallback">
+                      {displayName().slice(0, 1).toUpperCase()}
+                    </div>
+                  }
+                >
+                  {(src) => (
+                    <img
+                      src={src()}
+                      alt="Profile"
+                      class="sidebar-account-avatar"
+                    />
+                  )}
+                </Show>
+                <div class="sidebar-account-meta">
+                  <span class="sidebar-account-name">{displayName()}</span>
+                  <Show when={usernameForBadge()}>
+                    {(username) => (
+                      <span class="sidebar-account-username">
+                        @{username()}
+                      </span>
+                    )}
+                  </Show>
+                  <Show when={emailForBadge()}>
+                    {(email) => (
+                      <span class="sidebar-account-email">{email()}</span>
+                    )}
+                  </Show>
+                  <span class="sidebar-account-email">
+                    ID: {active().user.id}
+                  </span>
+                </div>
+              </div>
+
+              <Show when={usernameForBadge()}>
+                {(username) => (
+                  <div class="sidebar-account-provider">
+                    <span class="provider-label">GitHub</span>
+                    <strong>@{username()}</strong>
                   </div>
                 )}
-              <div class="sidebar-account-meta">
-                <span class="sidebar-account-name">{displayName}</span>
-                <Show when={user.username && user.username !== displayName}>
-                  <span class="sidebar-account-username">@{user.username}</span>
-                </Show>
-                <Show when={user.email && user.email !== displayName}>
-                  <span class="sidebar-account-email">{user.email}</span>
-                </Show>
-                <span class="sidebar-account-email">ID: {active().user.id}</span>
-              </div>
-            </div>
-
-              <Show when={user.username}>
-                <div class="sidebar-account-provider">
-                  <span class="provider-label">GitHub</span>
-                  <strong>@{user.username}</strong>
-                </div>
               </Show>
 
-              <Show when={user.bio}>
-                <p class="sidebar-account-bio">{user.bio}</p>
+              <Show when={active().user.bio}>
+                {(bio) => <p class="sidebar-account-bio">{bio()}</p>}
               </Show>
 
               <div class="sidebar-account-actions">

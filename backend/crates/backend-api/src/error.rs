@@ -94,6 +94,7 @@ impl From<AuthError> for ApiError {
             | AuthError::SessionNotFound
             | AuthError::SessionExpired
             | AuthError::InvalidSession => StatusCode::UNAUTHORIZED,
+            AuthError::InvalidProfile(_) => StatusCode::BAD_REQUEST,
             AuthError::UserExists => StatusCode::BAD_REQUEST,
             AuthError::Database(_) | AuthError::PasswordHash(_) => {
                 StatusCode::INTERNAL_SERVER_ERROR

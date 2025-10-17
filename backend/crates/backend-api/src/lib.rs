@@ -1,5 +1,6 @@
 mod docs;
 mod error;
+mod services;
 mod state;
 mod util;
 

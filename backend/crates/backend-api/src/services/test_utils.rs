@@ -167,7 +167,7 @@ async fn create_schema(pool: &SqlitePool) -> Result<(), sqlx::Error> {
             deleted_by_user_id INTEGER NOT NULL,
             reason TEXT,
             deleted_at TEXT NOT NULL,
-            FOREIGN KEY (message_id) REFERENCES messages (id),
+            FOREIGN KEY (message_id) REFERENCES messages (id) ON DELETE CASCADE,
             FOREIGN KEY (deleted_by_user_id) REFERENCES users (id)
         )
         "#

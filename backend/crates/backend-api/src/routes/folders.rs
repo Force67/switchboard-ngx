@@ -5,10 +5,9 @@ use axum::{
 };
 use serde::Serialize;
 
-use uuid::Uuid;
-
 use crate::{
     routes::models::{CreateFolderRequest, Folder, UpdateFolderRequest},
+    services::folder as folder_service,
     state::ServerEvent,
     util::require_bearer,
     ApiError, AppState,
@@ -43,21 +42,12 @@ pub async fn list_folders(
     let token = require_bearer(&headers)?;
     let (user, _) = state.authenticate(&token).await?;
 
-    let folders = sqlx::query_as::<_, Folder>(
-        r#"
-        SELECT id, public_id, user_id, name, color, parent_id, collapsed, created_at, updated_at
-        FROM folders
-        WHERE user_id = ?
-        ORDER BY created_at ASC
-        "#,
-    )
-    .bind(user.id)
-    .fetch_all(state.db_pool())
-    .await
-    .map_err(|e| {
-        tracing::error!("Failed to fetch folders: {}", e);
-        ApiError::internal_server_error("Failed to fetch folders")
-    })?;
+    let folders = folder_service::list_folders(state.db_pool(), user.id)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to fetch folders: {}", e);
+            ApiError::from(e)
+        })?;
 
     Ok(Json(FoldersResponse { folders }))
 }
@@ -83,64 +73,12 @@ pub async fn create_folder(
     let token = require_bearer(&headers)?;
     let (user, _) = state.authenticate(&token).await?;
 
-    let public_id = Uuid::new_v4().to_string();
-    let now = chrono::Utc::now().to_rfc3339();
-
-    let parent_db_id = if let Some(parent_public_id) = &req.parent_id {
-        // Resolve parent folder ID from public_id
-        sqlx::query_scalar::<_, i64>("SELECT id FROM folders WHERE public_id = ? AND user_id = ?")
-            .bind(parent_public_id)
-            .bind(user.id)
-            .fetch_optional(state.db_pool())
-            .await
-            .map_err(|e| {
-                tracing::error!("Failed to resolve parent folder: {}", e);
-                ApiError::internal_server_error("Failed to resolve parent folder")
-            })?
-    } else {
-        None
-    };
-
-    sqlx::query(
-        r#"
-        INSERT INTO folders (public_id, user_id, name, color, parent_id, collapsed, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        "#
-    )
-    .bind(&public_id)
-    .bind(user.id)
-    .bind(&req.name)
-    .bind(&req.color)
-    .bind(parent_db_id)
-    .bind(false)
-    .bind(&now)
-    .bind(&now)
-    .execute(state.db_pool())
-    .await
-    .map_err(|e| {
-        tracing::error!("Failed to create folder: {}", e);
-        ApiError::internal_server_error("Failed to create folder")
-    })?;
-
-    let folder_id = sqlx::query_scalar::<_, i64>("SELECT last_insert_rowid()")
-        .fetch_one(state.db_pool())
+    let folder = folder_service::create_folder(state.db_pool(), user.id, req)
         .await
         .map_err(|e| {
-            tracing::error!("Failed to get last insert ID: {}", e);
-            ApiError::internal_server_error("Failed to create folder")
+            tracing::error!("Failed to create folder: {}", e);
+            ApiError::from(e)
         })?;
-
-    let folder = Folder {
-        id: folder_id,
-        public_id,
-        user_id: user.id,
-        name: req.name.clone(),
-        color: req.color.clone(),
-        parent_id: parent_db_id,
-        collapsed: false,
-        created_at: now.clone(),
-        updated_at: now.clone(),
-    };
 
     let event = ServerEvent::FolderCreated {
         folder: folder.clone(),
@@ -173,22 +111,12 @@ pub async fn get_folder(
     let token = require_bearer(&headers)?;
     let (user, _) = state.authenticate(&token).await?;
 
-    let folder = sqlx::query_as::<_, Folder>(
-        r#"
-        SELECT id, public_id, user_id, name, color, parent_id, collapsed, created_at, updated_at
-        FROM folders
-        WHERE public_id = ? AND user_id = ?
-        "#,
-    )
-    .bind(&folder_id)
-    .bind(user.id)
-    .fetch_optional(state.db_pool())
-    .await
-    .map_err(|e| {
-        tracing::error!("Failed to fetch folder: {}", e);
-        ApiError::internal_server_error("Failed to fetch folder")
-    })?
-    .ok_or_else(|| ApiError::not_found("Folder not found"))?;
+    let folder = folder_service::get_folder(state.db_pool(), user.id, &folder_id)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to fetch folder: {}", e);
+            ApiError::from(e)
+        })?;
 
     Ok(Json(FolderResponse { folder }))
 }
@@ -219,47 +147,12 @@ pub async fn update_folder(
     let token = require_bearer(&headers)?;
     let (user, _) = state.authenticate(&token).await?;
 
-    let now = chrono::Utc::now().to_rfc3339();
-
-    sqlx::query(
-        r#"
-        UPDATE folders
-        SET name = COALESCE(?, name),
-            color = COALESCE(?, color),
-            collapsed = COALESCE(?, collapsed),
-            updated_at = ?
-        WHERE public_id = ? AND user_id = ?
-        "#,
-    )
-    .bind(&req.name)
-    .bind(&req.color)
-    .bind(req.collapsed)
-    .bind(&now)
-    .bind(&folder_id)
-    .bind(user.id)
-    .execute(state.db_pool())
-    .await
-    .map_err(|e| {
-        tracing::error!("Failed to update folder: {}", e);
-        ApiError::internal_server_error("Failed to update folder")
-    })?;
-
-    let folder = sqlx::query_as::<_, Folder>(
-        r#"
-        SELECT id, public_id, user_id, name, color, parent_id, collapsed, created_at, updated_at
-        FROM folders
-        WHERE public_id = ? AND user_id = ?
-        "#,
-    )
-    .bind(&folder_id)
-    .bind(user.id)
-    .fetch_optional(state.db_pool())
-    .await
-    .map_err(|e| {
-        tracing::error!("Failed to fetch updated folder: {}", e);
-        ApiError::internal_server_error("Failed to fetch updated folder")
-    })?
-    .ok_or_else(|| ApiError::not_found("Folder not found"))?;
+    let folder = folder_service::update_folder(state.db_pool(), user.id, &folder_id, req)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to update folder: {}", e);
+            ApiError::from(e)
+        })?;
 
     let event = ServerEvent::FolderUpdated {
         folder: folder.clone(),
@@ -292,19 +185,12 @@ pub async fn delete_folder(
     let token = require_bearer(&headers)?;
     let (user, _) = state.authenticate(&token).await?;
 
-    let result = sqlx::query("DELETE FROM folders WHERE public_id = ? AND user_id = ?")
-        .bind(&folder_id)
-        .bind(user.id)
-        .execute(state.db_pool())
+    folder_service::delete_folder(state.db_pool(), user.id, &folder_id)
         .await
         .map_err(|e| {
             tracing::error!("Failed to delete folder: {}", e);
-            ApiError::internal_server_error("Failed to delete folder")
+            ApiError::from(e)
         })?;
-
-    if result.rows_affected() == 0 {
-        return Err(ApiError::not_found("Folder not found"));
-    }
 
     let event = ServerEvent::FolderDeleted {
         folder_id: folder_id.clone(),

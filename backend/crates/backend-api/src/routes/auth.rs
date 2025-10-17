@@ -6,7 +6,10 @@ use serde::{Deserialize, Serialize};
 use switchboard_auth::{AuthSession, User};
 use utoipa::{IntoParams, ToSchema};
 
-use crate::{ApiError, AppState};
+use crate::{
+    services::auth as auth_service,
+    ApiError, AppState,
+};
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct GithubLoginResponse {
@@ -75,24 +78,17 @@ pub async fn github_login(
     State(state): State<AppState>,
     Query(params): Query<GithubLoginQuery>,
 ) -> Result<Json<GithubLoginResponse>, ApiError> {
-    if !state.authenticator().github_enabled() {
-        return Err(ApiError::new(
-            axum::http::StatusCode::SERVICE_UNAVAILABLE,
-            "GitHub OAuth is not configured",
-        ));
-    }
-
-    let oauth_state = state.oauth_state().issue().await;
-    let authorize_url = match state
-        .authenticator()
-        .github_authorization_url(&oauth_state, &params.redirect_uri)
-    {
-        Ok(url) => url,
-        Err(err) => {
-            state.oauth_state().consume(&oauth_state).await;
-            return Err(ApiError::from(err));
-        }
-    };
+    let authorize_url = auth_service::github_login_url(
+        state.authenticator(),
+        state.oauth_state(),
+        params.redirect_uri,
+    )
+    .await
+    .map_err(|e| {
+        // Consume the oauth state if there was an error
+        // Note: In a more sophisticated implementation, we might want to handle this differently
+        ApiError::from(e)
+    })?;
 
     Ok(Json(GithubLoginResponse { authorize_url }))
 }
@@ -113,20 +109,15 @@ pub async fn github_callback(
     State(state): State<AppState>,
     Json(payload): Json<GithubCallbackRequest>,
 ) -> Result<Json<SessionResponse>, ApiError> {
-    if !state.oauth_state().consume(&payload.state).await {
-        return Err(ApiError::bad_request("invalid or expired OAuth state"));
-    }
-
-    let session = state
-        .authenticator()
-        .login_with_github_code(&payload.code, &payload.redirect_uri)
-        .await
-        .map_err(ApiError::from)?;
-    let user = state
-        .authenticator()
-        .user_profile(session.user_id)
-        .await
-        .map_err(ApiError::from)?;
+    let (session, user) = auth_service::github_callback(
+        state.authenticator(),
+        state.oauth_state(),
+        payload.code,
+        payload.state,
+        payload.redirect_uri,
+    )
+    .await
+    .map_err(ApiError::from)?;
 
     Ok(Json(SessionResponse::new(session, user)))
 }
@@ -143,60 +134,12 @@ pub async fn github_callback(
     )
 )]
 pub async fn dev_token(State(state): State<AppState>) -> Result<Json<SessionResponse>, ApiError> {
-    // Create a development user in the database first
-    sqlx::query(
-        r#"
-        INSERT OR IGNORE INTO users (id, public_id, email, display_name, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?)
-        "#,
-    )
-    .bind(1i64)
-    .bind("dev-user-123")
-    .bind("dev@example.com")
-    .bind("Dev User")
-    .bind(chrono::Utc::now().to_rfc3339())
-    .bind(chrono::Utc::now().to_rfc3339())
-    .execute(state.db_pool())
-    .await
-    .map_err(|e| {
-        tracing::error!("Failed to create dev user: {}", e);
-        ApiError::internal_server_error("Failed to create dev user")
-    })?;
-
-    // Create a development session by inserting directly into the database
-    let session_token = cuid2::create_id();
-    let expires_at = chrono::Utc::now() + chrono::Duration::hours(24);
-
-    sqlx::query(
-        r#"
-        INSERT INTO sessions (token, user_id, expires_at, created_at)
-        VALUES (?, ?, ?, ?)
-        "#,
-    )
-    .bind(&session_token)
-    .bind(1i64)
-    .bind(expires_at.to_rfc3339())
-    .bind(chrono::Utc::now().to_rfc3339())
-    .execute(state.db_pool())
-    .await
-    .map_err(|e| {
-        tracing::error!("Failed to create dev session: {}", e);
-        ApiError::internal_server_error("Failed to create dev session")
-    })?;
-
-    // Create session and user objects
-    let session = AuthSession {
-        token: session_token.clone(),
-        user_id: 1,
-        expires_at,
-    };
-
-    let user = switchboard_auth::User {
-        id: 1,
-        public_id: "dev-user-123".to_string(),
-        email: Some("dev@example.com".to_string()),
-        display_name: Some("Dev User".to_string()),
-    };
+    let (session, user) = auth_service::create_dev_token(state.db_pool())
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to create dev token: {}", e);
+            ApiError::from(e)
+        })?;
 
     Ok(Json(SessionResponse::new(session, user)))
 }

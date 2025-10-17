@@ -2,7 +2,7 @@ use crate::{
     routes::{
         models::{CreateMessageRequest, UpdateChatRequest, UpdateMemberRoleRequest},
     },
-    services::{chat, invite, member, message},
+    services::{chat, folder, invite, member, message, notification},
     state::{AppState, ServerEvent},
 };
 use tokio::sync::mpsc;
@@ -87,6 +87,37 @@ pub async fn handle_client_event(
         }
         ClientEvent::RemoveMember { chat_id, member_user_id } => {
             handle_remove_member(chat_id, member_user_id, state, user, out_tx).await?
+        }
+
+        // Folder operations
+        ClientEvent::CreateFolder { name, color, parent_id } => {
+            handle_create_folder(name, color, parent_id, state, user, out_tx).await?
+        }
+        ClientEvent::UpdateFolder { folder_id, name, color, collapsed } => {
+            handle_update_folder(folder_id, name, color, collapsed, state, user, out_tx).await?
+        }
+        ClientEvent::DeleteFolder { folder_id } => {
+            handle_delete_folder(folder_id, state, user, out_tx).await?
+        }
+        ClientEvent::GetFolders => {
+            handle_get_folders(state, user, out_tx).await?
+        }
+
+        // Notification operations
+        ClientEvent::GetNotifications { unread_only, limit, offset } => {
+            handle_get_notifications(unread_only, limit, offset, state, user, out_tx).await?
+        }
+        ClientEvent::MarkNotificationRead { notification_id, read } => {
+            handle_mark_notification_read(notification_id, read, state, user, out_tx).await?
+        }
+        ClientEvent::MarkAllNotificationsRead => {
+            handle_mark_all_notifications_read(state, user, out_tx).await?
+        }
+        ClientEvent::DeleteNotification { notification_id } => {
+            handle_delete_notification(notification_id, state, user, out_tx).await?
+        }
+        ClientEvent::GetUnreadCount => {
+            handle_get_unread_count(state, user, out_tx).await?
         }
 
         // Real-time events
@@ -709,5 +740,228 @@ async fn handle_typing(
 
     out_tx.send(typing_event.clone()).await?;
     let _ = broadcaster.send(typing_event);
+    Ok(())
+}
+
+// Folder operations
+async fn handle_create_folder(
+    name: String,
+    color: Option<String>,
+    parent_id: Option<String>,
+    state: &AppState,
+    user: &switchboard_auth::User,
+    out_tx: &mpsc::Sender<ServerEvent>,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    use crate::routes::models::CreateFolderRequest;
+
+    let req = CreateFolderRequest {
+        name,
+        color,
+        parent_id,
+    };
+
+    let folder = folder::create_folder(state.db_pool(), user.id, req)
+        .await
+        .map_err(|e| format!("Failed to create folder: {}", e))?;
+
+    let event = ServerEvent::FolderCreated {
+        folder: folder.clone(),
+    };
+    state.broadcast_to_user(user.id, &event).await;
+
+    let response_event = ServerEvent::FolderResponse {
+        folder,
+    };
+    out_tx.send(response_event).await?;
+    Ok(())
+}
+
+async fn handle_update_folder(
+    folder_id: String,
+    name: Option<String>,
+    color: Option<String>,
+    collapsed: Option<bool>,
+    state: &AppState,
+    user: &switchboard_auth::User,
+    out_tx: &mpsc::Sender<ServerEvent>,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    use crate::routes::models::UpdateFolderRequest;
+
+    let req = UpdateFolderRequest {
+        name,
+        color,
+        collapsed,
+    };
+
+    let folder = folder::update_folder(state.db_pool(), user.id, &folder_id, req)
+        .await
+        .map_err(|e| format!("Failed to update folder: {}", e))?;
+
+    let event = ServerEvent::FolderUpdated {
+        folder: folder.clone(),
+    };
+    state.broadcast_to_user(user.id, &event).await;
+
+    let response_event = ServerEvent::FolderResponse {
+        folder,
+    };
+    out_tx.send(response_event).await?;
+    Ok(())
+}
+
+async fn handle_delete_folder(
+    folder_id: String,
+    state: &AppState,
+    user: &switchboard_auth::User,
+    out_tx: &mpsc::Sender<ServerEvent>,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    folder::delete_folder(state.db_pool(), user.id, &folder_id)
+        .await
+        .map_err(|e| format!("Failed to delete folder: {}", e))?;
+
+    let event = ServerEvent::FolderDeleted {
+        folder_id: folder_id.clone(),
+    };
+    state.broadcast_to_user(user.id, &event).await;
+
+    out_tx.send(event).await?;
+    Ok(())
+}
+
+async fn handle_get_folders(
+    state: &AppState,
+    user: &switchboard_auth::User,
+    out_tx: &mpsc::Sender<ServerEvent>,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let folders = folder::list_folders(state.db_pool(), user.id)
+        .await
+        .map_err(|e| format!("Failed to get folders: {}", e))?;
+
+    let response_event = ServerEvent::FoldersResponse {
+        folders,
+    };
+    out_tx.send(response_event).await?;
+    Ok(())
+}
+
+// Notification operations
+async fn handle_get_notifications(
+    unread_only: Option<bool>,
+    limit: Option<i64>,
+    offset: Option<i64>,
+    state: &AppState,
+    user: &switchboard_auth::User,
+    out_tx: &mpsc::Sender<ServerEvent>,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let unread_only = unread_only.unwrap_or(false);
+    let limit = limit.unwrap_or(50);
+    let offset = offset.unwrap_or(0);
+
+    let notifications = notification::list_notifications(
+        state.db_pool(),
+        user.id,
+        unread_only,
+        limit,
+        offset,
+    )
+    .await
+    .map_err(|e| format!("Failed to get notifications: {}", e))?;
+
+    let response_event = ServerEvent::NotificationsResponse {
+        notifications,
+    };
+    out_tx.send(response_event).await?;
+    Ok(())
+}
+
+async fn handle_mark_notification_read(
+    notification_id: i64,
+    read: bool,
+    state: &AppState,
+    user: &switchboard_auth::User,
+    out_tx: &mpsc::Sender<ServerEvent>,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    use crate::routes::models::MarkNotificationReadRequest;
+
+    let req = MarkNotificationReadRequest { read };
+    let notification = notification::mark_notification_read(
+        state.db_pool(),
+        user.id,
+        notification_id,
+        req,
+    )
+    .await
+    .map_err(|e| format!("Failed to mark notification read: {}", e))?;
+
+    // Broadcast the update to the user
+    let event = ServerEvent::NotificationUpdated {
+        notification: notification.clone(),
+    };
+    state.broadcast_to_user(user.id, &event).await;
+
+    // Send direct response
+    let response_event = ServerEvent::NotificationResponse {
+        notification,
+    };
+    out_tx.send(response_event).await?;
+    Ok(())
+}
+
+async fn handle_mark_all_notifications_read(
+    state: &AppState,
+    user: &switchboard_auth::User,
+    out_tx: &mpsc::Sender<ServerEvent>,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let updated_count = notification::mark_all_read(state.db_pool(), user.id)
+        .await
+        .map_err(|e| format!("Failed to mark all notifications read: {}", e))?;
+
+    let response_event = ServerEvent::NotificationUpdated {
+        notification: crate::routes::models::Notification {
+            id: 0,
+            user_id: user.id,
+            r#type: "bulk_update".to_string(),
+            title: format!("{} notifications marked as read", updated_count),
+            body: "Bulk update completed".to_string(),
+            read: true,
+            created_at: chrono::Utc::now().to_rfc3339(),
+        },
+    };
+    state.broadcast_to_user(user.id, &response_event).await;
+    out_tx.send(response_event).await?;
+    Ok(())
+}
+
+async fn handle_delete_notification(
+    notification_id: i64,
+    state: &AppState,
+    user: &switchboard_auth::User,
+    out_tx: &mpsc::Sender<ServerEvent>,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    notification::delete_notification(state.db_pool(), user.id, notification_id)
+        .await
+        .map_err(|e| format!("Failed to delete notification: {}", e))?;
+
+    let event = ServerEvent::NotificationDeleted {
+        notification_id,
+    };
+    state.broadcast_to_user(user.id, &event).await;
+    out_tx.send(event).await?;
+    Ok(())
+}
+
+async fn handle_get_unread_count(
+    state: &AppState,
+    user: &switchboard_auth::User,
+    out_tx: &mpsc::Sender<ServerEvent>,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let unread_count = notification::get_unread_count(state.db_pool(), user.id)
+        .await
+        .map_err(|e| format!("Failed to get unread count: {}", e))?;
+
+    let response_event = ServerEvent::UnreadCountResponse {
+        unread_count,
+    };
+    out_tx.send(response_event).await?;
     Ok(())
 }

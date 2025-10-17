@@ -175,6 +175,45 @@ async fn create_schema(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     .execute(pool)
     .await?;
 
+    // Folders table
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS folders (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            public_id TEXT NOT NULL UNIQUE,
+            user_id INTEGER NOT NULL,
+            name TEXT NOT NULL,
+            color TEXT,
+            parent_id INTEGER,
+            collapsed BOOLEAN NOT NULL DEFAULT FALSE,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY (parent_id) REFERENCES folders(id) ON DELETE CASCADE
+        )
+        "#
+    )
+    .execute(pool)
+    .await?;
+
+    // Notifications table
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS notifications (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            type TEXT NOT NULL,
+            title TEXT NOT NULL,
+            body TEXT NOT NULL,
+            read BOOLEAN NOT NULL DEFAULT FALSE,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+        "#
+    )
+    .execute(pool)
+    .await?;
+
     // Chat invites table
     sqlx::query(
         r#"
@@ -360,4 +399,5 @@ pub mod fixtures {
     pub const TEST_CHAT_TYPE: &str = "direct";
     pub const TEST_MESSAGE_CONTENT: &str = "Hello, world!";
     pub const TEST_MESSAGE_ROLE: &str = "user";
+    pub const TEST_FOLDER_NAME: &str = "Test Folder";
 }

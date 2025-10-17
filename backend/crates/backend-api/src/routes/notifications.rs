@@ -10,6 +10,7 @@ use crate::{
     routes::models::{
         MarkNotificationReadRequest, Notification, NotificationResponse, NotificationsResponse,
     },
+    services::notification as notification_service,
     util::require_bearer,
     ApiError, AppState,
 };
@@ -56,45 +57,18 @@ pub async fn get_notifications(
     let limit = query.limit.unwrap_or(50);
     let offset = query.offset.unwrap_or(0);
 
-    let notifications = if unread_only {
-        sqlx::query_as::<_, Notification>(
-            r#"
-            SELECT id, user_id, type, title, body, read, created_at
-            FROM notifications
-            WHERE user_id = ? AND read = FALSE
-            ORDER BY created_at DESC
-            LIMIT ? OFFSET ?
-            "#,
-        )
-        .bind(user.id)
-        .bind(limit)
-        .bind(offset)
-        .fetch_all(state.db_pool())
-        .await
-        .map_err(|e| {
-            tracing::error!("Failed to fetch unread notifications: {}", e);
-            ApiError::internal_server_error("Failed to fetch notifications")
-        })?
-    } else {
-        sqlx::query_as::<_, Notification>(
-            r#"
-            SELECT id, user_id, type, title, body, read, created_at
-            FROM notifications
-            WHERE user_id = ?
-            ORDER BY created_at DESC
-            LIMIT ? OFFSET ?
-            "#,
-        )
-        .bind(user.id)
-        .bind(limit)
-        .bind(offset)
-        .fetch_all(state.db_pool())
-        .await
-        .map_err(|e| {
-            tracing::error!("Failed to fetch notifications: {}", e);
-            ApiError::internal_server_error("Failed to fetch notifications")
-        })?
-    };
+    let notifications = notification_service::list_notifications(
+        state.db_pool(),
+        user.id,
+        unread_only,
+        limit,
+        offset,
+    )
+    .await
+    .map_err(|e| {
+        tracing::error!("Failed to fetch notifications: {}", e);
+        ApiError::from(e)
+    })?;
 
     Ok(Json(NotificationsResponse { notifications }))
 }
@@ -118,15 +92,12 @@ pub async fn get_unread_count(
     let token = require_bearer(&headers)?;
     let (user, _) = state.authenticate(&token).await?;
 
-    let count: i64 =
-        sqlx::query_scalar("SELECT COUNT(*) FROM notifications WHERE user_id = ? AND read = FALSE")
-            .bind(user.id)
-            .fetch_one(state.db_pool())
-            .await
-            .map_err(|e| {
-                tracing::error!("Failed to fetch unread notification count: {}", e);
-                ApiError::internal_server_error("Failed to fetch unread notification count")
-            })?;
+    let count = notification_service::get_unread_count(state.db_pool(), user.id)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to fetch unread notification count: {}", e);
+            ApiError::from(e)
+        })?;
 
     Ok(Json(serde_json::json!({ "unread_count": count })))
 }
@@ -157,48 +128,17 @@ pub async fn mark_notification_read(
     let token = require_bearer(&headers)?;
     let (user, _) = state.authenticate(&token).await?;
 
-    // Check if notification exists and belongs to user
-    let existing_notification: Option<(i64,)> =
-        sqlx::query_as("SELECT id FROM notifications WHERE id = ? AND user_id = ?")
-            .bind(notification_id)
-            .bind(user.id)
-            .fetch_optional(state.db_pool())
-            .await
-            .map_err(|e| {
-                tracing::error!("Failed to fetch notification: {}", e);
-                ApiError::internal_server_error("Failed to fetch notification")
-            })?;
-
-    existing_notification.ok_or_else(|| ApiError::not_found("Notification not found"))?;
-
-    // Update the notification
-    sqlx::query("UPDATE notifications SET read = ? WHERE id = ? AND user_id = ?")
-        .bind(req.read)
-        .bind(notification_id)
-        .bind(user.id)
-        .execute(state.db_pool())
-        .await
-        .map_err(|e| {
-            tracing::error!("Failed to update notification: {}", e);
-            ApiError::internal_server_error("Failed to update notification")
-        })?;
-
-    // Fetch the updated notification
-    let notification = sqlx::query_as::<_, Notification>(
-        r#"
-        SELECT id, user_id, type, title, body, read, created_at
-        FROM notifications
-        WHERE id = ?
-        "#,
+    let notification = notification_service::mark_notification_read(
+        state.db_pool(),
+        user.id,
+        notification_id,
+        req,
     )
-    .bind(notification_id)
-    .fetch_optional(state.db_pool())
     .await
     .map_err(|e| {
-        tracing::error!("Failed to fetch updated notification: {}", e);
-        ApiError::internal_server_error("Failed to fetch updated notification")
-    })?
-    .ok_or_else(|| ApiError::internal_server_error("Failed to fetch updated notification"))?;
+        tracing::error!("Failed to update notification: {}", e);
+        ApiError::from(e)
+    })?;
 
     Ok(Json(NotificationResponse { notification }))
 }
@@ -222,18 +162,15 @@ pub async fn mark_all_read(
     let token = require_bearer(&headers)?;
     let (user, _) = state.authenticate(&token).await?;
 
-    let result =
-        sqlx::query("UPDATE notifications SET read = TRUE WHERE user_id = ? AND read = FALSE")
-            .bind(user.id)
-            .execute(state.db_pool())
-            .await
-            .map_err(|e| {
-                tracing::error!("Failed to mark all notifications as read: {}", e);
-                ApiError::internal_server_error("Failed to mark all notifications as read")
-            })?;
+    let updated_count = notification_service::mark_all_read(state.db_pool(), user.id)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to mark all notifications as read: {}", e);
+            ApiError::from(e)
+        })?;
 
     Ok(Json(serde_json::json!({
-        "updated_count": result.rows_affected()
+        "updated_count": updated_count
     })))
 }
 
@@ -261,19 +198,12 @@ pub async fn delete_notification(
     let token = require_bearer(&headers)?;
     let (user, _) = state.authenticate(&token).await?;
 
-    let result = sqlx::query("DELETE FROM notifications WHERE id = ? AND user_id = ?")
-        .bind(notification_id)
-        .bind(user.id)
-        .execute(state.db_pool())
+    notification_service::delete_notification(state.db_pool(), user.id, notification_id)
         .await
         .map_err(|e| {
             tracing::error!("Failed to delete notification: {}", e);
-            ApiError::internal_server_error("Failed to delete notification")
+            ApiError::from(e)
         })?;
-
-    if result.rows_affected() == 0 {
-        return Err(ApiError::not_found("Notification not found"));
-    }
 
     Ok(())
 }

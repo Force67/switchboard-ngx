@@ -10,7 +10,7 @@ use switchboard_orchestrator::Orchestrator;
 use tokio::sync::{broadcast, Mutex};
 
 use crate::{
-    routes::models::{Chat, ChatInvite, ChatMember, Folder, Message},
+    routes::models::{Chat, ChatInvite, ChatMember, Folder, Message, Notification},
     ApiError,
 };
 
@@ -107,6 +107,39 @@ pub enum ClientEvent {
         member_user_id: i64,
     },
 
+    // Folder operations
+    CreateFolder {
+        name: String,
+        color: Option<String>,
+        parent_id: Option<String>,
+    },
+    UpdateFolder {
+        folder_id: String,
+        name: Option<String>,
+        color: Option<String>,
+        collapsed: Option<bool>,
+    },
+    DeleteFolder {
+        folder_id: String,
+    },
+    GetFolders,
+
+    // Notification operations
+    GetNotifications {
+        unread_only: Option<bool>,
+        limit: Option<i64>,
+        offset: Option<i64>,
+    },
+    MarkNotificationRead {
+        notification_id: i64,
+        read: bool,
+    },
+    MarkAllNotificationsRead,
+    DeleteNotification {
+        notification_id: i64,
+    },
+    GetUnreadCount,
+
     // Real-time events
     Typing {
         chat_id: String,
@@ -202,6 +235,30 @@ pub enum ServerEvent {
     },
     MembersResponse {
         members: Vec<ChatMember>,
+    },
+    FoldersResponse {
+        folders: Vec<Folder>,
+    },
+    FolderResponse {
+        folder: Folder,
+    },
+    NotificationsResponse {
+        notifications: Vec<Notification>,
+    },
+    NotificationResponse {
+        notification: Notification,
+    },
+    UnreadCountResponse {
+        unread_count: i64,
+    },
+    NotificationCreated {
+        notification: Notification,
+    },
+    NotificationUpdated {
+        notification: Notification,
+    },
+    NotificationDeleted {
+        notification_id: i64,
     },
 }
 

@@ -158,6 +158,24 @@ async fn create_schema(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     .execute(pool)
     .await?;
 
+    // Message attachments table
+    sqlx::query(
+        r#"
+        CREATE TABLE message_attachments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            message_id INTEGER NOT NULL,
+            file_name TEXT NOT NULL,
+            file_type TEXT NOT NULL,
+            file_url TEXT NOT NULL,
+            file_size_bytes INTEGER NOT NULL,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (message_id) REFERENCES messages (id) ON DELETE CASCADE
+        )
+        "#
+    )
+    .execute(pool)
+    .await?;
+
     // Message deletions table
     sqlx::query(
         r#"

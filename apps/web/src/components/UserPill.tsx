@@ -45,16 +45,20 @@ export default function UserPill(props: Props) {
   });
 
   const session = props.session();
-  if (!session) return null;
+  console.log('UserPill - session:', session);
 
-  const displayName = session.user.display_name || session.user.email || "User";
+  // Always render for debugging
+  const displayName = session?.user.display_name || session?.user.email || "Debug User";
+
+  console.log('UserPill - rendering with displayName:', displayName);
 
   return (
     <>
       <div
         class="user-pill"
         onContextMenu={handleContextMenu}
-        title="Right-click to logout"
+        title="Right-click for options"
+        style={{ border: '2px solid red !important' }}
       >
         <svg viewBox="0 0 16 16" width="12" height="12">
           <circle cx="8" cy="8" r="4" fill="currentColor" opacity="0.7" />
@@ -75,8 +79,8 @@ export default function UserPill(props: Props) {
         >
           <button class="menu-item" onClick={handleLogout}>
             <svg viewBox="0 0 16 16" width="14" height="14">
-              <path d="M2 4v8c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2z" fill="none" stroke="currentColor" stroke-width="1.5"/>
-              <path d="M6 8h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              <path d="M10 12.5a.5.5 0 0 1-.5.5h-8a.5.5 0 0 1-.5-.5v-9a.5.5 0 0 1 .5-.5h8a.5.5 0 0 1 .5.5v2a.5.5 0 0 0 1 0v-2A1.5 1.5 0 0 0 9.5 2h-8A1.5 1.5 0 0 0 0 3.5v9A1.5 1.5 0 0 0 1.5 14h8a1.5 1.5 0 0 0 1.5-1.5v-2a.5.5 0 0 0-1 0v2z"/>
+              <path d="M15.854 8.354a.5.5 0 0 0 0-.708l-3-3a.5.5 0 0 0-.708.708L14.293 7.5H5.5a.5.5 0 0 0 0 1h8.793l-2.147 2.146a.5.5 0 0 0 .708.708l3-3z"/>
             </svg>
             Logout
           </button>

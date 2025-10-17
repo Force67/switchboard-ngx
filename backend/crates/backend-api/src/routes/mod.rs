@@ -10,3 +10,4 @@ pub mod notifications;
 pub mod permissions;
 pub mod rest;
 pub mod websocket;
+pub mod websocket_handlers;

@@ -9,6 +9,20 @@ pub enum ServiceError {
     Internal(String),
 }
 
+impl std::fmt::Display for ServiceError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ServiceError::NotFound => write!(f, "Resource not found"),
+            ServiceError::Forbidden => write!(f, "Access forbidden"),
+            ServiceError::BadRequest(msg) => write!(f, "Bad request: {}", msg),
+            ServiceError::Database(err) => write!(f, "Database error: {}", err),
+            ServiceError::Auth(err) => write!(f, "Authentication error: {}", err),
+            ServiceError::Config(msg) => write!(f, "Configuration error: {}", msg),
+            ServiceError::Internal(msg) => write!(f, "Internal server error: {}", msg),
+        }
+    }
+}
+
 impl ServiceError {
     pub fn not_found(_msg: impl Into<String>) -> Self {
         Self::NotFound

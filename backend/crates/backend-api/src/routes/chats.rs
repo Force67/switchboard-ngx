@@ -3,7 +3,7 @@ use axum::{
     http::HeaderMap,
     Json,
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sqlx::Row;
 
@@ -32,7 +32,7 @@ pub struct ChatDetailResponse {
     pub chat: Chat,
 }
 
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct ChatWithMessages {
     pub id: i64,
     pub public_id: String,

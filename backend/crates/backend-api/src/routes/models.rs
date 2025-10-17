@@ -252,7 +252,7 @@ pub struct MemberResponse {
 }
 
 // New DTOs for message features
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct CreateMessageRequest {
     pub content: String,
     pub role: String,

@@ -17,18 +17,97 @@ use crate::{
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ClientEvent {
+    // WebSocket connection management
     Subscribe {
         chat_id: String,
     },
     Unsubscribe {
         chat_id: String,
     },
+
+    // Chat operations
+    CreateChat {
+        title: String,
+        chat_type: String,
+        folder_id: Option<String>,
+        messages: Vec<crate::routes::models::CreateMessageRequest>,
+    },
+    UpdateChat {
+        chat_id: String,
+        title: Option<String>,
+        folder_id: Option<String>,
+    },
+    DeleteChat {
+        chat_id: String,
+    },
+    GetChats,
+    GetChat {
+        chat_id: String,
+    },
+
+    // Message operations
     Message {
         chat_id: String,
         content: String,
         #[serde(default, deserialize_with = "deserialize_models")]
         models: Vec<String>,
     },
+    CreateMessage {
+        chat_id: String,
+        content: String,
+        role: String,
+        model: Option<String>,
+        message_type: Option<String>,
+        thread_id: Option<String>,
+        reply_to_id: Option<String>,
+    },
+    UpdateMessage {
+        chat_id: String,
+        message_id: String,
+        content: String,
+    },
+    DeleteMessage {
+        chat_id: String,
+        message_id: String,
+    },
+    GetMessages {
+        chat_id: String,
+    },
+    GetMessageEdits {
+        chat_id: String,
+        message_id: String,
+    },
+
+    // Invite operations
+    CreateInvite {
+        chat_id: String,
+        email: String,
+    },
+    ListInvites {
+        chat_id: String,
+    },
+    AcceptInvite {
+        invite_id: i64,
+    },
+    RejectInvite {
+        invite_id: i64,
+    },
+
+    // Member operations
+    ListMembers {
+        chat_id: String,
+    },
+    UpdateMemberRole {
+        chat_id: String,
+        member_user_id: i64,
+        role: String,
+    },
+    RemoveMember {
+        chat_id: String,
+        member_user_id: i64,
+    },
+
+    // Real-time events
     Typing {
         chat_id: String,
         is_typing: bool,
@@ -103,6 +182,26 @@ pub enum ServerEvent {
     MemberRemoved {
         chat_id: String,
         user_id: i64,
+    },
+
+    // Data responses
+    ChatsResponse {
+        chats: Vec<crate::routes::chats::ChatWithMessages>,
+    },
+    ChatResponse {
+        chat: Chat,
+    },
+    MessagesResponse {
+        messages: Vec<Message>,
+    },
+    MessageEditsResponse {
+        edits: Vec<crate::routes::models::MessageEdit>,
+    },
+    InvitesResponse {
+        invites: Vec<ChatInvite>,
+    },
+    MembersResponse {
+        members: Vec<ChatMember>,
     },
 }
 

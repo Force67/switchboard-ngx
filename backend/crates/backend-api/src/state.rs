@@ -10,7 +10,7 @@ use switchboard_orchestrator::Orchestrator;
 use tokio::sync::{broadcast, Mutex};
 
 use crate::{
-    routes::models::{Chat, ChatInvite, ChatMember, Folder, Message, Notification},
+    routes::models::{Chat, ChatInvite, ChatMember, Folder, Message, Notification, Permission},
     ApiError,
 };
 
@@ -140,6 +140,33 @@ pub enum ClientEvent {
     },
     GetUnreadCount,
 
+    // Permission operations
+    GetUserPermissions {
+        user_id: String, // public_id
+        resource_type: Option<String>,
+        resource_id: Option<String>, // public_id
+    },
+    GetResourcePermissions {
+        resource_type: String,
+        resource_id: String, // public_id
+    },
+    GrantPermission {
+        resource_type: String,
+        resource_id: String, // public_id
+        user_id: String, // public_id
+        permission_level: String,
+    },
+    RevokePermission {
+        resource_type: String,
+        resource_id: String, // public_id
+        user_id: String, // public_id
+    },
+    CheckPermission {
+        resource_type: String,
+        resource_id: String, // public_id
+        permission_level: String,
+    },
+
     // Real-time events
     Typing {
         chat_id: String,
@@ -259,6 +286,31 @@ pub enum ServerEvent {
     },
     NotificationDeleted {
         notification_id: i64,
+    },
+    PermissionsResponse {
+        permissions: Vec<Permission>,
+    },
+    PermissionResponse {
+        permission: Permission,
+    },
+    PermissionGranted {
+        permission: Permission,
+    },
+    PermissionRevoked {
+        resource_type: String,
+        resource_id: i64,
+        user_id: i64,
+    },
+    PermissionCheckResponse {
+        has_permission: bool,
+    },
+
+    // User management responses
+    UsersResponse {
+        users: Vec<crate::routes::models::User>,
+    },
+    UserResponse {
+        user: crate::routes::models::User,
     },
 }
 

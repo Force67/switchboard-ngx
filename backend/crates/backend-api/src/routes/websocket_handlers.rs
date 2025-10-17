@@ -2,7 +2,7 @@ use crate::{
     routes::{
         models::{CreateMessageRequest, UpdateChatRequest, UpdateMemberRoleRequest},
     },
-    services::{chat, folder, invite, member, message, notification},
+    services::{chat, folder, invite, member, message, notification, permission},
     state::{AppState, ServerEvent},
 };
 use tokio::sync::mpsc;
@@ -118,6 +118,23 @@ pub async fn handle_client_event(
         }
         ClientEvent::GetUnreadCount => {
             handle_get_unread_count(state, user, out_tx).await?
+        }
+
+        // Permission operations
+        ClientEvent::GetUserPermissions { user_id, resource_type, resource_id } => {
+            handle_get_user_permissions(user_id, resource_type, resource_id, state, user, out_tx).await?
+        }
+        ClientEvent::GetResourcePermissions { resource_type, resource_id } => {
+            handle_get_resource_permissions(resource_type, resource_id, state, user, out_tx).await?
+        }
+        ClientEvent::GrantPermission { resource_type, resource_id, user_id, permission_level } => {
+            handle_grant_permission(resource_type, resource_id, user_id, permission_level, state, user, out_tx).await?
+        }
+        ClientEvent::RevokePermission { resource_type, resource_id, user_id } => {
+            handle_revoke_permission(resource_type, resource_id, user_id, state, user, out_tx).await?
+        }
+        ClientEvent::CheckPermission { resource_type, resource_id, permission_level } => {
+            handle_check_permission(resource_type, resource_id, permission_level, state, user, out_tx).await?
         }
 
         // Real-time events
@@ -961,6 +978,241 @@ async fn handle_get_unread_count(
 
     let response_event = ServerEvent::UnreadCountResponse {
         unread_count,
+    };
+    out_tx.send(response_event).await?;
+    Ok(())
+}
+
+// Permission operations
+async fn handle_get_user_permissions(
+    user_id: String,
+    resource_type: Option<String>,
+    resource_id: Option<String>,
+    state: &AppState,
+    current_user: &switchboard_auth::User,
+    out_tx: &mpsc::Sender<ServerEvent>,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    // Resolve target user ID
+    let target_user_id = permission::resolve_user_id(state.db_pool(), &user_id)
+        .await
+        .map_err(|e| format!("Failed to resolve user ID: {}", e))?
+        .ok_or_else(|| "User not found".to_string())?;
+
+    // Users can only see their own permissions unless they're admin
+    if current_user.id != target_user_id {
+        return Err("Cannot view other users' permissions".into());
+    }
+
+    let resource_db_id = if let (Some(rt), Some(rid)) = (&resource_type, resource_id) {
+        Some(permission::resolve_resource_id(state.db_pool(), rt, &rid)
+            .await
+            .map_err(|e| format!("Failed to resolve resource ID: {}", e))?
+            .ok_or_else(|| "Resource not found".to_string())?)
+    } else {
+        None
+    };
+
+    let permissions = permission::get_user_permissions(
+        state.db_pool(),
+        target_user_id,
+        resource_type.as_deref(),
+        resource_db_id,
+    )
+    .await
+    .map_err(|e| format!("Failed to get user permissions: {}", e))?;
+
+    let response_event = ServerEvent::PermissionsResponse {
+        permissions,
+    };
+    out_tx.send(response_event).await?;
+    Ok(())
+}
+
+async fn handle_get_resource_permissions(
+    resource_type: String,
+    resource_id: String,
+    state: &AppState,
+    user: &switchboard_auth::User,
+    out_tx: &mpsc::Sender<ServerEvent>,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    // Resolve resource ID from public ID
+    let resource_db_id = permission::resolve_resource_id(state.db_pool(), &resource_type, &resource_id)
+        .await
+        .map_err(|e| format!("Failed to resolve resource ID: {}", e))?
+        .ok_or_else(|| "Resource not found".to_string())?;
+
+    // Check if user has admin permission for this resource
+    if !permission::check_permission(
+        state.db_pool(),
+        user.id,
+        &resource_type,
+        resource_db_id,
+        "admin",
+    )
+    .await
+    .map_err(|e| format!("Failed to check admin permission: {}", e))?
+    {
+        return Err("Admin permission required".into());
+    }
+
+    let permissions = permission::get_resource_permissions(
+        state.db_pool(),
+        &resource_type,
+        resource_db_id,
+    )
+    .await
+    .map_err(|e| format!("Failed to get resource permissions: {}", e))?;
+
+    let response_event = ServerEvent::PermissionsResponse {
+        permissions,
+    };
+    out_tx.send(response_event).await?;
+    Ok(())
+}
+
+async fn handle_grant_permission(
+    resource_type: String,
+    resource_id: String,
+    user_id: String,
+    permission_level: String,
+    state: &AppState,
+    current_user: &switchboard_auth::User,
+    out_tx: &mpsc::Sender<ServerEvent>,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    // Resolve resource ID from public ID
+    let resource_db_id = permission::resolve_resource_id(state.db_pool(), &resource_type, &resource_id)
+        .await
+        .map_err(|e| format!("Failed to resolve resource ID: {}", e))?
+        .ok_or_else(|| "Resource not found".to_string())?;
+
+    // Check if user has admin permission for this resource
+    if !permission::check_permission(
+        state.db_pool(),
+        current_user.id,
+        &resource_type,
+        resource_db_id,
+        "admin",
+    )
+    .await
+    .map_err(|e| format!("Failed to check admin permission: {}", e))?
+    {
+        return Err("Admin permission required".into());
+    }
+
+    // Resolve target user ID
+    let target_user_id = permission::resolve_user_id(state.db_pool(), &user_id)
+        .await
+        .map_err(|e| format!("Failed to resolve target user ID: {}", e))?
+        .ok_or_else(|| "Target user not found".to_string())?;
+
+    // Grant the permission
+    let permission = permission::grant_permission(
+        state.db_pool(),
+        target_user_id,
+        &resource_type,
+        resource_db_id,
+        &permission_level,
+        current_user.id,
+    )
+    .await
+    .map_err(|e| format!("Failed to grant permission: {}", e))?;
+
+    // Broadcast the permission granted event
+    let event = ServerEvent::PermissionGranted {
+        permission: permission.clone(),
+    };
+    state.broadcast_to_user(current_user.id, &event).await;
+
+    // Send direct response
+    let response_event = ServerEvent::PermissionResponse {
+        permission,
+    };
+    out_tx.send(response_event).await?;
+    Ok(())
+}
+
+async fn handle_revoke_permission(
+    resource_type: String,
+    resource_id: String,
+    user_id: String,
+    state: &AppState,
+    current_user: &switchboard_auth::User,
+    out_tx: &mpsc::Sender<ServerEvent>,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    // Resolve resource ID from public ID
+    let resource_db_id = permission::resolve_resource_id(state.db_pool(), &resource_type, &resource_id)
+        .await
+        .map_err(|e| format!("Failed to resolve resource ID: {}", e))?
+        .ok_or_else(|| "Resource not found".to_string())?;
+
+    // Check if user has admin permission for this resource
+    if !permission::check_permission(
+        state.db_pool(),
+        current_user.id,
+        &resource_type,
+        resource_db_id,
+        "admin",
+    )
+    .await
+    .map_err(|e| format!("Failed to check admin permission: {}", e))?
+    {
+        return Err("Admin permission required".into());
+    }
+
+    // Resolve target user ID
+    let target_user_id = permission::resolve_user_id(state.db_pool(), &user_id)
+        .await
+        .map_err(|e| format!("Failed to resolve target user ID: {}", e))?
+        .ok_or_else(|| "Target user not found".to_string())?;
+
+    // Revoke the permission
+    permission::revoke_permission(
+        state.db_pool(),
+        target_user_id,
+        &resource_type,
+        resource_db_id,
+    )
+    .await
+    .map_err(|e| format!("Failed to revoke permission: {}", e))?;
+
+    // Broadcast the permission revoked event
+    let event = ServerEvent::PermissionRevoked {
+        resource_type,
+        resource_id: resource_db_id,
+        user_id: target_user_id,
+    };
+    state.broadcast_to_user(current_user.id, &event).await;
+
+    out_tx.send(event).await?;
+    Ok(())
+}
+
+async fn handle_check_permission(
+    resource_type: String,
+    resource_id: String,
+    permission_level: String,
+    state: &AppState,
+    user: &switchboard_auth::User,
+    out_tx: &mpsc::Sender<ServerEvent>,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    // Resolve resource ID from public ID
+    let resource_db_id = permission::resolve_resource_id(state.db_pool(), &resource_type, &resource_id)
+        .await
+        .map_err(|e| format!("Failed to resolve resource ID: {}", e))?
+        .ok_or_else(|| "Resource not found".to_string())?;
+
+    let has_permission = permission::check_permission(
+        state.db_pool(),
+        user.id,
+        &resource_type,
+        resource_db_id,
+        &permission_level,
+    )
+    .await
+    .map_err(|e| format!("Failed to check permission: {}", e))?;
+
+    let response_event = ServerEvent::PermissionCheckResponse {
+        has_permission,
     };
     out_tx.send(response_event).await?;
     Ok(())

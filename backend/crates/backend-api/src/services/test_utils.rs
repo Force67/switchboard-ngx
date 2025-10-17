@@ -214,6 +214,24 @@ async fn create_schema(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     .execute(pool)
     .await?;
 
+    // Permissions table
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS permissions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            resource_type TEXT NOT NULL,
+            resource_id INTEGER NOT NULL,
+            permission_level TEXT NOT NULL CHECK (permission_level IN ('read', 'write', 'admin')),
+            granted_at TEXT NOT NULL,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+            UNIQUE(user_id, resource_type, resource_id)
+        )
+        "#
+    )
+    .execute(pool)
+    .await?;
+
     // Chat invites table
     sqlx::query(
         r#"

@@ -264,7 +264,7 @@ async fn handle_create_message(
     state: &AppState,
     user: &switchboard_auth::User,
     out_tx: &mpsc::Sender<ServerEvent>,
-    subscribed_chats: &HashMap<String, (i64, tokio::sync::broadcast::Sender<ServerEvent>)>,
+    _subscribed_chats: &HashMap<String, (i64, tokio::sync::broadcast::Sender<ServerEvent>)>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let create_req = CreateMessageRequest {
         content,
@@ -425,7 +425,7 @@ async fn handle_message_with_llm(
     out_tx.send(message_event).await?;
 
     // LLM processing (existing logic)
-    let (chat_db_id, broadcaster) = match subscribed_chats.get(&chat_id) {
+    let (_chat_db_id, broadcaster) = match subscribed_chats.get(&chat_id) {
         Some((id, sender)) => (*id, sender.clone()),
         None => {
             return Err("Not subscribed to chat".into());
@@ -480,7 +480,7 @@ async fn handle_message_with_llm(
             match provider.complete(request).await {
                 Ok(completion) => {
                     let response_content = completion.message.text().unwrap_or_default().to_string();
-                    let assistant_message_id = cuid2::create_id();
+                    let _assistant_message_id = cuid2::create_id();
                     let assistant_timestamp = chrono::Utc::now().to_rfc3339();
 
                     // Create assistant message request
@@ -598,7 +598,7 @@ async fn handle_reject_invite(
     invite_id: i64,
     state: &AppState,
     user: &switchboard_auth::User,
-    out_tx: &mpsc::Sender<ServerEvent>,
+    _out_tx: &mpsc::Sender<ServerEvent>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     invite::reject_invite(
         state.db_pool(),
@@ -685,7 +685,7 @@ async fn handle_remove_member(
 async fn handle_typing(
     chat_id: String,
     is_typing: bool,
-    state: &AppState,
+    _state: &AppState,
     user: &switchboard_auth::User,
     out_tx: &mpsc::Sender<ServerEvent>,
     subscribed_chats: &HashMap<String, (i64, tokio::sync::broadcast::Sender<ServerEvent>)>,

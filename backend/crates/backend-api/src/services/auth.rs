@@ -88,3 +88,46 @@ pub async fn create_dev_token(pool: &SqlitePool) -> Result<(AuthSession, User), 
 pub fn create_session_response(session: AuthSession, user: User) -> SessionResponse {
     SessionResponse::new(session, user)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::services::test_utils::{create_test_db, create_test_user};
+    use crate::services::test_utils::fixtures::*;
+    use switchboard_auth::{Authenticator, AuthSession};
+
+    // Note: GitHub OAuth tests require complex mocking which is beyond the scope of current test setup.
+    // These would require either a more sophisticated mocking framework or integration tests.
+
+    #[tokio::test]
+    async fn test_create_dev_token_success() {
+        let (pool, _temp_dir) = create_test_db().await;
+
+        let result = create_dev_token(&pool).await;
+
+        assert!(result.is_ok());
+        let (session, user) = result.unwrap();
+        assert_eq!(session.user_id, 1);
+        assert_eq!(user.id, 1);
+        assert_eq!(user.public_id, "dev-user-123");
+        assert_eq!(user.email.unwrap(), "dev@example.com");
+    }
+
+    #[tokio::test]
+    async fn test_create_session_response() {
+        let session = AuthSession {
+            token: "test-token".to_string(),
+            user_id: 1,
+            expires_at: chrono::Utc::now() + chrono::Duration::hours(24),
+        };
+        let user = test_user();
+
+        let response = create_session_response(session.clone(), user.clone());
+
+        assert_eq!(response.token, session.token);
+        assert_eq!(response.user.id, user.public_id);
+        // Note: SessionResponse doesn't include public_id based on the current implementation
+        assert_eq!(response.user.email, user.email);
+        assert_eq!(response.user.display_name, user.display_name);
+    }
+}

@@ -233,6 +233,69 @@ pub async fn notify_mention(
     create_notification(pool, mentioned_user_id, "mention", &title, &body).await
 }
 
+// Service functions that handle business logic for API routes
+
+/// Get user notifications with parameter handling and business logic
+pub async fn get_user_notifications(
+    pool: &SqlitePool,
+    user_id: i64,
+    unread_only: Option<bool>,
+    limit: Option<i64>,
+    offset: Option<i64>,
+) -> Result<Vec<crate::routes::models::Notification>, ServiceError> {
+    let unread_only = unread_only.unwrap_or(false);
+    let limit = limit.unwrap_or(50);
+    let offset = offset.unwrap_or(0);
+
+    list_notifications(
+        pool,
+        user_id,
+        unread_only,
+        limit,
+        offset,
+    ).await
+}
+
+/// Get unread count for a user
+pub async fn get_user_unread_count(
+    pool: &SqlitePool,
+    user_id: i64,
+) -> Result<i64, ServiceError> {
+    get_unread_count(pool, user_id).await
+}
+
+/// Mark notification as read/unread with validation
+pub async fn mark_notification_as_read(
+    pool: &SqlitePool,
+    user_id: i64,
+    notification_id: i64,
+    request: crate::routes::models::MarkNotificationReadRequest,
+) -> Result<crate::routes::models::Notification, ServiceError> {
+    mark_notification_read(
+        pool,
+        user_id,
+        notification_id,
+        request,
+    ).await
+}
+
+/// Mark all notifications as read for a user
+pub async fn mark_all_user_notifications_read(
+    pool: &SqlitePool,
+    user_id: i64,
+) -> Result<u64, ServiceError> {
+    mark_all_read(pool, user_id).await
+}
+
+/// Delete a notification with ownership validation
+pub async fn delete_user_notification(
+    pool: &SqlitePool,
+    user_id: i64,
+    notification_id: i64,
+) -> Result<(), ServiceError> {
+    delete_notification(pool, user_id, notification_id).await
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

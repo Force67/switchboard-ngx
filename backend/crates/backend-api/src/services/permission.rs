@@ -2,7 +2,9 @@ use sqlx::SqlitePool;
 use crate::routes::models::Permission;
 use super::error::ServiceError;
 
+#[allow(dead_code)]
 pub const PERMISSION_LEVELS: &[&str] = &["read", "write", "admin"];
+#[allow(dead_code)]
 pub const RESOURCE_TYPES: &[&str] = &["chat", "folder", "workspace"];
 
 pub async fn check_permission(
@@ -218,6 +220,7 @@ pub async fn check_chat_permission(
     }
 }
 
+#[allow(dead_code)]
 pub async fn check_folder_permission(
     pool: &SqlitePool,
     user_id: i64,

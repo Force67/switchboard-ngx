@@ -6,7 +6,7 @@ members = [
   "crates/backend-api",
   "crates/runtime",
   "server"
-]
+, "apps"]
 resolver = "2"
 
 [workspace.package]

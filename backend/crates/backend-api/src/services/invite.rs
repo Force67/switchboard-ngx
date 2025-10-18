@@ -49,6 +49,8 @@ pub async fn create_invite(
         .fetch_one(pool)
         .await?;
 
+    let invitee_email = req.email.clone();
+
     let invite = ChatInvite {
         id: invite_id,
         chat_id: chat_db_id,
@@ -60,6 +62,19 @@ pub async fn create_invite(
     };
 
     let member_ids = super::chat::fetch_chat_member_ids_by_id(pool, chat_db_id).await?;
+
+    // Send notification to invited user if they exist in the system
+    if let Ok(invited_user_id) = find_user_by_email(pool, &invitee_email).await {
+        if let Ok((inviter_name, chat_title)) = get_user_and_chat_info(pool, user_id, chat_db_id).await {
+            // This is a fire-and-forget operation, we don't want to fail invite creation if notification fails
+            let _ = super::notification::notify_chat_invite(
+                pool,
+                invited_user_id,
+                &chat_title,
+                &inviter_name,
+            ).await;
+        }
+    }
 
     Ok((invite, member_ids))
 }
@@ -150,6 +165,27 @@ pub async fn accept_invite(
 
     let member_ids = super::chat::fetch_chat_member_ids_by_id(pool, chat_db_id).await?;
 
+    // Send notification to the inviter that the invite was accepted
+    // Get the inviter's user_id from the invite
+    let inviter_user_id: Option<i64> = sqlx::query_scalar(
+        "SELECT inviter_id FROM chat_invites WHERE id = ?"
+    )
+    .bind(invite_id)
+    .fetch_optional(pool)
+    .await?;
+
+    if let Some(inviter_id) = inviter_user_id {
+        if let Ok((accepted_user_name, chat_title)) = get_user_and_chat_info(pool, user_id, chat_db_id).await {
+            // This is a fire-and-forget operation, we don't want to fail invite acceptance if notification fails
+            let _ = super::notification::notify_invite_accepted(
+                pool,
+                inviter_id,
+                &accepted_user_name,
+                &chat_title,
+            ).await;
+        }
+    }
+
     Ok((member, member_ids, chat_public_id))
 }
 
@@ -184,3 +220,40 @@ pub async fn reject_invite(
 
     Ok(())
 }
+
+async fn find_user_by_email(pool: &SqlitePool, email: &str) -> Result<i64, ServiceError> {
+    let user_id = sqlx::query_scalar::<_, i64>(
+        "SELECT id FROM users WHERE email = ?"
+    )
+    .bind(email)
+    .fetch_optional(pool)
+    .await?;
+
+    user_id.ok_or_else(|| ServiceError::not_found("User not found"))
+}
+
+async fn get_user_and_chat_info(
+    pool: &SqlitePool,
+    user_id: i64,
+    chat_db_id: i64,
+) -> Result<(String, String), ServiceError> {
+    let result: Option<(Option<String>, String)> = sqlx::query_as(
+        r#"
+        SELECT u.display_name, c.title
+        FROM users u
+        JOIN chats c ON c.id = ?
+        WHERE u.id = ?
+        "#,
+    )
+    .bind(chat_db_id)
+    .bind(user_id)
+    .fetch_optional(pool)
+    .await?;
+
+    match result {
+        Some((Some(display_name), chat_title)) => Ok((display_name, chat_title)),
+        Some((None, chat_title)) => Ok(("Unknown User".to_string(), chat_title)),
+        _ => Err(ServiceError::internal("Failed to get user and chat info")),
+    }
+}
+

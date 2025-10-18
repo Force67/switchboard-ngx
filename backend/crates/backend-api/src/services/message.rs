@@ -115,6 +115,18 @@ pub async fn create_message(
 
     let member_ids = fetch_chat_member_ids(pool, chat_db_id).await?;
 
+    // Send notifications to other chat members
+    if let Ok((sender_name, chat_title)) = get_user_and_chat_info(pool, user_id, chat_db_id).await {
+        // This is a fire-and-forget operation, we don't want to fail message creation if notification fails
+        let _ = super::notification::notify_new_message(
+            pool,
+            chat_db_id,
+            user_id,
+            &sender_name,
+            &chat_title,
+        ).await;
+    }
+
     Ok((message, member_ids))
 }
 
@@ -311,16 +323,33 @@ async fn check_message_edit_permission(
         return Ok(true);
     }
 
-    // Check if user is admin or owner of the chat
-    let user_role: Option<String> = sqlx::query_scalar(
-        "SELECT cm.role FROM chat_members cm WHERE cm.chat_id = ? AND cm.user_id = ?",
+    // Use the centralized permission service to check if user has admin permission
+    super::permission::check_chat_permission(pool, user_id, chat_db_id, "admin").await
+}
+
+async fn get_user_and_chat_info(
+    pool: &SqlitePool,
+    user_id: i64,
+    chat_db_id: i64,
+) -> Result<(String, String), ServiceError> {
+    let result: Option<(Option<String>, String)> = sqlx::query_as(
+        r#"
+        SELECT u.display_name, c.title
+        FROM users u
+        JOIN chats c ON c.id = ?
+        WHERE u.id = ?
+        "#,
     )
     .bind(chat_db_id)
     .bind(user_id)
     .fetch_optional(pool)
     .await?;
 
-    Ok(matches!(user_role.as_deref(), Some("admin") | Some("owner")))
+    match result {
+        Some((Some(display_name), chat_title)) => Ok((display_name, chat_title)),
+        Some((None, chat_title)) => Ok(("Unknown User".to_string(), chat_title)),
+        _ => Err(ServiceError::internal("Failed to get user and chat info")),
+    }
 }
 
 #[cfg(test)]

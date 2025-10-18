@@ -221,6 +221,7 @@ pub async fn notify_invite_accepted(
     create_notification(pool, inviter_user_id, "invite_accepted", &title, &body).await
 }
 
+#[allow(dead_code)]
 pub async fn notify_mention(
     pool: &SqlitePool,
     mentioned_user_id: i64,

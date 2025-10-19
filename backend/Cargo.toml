@@ -1,10 +1,12 @@
 [workspace]
 members = [
   "crates/auth",
+  "crates/chats",
   "crates/config",
   "crates/orchestrator",
   "crates/backend-api",
   "crates/runtime",
+  "crates/users",
   "server"
 , "apps"]
 resolver = "2"

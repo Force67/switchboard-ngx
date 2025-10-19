@@ -54,7 +54,7 @@ pub fn create_router(state: GatewayState) -> Router {
     let arc_state = Arc::new(state);
     let mut router = Router::new()
         // REST API routes
-        .merge(rest::create_rest_routes().with_state(arc_state.as_ref().clone()))
+        .merge(rest::create_rest_routes().with_state(arc_state.clone()))
         // WebSocket routes
         .merge(websocket::create_websocket_routes().with_state(arc_state))
         // CORS middleware

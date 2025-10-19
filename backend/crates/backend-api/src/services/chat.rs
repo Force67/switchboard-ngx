@@ -344,9 +344,9 @@ mod tests {
             .await.expect("Failed to create test user");
 
         // Create test chats
-        let chat1_id = create_test_chat(&pool, TEST_USER_ID, "Chat 1", TEST_CHAT_TYPE)
+        let _chat1_id = create_test_chat(&pool, TEST_USER_ID, "Chat 1", TEST_CHAT_TYPE)
             .await.expect("Failed to create chat 1");
-        let chat2_id = create_test_chat(&pool, TEST_USER_ID, "Chat 2", TEST_CHAT_TYPE)
+        let _chat2_id = create_test_chat(&pool, TEST_USER_ID, "Chat 2", TEST_CHAT_TYPE)
             .await.expect("Failed to create chat 2");
 
         let result = list_chats(&pool, TEST_USER_ID).await;

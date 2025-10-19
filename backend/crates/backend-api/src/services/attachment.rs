@@ -128,7 +128,7 @@ pub async fn delete_attachment(
     .fetch_optional(pool)
     .await?;
 
-    let message_db_id = message_details.ok_or_else(|| ServiceError::not_found("Attachment not found"))?.0;
+    let _message_db_id = message_details.ok_or_else(|| ServiceError::not_found("Attachment not found"))?.0;
 
     // Check if user can delete attachments from this message
     let can_delete = check_attachment_delete_permission(pool, message_public_id, chat_db_id, user_id).await?;
@@ -205,7 +205,7 @@ mod tests {
             .await.expect("Failed to create message");
 
         // Create test attachment
-        let attachment_id = create_test_attachment(&pool, message_id, "test.pdf", "application/pdf", "http://example.com/test.pdf", 1024)
+        let _attachment_id = create_test_attachment(&pool, message_id, "test.pdf", "application/pdf", "http://example.com/test.pdf", 1024)
             .await.expect("Failed to create attachment");
 
         // Get public IDs

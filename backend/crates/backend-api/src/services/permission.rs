@@ -570,7 +570,7 @@ mod tests {
     #[tokio::test]
     async fn test_resolve_user_id() {
         let (pool, _temp_dir) = create_test_db().await;
-        let user = create_test_user(&pool, TEST_USER_ID, TEST_USER_PUBLIC_ID, Some(TEST_USER_EMAIL), Some(TEST_USER_DISPLAY_NAME)).await.unwrap();
+        let _user = create_test_user(&pool, TEST_USER_ID, TEST_USER_PUBLIC_ID, Some(TEST_USER_EMAIL), Some(TEST_USER_DISPLAY_NAME)).await.unwrap();
 
         // Resolve public ID to database ID
         let result = resolve_user_id(&pool, TEST_USER_PUBLIC_ID).await;

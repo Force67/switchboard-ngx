@@ -1,9 +1,10 @@
-//! WebSocket handlers for chat-related real-time functionality
+//! Chat WebSocket handlers
 
 use axum::{
     extract::{
         ws::{Message, WebSocket, WebSocketUpgrade},
         State,
+        Query,
     },
     response::Response,
 };
@@ -13,12 +14,8 @@ use std::sync::Arc;
 use tokio::sync::{broadcast, RwLock};
 use uuid::Uuid;
 
-use switchboard_database::{
-    Chat, ChatMessage, ChatMember, ChatInvite, MessageAttachment,
-    ChatService, MessageService, MemberService, InviteService, AttachmentService,
-    ChatError, MessageError, MemberError, InviteError, AttachmentError,
-    ChatRole, MessageStatus, MessageType, InviteStatus,
-};
+use crate::state::GatewayState;
+use crate::error::GatewayError;
 
 /// WebSocket state for managing chat connections and broadcasts
 #[derive(Clone)]
@@ -27,34 +24,16 @@ pub struct ChatWebSocketState {
     pub chat_subscriptions: Arc<RwLock<HashMap<String, (i64, broadcast::Sender<ChatServerEvent>)>>>,
     /// Active user connections
     pub user_connections: Arc<RwLock<HashMap<i64, broadcast::Sender<ChatServerEvent>>>>,
-    /// Chat service
-    pub chat_service: ChatService<switchboard_database::ChatRepository>,
-    /// Message service
-    pub message_service: MessageService<switchboard_database::MessageRepository>,
-    /// Member service
-    pub member_service: MemberService<switchboard_database::MemberRepository>,
-    /// Invite service
-    pub invite_service: InviteService<switchboard_database::InviteRepository>,
-    /// Attachment service
-    pub attachment_service: AttachmentService<switchboard_database::AttachmentRepository>,
+    /// Gateway state with access to services
+    pub gateway_state: Arc<GatewayState>,
 }
 
 impl ChatWebSocketState {
-    pub fn new(
-        chat_service: ChatService<switchboard_database::ChatRepository>,
-        message_service: MessageService<switchboard_database::MessageRepository>,
-        member_service: MemberService<switchboard_database::MemberRepository>,
-        invite_service: InviteService<switchboard_database::InviteRepository>,
-        attachment_service: AttachmentService<switchboard_database::AttachmentRepository>,
-    ) -> Self {
+    pub fn new(gateway_state: Arc<GatewayState>) -> Self {
         Self {
             chat_subscriptions: Arc::new(RwLock::new(HashMap::new())),
             user_connections: Arc::new(RwLock::new(HashMap::new())),
-            chat_service,
-            message_service,
-            member_service,
-            invite_service,
-            attachment_service,
+            gateway_state,
         }
     }
 
@@ -77,21 +56,21 @@ impl ChatWebSocketState {
     }
 
     /// Broadcast an event to a specific chat
-    pub async fn broadcast_to_chat(&self, chat_id: &str, event: &ChatServerEvent) -> ChatResult<()> {
+    pub async fn broadcast_to_chat(&self, chat_id: &str, event: &ChatServerEvent) -> Result<(), GatewayError> {
         let broadcaster = self.get_chat_broadcaster(chat_id).await;
         let _ = broadcaster.send(event.clone());
         Ok(())
     }
 
     /// Broadcast an event to a specific user
-    pub async fn broadcast_to_user(&self, user_id: i64, event: &ChatServerEvent) -> ChatResult<()> {
+    pub async fn broadcast_to_user(&self, user_id: i64, event: &ChatServerEvent) -> Result<(), GatewayError> {
         let broadcaster = self.get_user_broadcaster(user_id).await;
         let _ = broadcaster.send(event.clone());
         Ok(())
     }
 
     /// Subscribe a user to a chat
-    pub async fn subscribe_to_chat(&self, chat_id: &str, user_id: i64) -> ChatResult<()> {
+    pub async fn subscribe_to_chat(&self, chat_id: &str, user_id: i64) -> Result<(), GatewayError> {
         let broadcaster = self.get_chat_broadcaster(chat_id).await;
         let mut subscriptions = self.chat_subscriptions.write().await;
         subscriptions.insert(chat_id.to_string(), (user_id, broadcaster));
@@ -99,7 +78,7 @@ impl ChatWebSocketState {
     }
 
     /// Unsubscribe a user from a chat
-    pub async fn unsubscribe_from_chat(&self, chat_id: &str) -> ChatResult<()> {
+    pub async fn unsubscribe_from_chat(&self, chat_id: &str) -> Result<(), GatewayError> {
         let mut subscriptions = self.chat_subscriptions.write().await;
         subscriptions.remove(chat_id);
         Ok(())
@@ -126,35 +105,6 @@ pub enum ChatClientEvent {
     Unsubscribe {
         chat_id: String,
     },
-    /// Create a new chat
-    CreateChat {
-        title: String,
-        description: Option<String>,
-        avatar_url: Option<String>,
-        folder_id: Option<String>,
-    },
-    /// Get chat details
-    GetChat {
-        chat_id: String,
-    },
-    /// Update chat
-    UpdateChat {
-        chat_id: String,
-        title: Option<String>,
-        description: Option<String>,
-        avatar_url: Option<String>,
-        folder_id: Option<String>,
-    },
-    /// Delete chat
-    DeleteChat {
-        chat_id: String,
-    },
-    /// Get list of user's chats
-    GetChats {
-        folder_id: Option<String>,
-        limit: Option<i64>,
-        offset: Option<i64>,
-    },
     /// Send a message
     SendMessage {
         chat_id: String,
@@ -173,21 +123,6 @@ pub enum ChatClientEvent {
     DeleteMessage {
         chat_id: String,
         message_id: String,
-    },
-    /// Get messages for a chat
-    GetMessages {
-        chat_id: String,
-        limit: Option<i64>,
-        offset: Option<i64>,
-        before: Option<String>,
-        after: Option<String>,
-    },
-    /// Get message edits
-    GetMessageEdits {
-        chat_id: String,
-        message_id: String,
-        limit: Option<i64>,
-        offset: Option<i64>,
     },
     /// Typing indicator
     Typing {
@@ -230,25 +165,6 @@ pub enum ChatClientEvent {
     LeaveChat {
         chat_id: String,
     },
-    /// Upload attachment
-    UploadAttachment {
-        chat_id: String,
-        message_id: String,
-        file_name: String,
-        file_type: String,
-        file_size: i64,
-        file_data: String, // Base64 encoded
-    },
-    /// Get message attachments
-    GetMessageAttachments {
-        chat_id: String,
-        message_id: String,
-    },
-    /// Delete attachment
-    DeleteAttachment {
-        chat_id: String,
-        attachment_id: String,
-    },
 }
 
 /// Server events sent to WebSocket clients
@@ -276,26 +192,6 @@ pub enum ChatServerEvent {
     Unsubscribed {
         chat_id: String,
     },
-    /// Chat created
-    ChatCreated {
-        chat: ChatResponse,
-    },
-    /// Chat updated
-    ChatUpdated {
-        chat: ChatResponse,
-    },
-    /// Chat deleted
-    ChatDeleted {
-        chat_id: String,
-    },
-    /// List of chats
-    Chats {
-        chats: Vec<ChatResponse>,
-    },
-    /// Chat details
-    Chat {
-        chat: ChatResponse,
-    },
     /// New message
     Message {
         chat_id: String,
@@ -310,17 +206,6 @@ pub enum ChatServerEvent {
     MessageDeleted {
         chat_id: String,
         message_id: String,
-    },
-    /// List of messages
-    Messages {
-        chat_id: String,
-        messages: Vec<MessageResponse>,
-    },
-    /// Message edits
-    MessageEdits {
-        chat_id: String,
-        message_id: String,
-        edits: Vec<MessageEditResponse>,
     },
     /// User is typing
     UserTyping {
@@ -373,30 +258,9 @@ pub enum ChatServerEvent {
         message_id: String,
         attachment_id: String,
     },
-    /// List of attachments
-    Attachments {
-        chat_id: String,
-        message_id: Option<String>,
-        attachments: Vec<AttachmentResponse>,
-    },
 }
 
-// Response structs (matching the REST API responses)
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ChatResponse {
-    pub id: String,
-    pub title: String,
-    pub description: Option<String>,
-    pub avatar_url: Option<String>,
-    pub folder_id: Option<String>,
-    pub created_by: String,
-    pub created_at: String,
-    pub updated_at: String,
-    pub member_count: i64,
-    pub message_count: i64,
-    pub last_message_at: Option<String>,
-}
-
+// Response structs
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MessageResponse {
     pub id: String,
@@ -410,16 +274,6 @@ pub struct MessageResponse {
     pub updated_at: Option<String>,
     pub edited: bool,
     pub deleted: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MessageEditResponse {
-    pub id: String,
-    pub message_id: String,
-    pub old_content: String,
-    pub new_content: String,
-    pub edited_by: String,
-    pub edited_at: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -455,29 +309,60 @@ pub struct AttachmentResponse {
     pub created_at: String,
 }
 
-/// WebSocket connection handler
-pub async fn websocket_handler(
-    ws: WebSocketUpgrade,
-    State(state): State<ChatWebSocketState>,
+#[derive(Debug, Deserialize)]
+pub struct WebSocketQuery {
     token: Option<String>,
-) -> Response {
-    // Authenticate user (simplified - in real implementation, validate token)
-    let user_id = if let Some(_token) = token {
-        // In a real implementation, validate token and get user ID
-        1i64 // Placeholder user ID
-    } else {
-        return axum::response::Json(serde_json::json!({
-            "error": "Authentication required",
-            "message": "WebSocket connection requires authentication token"
-        }))
-        .into_response();
-    };
-
-    ws.on_upgrade(move |socket| handle_websocket(socket, state, user_id))
 }
 
-/// Handle WebSocket connection
-async fn handle_websocket(
+/// Chat WebSocket connection handler
+pub async fn chat_websocket_handler(
+    ws: WebSocketUpgrade,
+    State(state): State<Arc<GatewayState>>,
+    Query(query): Query<WebSocketQuery>,
+) -> Result<Response, GatewayError> {
+    // Create chat WebSocket state
+    let chat_ws_state = ChatWebSocketState::new(state.clone());
+
+    // Authenticate user
+    let (user_id, _user) = match authenticate_user(&state, query.token).await {
+        Ok(result) => result,
+        Err(e) => {
+            return Ok(axum::response::Json(serde_json::json!({
+                "error": "Authentication failed",
+                "message": e.to_string()
+            }))
+            .into_response());
+        }
+    };
+
+    ws.on_upgrade(move |socket| handle_chat_websocket(socket, chat_ws_state, user_id))
+}
+
+/// Authenticate user from token
+async fn authenticate_user(
+    state: &Arc<GatewayState>,
+    token: Option<String>,
+) -> Result<(i64, switchboard_database::User), GatewayError> {
+    let token = token.ok_or(GatewayError::AuthenticationFailed("Missing token".to_string()))?;
+
+    let session = state
+        .session_service
+        .validate_session(&token)
+        .await
+        .map_err(|e| GatewayError::AuthenticationFailed(format!("Invalid token: {}", e)))?;
+
+    // Get user from session
+    let user = state
+        .user_service
+        .get_user(session.user_id)
+        .await
+        .map_err(|e| GatewayError::ServiceError(format!("Failed to get user: {}", e)))?;
+
+    Ok((session.user_id, user))
+}
+
+/// Handle chat WebSocket connection
+async fn handle_chat_websocket(
     socket: WebSocket,
     state: ChatWebSocketState,
     user_id: i64,
@@ -507,7 +392,7 @@ async fn handle_websocket(
                 match msg {
                     Message::Text(text) => {
                         if let Ok(client_event) = serde_json::from_str::<ChatClientEvent>(&text) {
-                            handle_client_event(client_event, &state_clone, user_id).await;
+                            handle_chat_client_event(client_event, &state_clone, user_id).await;
                         }
                     }
                     Message::Close(_) => {
@@ -538,8 +423,8 @@ async fn handle_websocket(
     state.remove_user_connection(user_id).await;
 }
 
-/// Handle client events
-async fn handle_client_event(
+/// Handle chat client events
+async fn handle_chat_client_event(
     event: ChatClientEvent,
     state: &ChatWebSocketState,
     user_id: i64,
@@ -551,7 +436,7 @@ async fn handle_client_event(
         }
         ChatClientEvent::Subscribe { chat_id } => {
             // Check if user is member of chat
-            if let Ok(()) = state.member_service.check_chat_membership(&chat_id, user_id).await {
+            if let Ok(()) = state.gateway_state.member_service.check_chat_membership(&chat_id, user_id).await {
                 let _ = state.subscribe_to_chat(&chat_id, user_id).await;
                 let subscribe_event = ChatServerEvent::Subscribed { chat_id };
                 let _ = state.broadcast_to_user(user_id, &subscribe_event).await;
@@ -571,7 +456,7 @@ async fn handle_client_event(
         }
         ChatClientEvent::Typing { chat_id, is_typing } => {
             // Check if user is member of chat
-            if let Ok(()) = state.member_service.check_chat_membership(&chat_id, user_id).await {
+            if let Ok(()) = state.gateway_state.member_service.check_chat_membership(&chat_id, user_id).await {
                 let typing_event = ChatServerEvent::UserTyping {
                     chat_id,
                     user_id: user_id.to_string(),
@@ -582,12 +467,12 @@ async fn handle_client_event(
         }
         ChatClientEvent::SendMessage { chat_id, content, message_type, reply_to, thread_id } => {
             // Check if user is member of chat
-            if let Ok(()) = state.member_service.check_chat_membership(&chat_id, user_id).await {
+            if let Ok(()) = state.gateway_state.member_service.check_chat_membership(&chat_id, user_id).await {
                 let msg_type = match message_type.as_deref() {
-                    Some("image") => MessageType::Image,
-                    Some("file") => MessageType::File,
-                    Some("system") => MessageType::System,
-                    _ => MessageType::Text,
+                    Some("image") => switchboard_database::MessageType::Image,
+                    Some("file") => switchboard_database::MessageType::File,
+                    Some("system") => switchboard_database::MessageType::System,
+                    _ => switchboard_database::MessageType::Text,
                 };
 
                 let create_req = switchboard_database::CreateMessageRequest {
@@ -599,7 +484,7 @@ async fn handle_client_event(
                     thread_public_id: thread_id,
                 };
 
-                if let Ok(message) = state.message_service.create(&create_req, user_id).await {
+                if let Ok(message) = state.gateway_state.message_service.create(&create_req, user_id).await {
                     let message_response = MessageResponse {
                         id: message.public_id,
                         chat_id: message.chat_public_id,

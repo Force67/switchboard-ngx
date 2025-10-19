@@ -21,11 +21,8 @@
 //! ```
 
 pub mod services;
-pub mod api;
 pub mod types {
     pub mod events;
-    pub mod requests;
-    pub mod responses;
 }
 pub mod utils;
 
@@ -48,7 +45,6 @@ pub use services::{
     ChatService, MessageService, AttachmentService, MemberService, InviteService, CompletionService,
 };
 pub use types::events::ChatEvent;
-pub use api::*;
 
 #[cfg(test)]
 mod tests {

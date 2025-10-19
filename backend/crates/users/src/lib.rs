@@ -23,8 +23,6 @@
 
 pub mod services;
 pub mod types {
-    pub mod requests;
-    pub mod responses;
     pub mod events;
 }
 pub mod utils;
@@ -42,9 +40,8 @@ pub use switchboard_database::{
 pub use sqlx::sqlite::SqlitePool;
 
 // Re-export main types for convenience
-// Note: LoginRequest, RegisterRequest, NotificationPreferences need to be moved elsewhere
 pub use services::{
-    UserService, /* AuthService, NotificationService, SessionService, */
+    UserService, AuthService, SessionService,
 };
 pub use types::events::UserEvent;
 

@@ -3,15 +3,9 @@
 //! This module contains common types, error definitions, and interfaces
 //! that are used across multiple modules in the crate.
 
-pub mod errors;
-pub mod requests;
-pub mod responses;
 pub mod events;
 
 // Re-export common types
-pub use errors::{UserError, UserResult, AuthResult, NotificationResult};
-pub use requests::*;
-pub use responses::*;
 pub use events::*;
 
 // Common type aliases

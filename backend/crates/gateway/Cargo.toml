@@ -1,0 +1,47 @@
+[package]
+name = "switchboard-gateway"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Database
+switchboard-database = { path = "../database" }
+switchboard-users = { path = "../users" }
+switchboard-chats = { path = "../chats" }
+
+# Web framework
+axum = { workspace = true }
+tower = { workspace = true }
+tower-http = { workspace = true, features = ["cors", "trace"] }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Utilities
+uuid = { workspace = true }
+chrono = { workspace = true }
+tracing = { workspace = true }
+
+# WebSocket
+tokio = { workspace = true, features = ["full"] }
+futures-util = { workspace = true }
+
+# OpenAPI documentation
+utoipa = { workspace = true }
+utoipa-swagger-ui = { workspace = true }
+
+# Error handling
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+
+# HTTP client (if needed for external services)
+reqwest = { workspace = true, optional = true }
+
+[features]
+default = []
+http-client = ["reqwest"]
+
+[dev-dependencies]
+tokio-test = "0.4"
+tempfile = "3.0"

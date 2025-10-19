@@ -1,9 +1,10 @@
-//! WebSocket handlers for user-related real-time functionality
+//! User WebSocket handlers
 
 use axum::{
     extract::{
         ws::{Message, WebSocket, WebSocketUpgrade},
         State,
+        Query,
     },
     response::Response,
 };
@@ -13,22 +14,23 @@ use std::sync::Arc;
 use tokio::sync::{broadcast, RwLock};
 use uuid::Uuid;
 
-use switchboard_database::{User, AuthSession, SessionService, UserError, UserResult};
+use crate::state::GatewayState;
+use crate::error::GatewayError;
 
 /// WebSocket state for managing user connections and broadcasts
 #[derive(Clone)]
 pub struct UserWebSocketState {
     /// Active user connections
     pub user_connections: Arc<RwLock<HashMap<i64, broadcast::Sender<UserServerEvent>>>>,
-    /// Session service for authentication
-    pub session_service: SessionService,
+    /// Gateway state with access to services
+    pub gateway_state: Arc<GatewayState>,
 }
 
 impl UserWebSocketState {
-    pub fn new(session_service: SessionService) -> Self {
+    pub fn new(gateway_state: Arc<GatewayState>) -> Self {
         Self {
             user_connections: Arc::new(RwLock::new(HashMap::new())),
-            session_service,
+            gateway_state,
         }
     }
 
@@ -42,7 +44,7 @@ impl UserWebSocketState {
     }
 
     /// Broadcast an event to a specific user
-    pub async fn broadcast_to_user(&self, user_id: i64, event: &UserServerEvent) -> UserResult<()> {
+    pub async fn broadcast_to_user(&self, user_id: i64, event: &UserServerEvent) -> Result<(), GatewayError> {
         let broadcaster = self.get_user_broadcaster(user_id).await;
         let _ = broadcaster.send(event.clone());
         Ok(())
@@ -83,13 +85,9 @@ pub enum UserClientEvent {
     GetUserSettings,
     /// Update user settings
     UpdateUserSettings {
-        /// Theme preference
         theme: Option<String>,
-        /// Language preference
         language: Option<String>,
-        /// Email notifications enabled
         email_notifications: Option<bool>,
-        /// Push notifications enabled
         push_notifications: Option<bool>,
     },
     /// Get user notifications
@@ -216,69 +214,64 @@ pub struct NotificationResponse {
     pub updated_at: Option<String>,
 }
 
-/// WebSocket connection handler
-pub async fn websocket_handler(
-    ws: WebSocketUpgrade,
-    State(state): State<UserWebSocketState>,
+#[derive(Debug, Deserialize)]
+pub struct WebSocketQuery {
     token: Option<String>,
-) -> Response {
+}
+
+/// User WebSocket connection handler
+pub async fn user_websocket_handler(
+    ws: WebSocketUpgrade,
+    State(state): State<Arc<GatewayState>>,
+    Query(query): Query<WebSocketQuery>,
+) -> Result<Response, GatewayError> {
+    // Create user WebSocket state
+    let user_ws_state = UserWebSocketState::new(state.clone());
+
     // Authenticate user
-    let (user_id, user) = match authenticate_user(&state, token).await {
+    let (user_id, user) = match authenticate_user(&state, query.token).await {
         Ok(result) => result,
         Err(e) => {
-            return axum::response::Json(serde_json::json!({
+            return Ok(axum::response::Json(serde_json::json!({
                 "error": "Authentication failed",
                 "message": e.to_string()
             }))
-            .into_response();
+            .into_response());
         }
     };
 
-    ws.on_upgrade(move |socket| handle_websocket(socket, state, user_id, user))
+    ws.on_upgrade(move |socket| handle_user_websocket(socket, user_ws_state, user_id, user))
 }
 
 /// Authenticate user from token
 async fn authenticate_user(
-    state: &UserWebSocketState,
+    state: &Arc<GatewayState>,
     token: Option<String>,
-) -> UserResult<(i64, User)> {
-    let token = token.ok_or(UserError::AuthenticationFailed)?;
+) -> Result<(i64, switchboard_database::User), GatewayError> {
+    let token = token.ok_or(GatewayError::AuthenticationFailed("Missing token".to_string()))?;
 
     let session = state
         .session_service
         .validate_session(&token)
         .await
-        .map_err(|_| UserError::AuthenticationFailed)?;
+        .map_err(|e| GatewayError::AuthenticationFailed(format!("Invalid token: {}", e)))?;
 
-    // In a real implementation, you would fetch the user from the user service
-    // For now, we'll return a placeholder user
-    let user = switchboard_database::User {
-        id: session.user_id,
-        public_id: Uuid::new_v4().to_string(),
-        email: None,
-        username: "user".to_string(),
-        display_name: None,
-        avatar_url: None,
-        bio: None,
-        status: "active".to_string(),
-        role: "user".to_string(),
-        created_at: chrono::Utc::now(),
-        updated_at: chrono::Utc::now(),
-        last_login_at: Some(chrono::Utc::now()),
-        email_verified: false,
-        is_active: true,
-        password_hash: None,
-    };
+    // Get user from session
+    let user = state
+        .user_service
+        .get_user(session.user_id)
+        .await
+        .map_err(|e| GatewayError::ServiceError(format!("Failed to get user: {}", e)))?;
 
     Ok((session.user_id, user))
 }
 
-/// Handle WebSocket connection
-async fn handle_websocket(
+/// Handle user WebSocket connection
+async fn handle_user_websocket(
     socket: WebSocket,
     state: UserWebSocketState,
     user_id: i64,
-    user: User,
+    user: switchboard_database::User,
 ) {
     // Split WebSocket into sender and receiver
     let (mut sender, mut receiver) = socket.split();
@@ -298,13 +291,14 @@ async fn handle_websocket(
     }
 
     // Spawn task to handle incoming messages
+    let state_clone = state.clone();
     let receive_task = tokio::spawn(async move {
         while let Some(msg) = receiver.next().await {
             if let Ok(msg) = msg {
                 match msg {
                     Message::Text(text) => {
                         if let Ok(client_event) = serde_json::from_str::<UserClientEvent>(&text) {
-                            handle_client_event(client_event, &state, user_id, &user).await;
+                            handle_user_client_event(client_event, &state_clone, user_id, &user).await;
                         }
                     }
                     Message::Close(_) => {
@@ -335,12 +329,12 @@ async fn handle_websocket(
     state.remove_user_connection(user_id).await;
 }
 
-/// Handle client events
-async fn handle_client_event(
+/// Handle user client events
+async fn handle_user_client_event(
     event: UserClientEvent,
     state: &UserWebSocketState,
     user_id: i64,
-    user: &User,
+    user: &switchboard_database::User,
 ) {
     match event {
         UserClientEvent::Ping => {
@@ -370,26 +364,28 @@ async fn handle_client_event(
         }
         UserClientEvent::GetUserProfile { user_id: target_user_id } => {
             // In a real implementation, fetch user profile
-            let profile_response = UserProfileResponse {
-                id: user.public_id.clone(),
-                email: user.email.clone(),
-                username: user.username.clone(),
-                display_name: user.display_name.clone(),
-                avatar_url: user.avatar_url.clone(),
-                bio: user.bio.clone(),
-                status: user.status.clone(),
-                role: user.role.clone(),
-                created_at: user.created_at.to_rfc3339(),
-                updated_at: user.updated_at.to_rfc3339(),
-                last_login_at: user.last_login_at.map(|dt| dt.to_rfc3339()),
-                email_verified: user.email_verified,
-                is_active: user.is_active,
-            };
+            if target_user_id == user.public_id {
+                let profile_response = UserProfileResponse {
+                    id: user.public_id.clone(),
+                    email: user.email.clone(),
+                    username: user.username.clone(),
+                    display_name: user.display_name.clone(),
+                    avatar_url: user.avatar_url.clone(),
+                    bio: user.bio.clone(),
+                    status: user.status.clone(),
+                    role: user.role.clone(),
+                    created_at: user.created_at.to_rfc3339(),
+                    updated_at: user.updated_at.to_rfc3339(),
+                    last_login_at: user.last_login_at.map(|dt| dt.to_rfc3339()),
+                    email_verified: user.email_verified,
+                    is_active: user.is_active,
+                };
 
-            let profile_event = UserServerEvent::UserProfile {
-                user: profile_response,
-            };
-            let _ = state.broadcast_to_user(user_id, &profile_event).await;
+                let profile_event = UserServerEvent::UserProfile {
+                    user: profile_response,
+                };
+                let _ = state.broadcast_to_user(user_id, &profile_event).await;
+            }
         }
         UserClientEvent::UpdateUserProfile { display_name, avatar_url, bio } => {
             // In a real implementation, update user profile in database
@@ -446,7 +442,7 @@ async fn handle_client_event(
             };
             let _ = state.broadcast_to_user(user_id, &settings_event).await;
         }
-        UserClientEvent::GetNotifications { limit, offset, unread_only } => {
+        UserClientEvent::GetNotifications { limit: _, offset: _, unread_only: _ } => {
             // In a real implementation, fetch notifications from database
             let notifications = vec![]; // Placeholder
             let notifications_event = UserServerEvent::Notifications {
@@ -456,14 +452,13 @@ async fn handle_client_event(
             };
             let _ = state.broadcast_to_user(user_id, &notifications_event).await;
         }
-        UserClientEvent::MarkNotificationRead { notification_id } => {
+        UserClientEvent::MarkNotificationRead { notification_id: _ } => {
             // In a real implementation, mark notification as read
-            // For now, just acknowledge the operation
         }
         UserClientEvent::MarkAllNotificationsRead => {
             // In a real implementation, mark all notifications as read
         }
-        UserClientEvent::DeleteNotification { notification_id } => {
+        UserClientEvent::DeleteNotification { notification_id: _ } => {
             // In a real implementation, delete notification
         }
     }

@@ -6,7 +6,7 @@ use axum::{
     middleware::Next,
     response::{IntoResponse, Response},
 };
-use tower_http::trace::{TraceLayer, DefaultMakeSpan, DefaultOnRequest, DefaultOnResponse, TraceNewService};
+use tower_http::trace::{TraceLayer, DefaultMakeSpan, DefaultOnRequest, DefaultOnResponse};
 use tracing::Level;
 
 use crate::state::GatewayState;
@@ -60,7 +60,7 @@ pub async fn auth_middleware(
 
     // Validate token
     let session = state
-        .session_service
+        .session_service()
         .validate_session(token)
         .await
         .map_err(|e| GatewayError::AuthenticationFailed(format!("Invalid token: {}", e)))?;
@@ -80,7 +80,7 @@ fn is_dev_endpoint(path: &str) -> bool {
 async fn get_dev_user_id(state: &GatewayState) -> GatewayResult<i64> {
     // Try to create a dev token, which will also create a dev user if needed
     let (session, _user) = state
-        .session_service
+        .session_service()
         .create_dev_token()
         .await
         .map_err(|e| GatewayError::InternalError(format!("Failed to create dev token: {}", e)))?;
@@ -109,7 +109,7 @@ pub async fn optional_auth_middleware(
         });
 
     if let Some(token) = auth_header {
-        if let Ok(session) = state.session_service.validate_session(token).await {
+        if let Ok(session) = state.session_service().validate_session(token).await {
             request.extensions_mut().insert(session.user_id);
         }
     }
@@ -127,7 +127,7 @@ pub fn extract_user_id(request: &Request) -> GatewayResult<i64> {
 }
 
 /// Create tracing middleware
-pub fn create_trace_middleware() -> TraceLayer<TraceNewService<(), (), (), (), (), (), (), (), (), (), (), (), ()>> {
+pub fn create_trace_middleware() -> TraceLayer {
     TraceLayer::new_for_http()
         .make_span_with(DefaultMakeSpan::new().level(Level::INFO))
         .on_request(DefaultOnRequest::new().level(Level::INFO))

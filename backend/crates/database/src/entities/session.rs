@@ -41,6 +41,7 @@ pub enum AuthProvider {
     Email,
     GitHub,
     Google,
+    Development,
 }
 
 impl AuthProvider {
@@ -49,6 +50,7 @@ impl AuthProvider {
             AuthProvider::Email => "email",
             AuthProvider::GitHub => "github",
             AuthProvider::Google => "google",
+            AuthProvider::Development => "development",
         }
     }
 }
@@ -58,6 +60,7 @@ impl From<&str> for AuthProvider {
         match s {
             "github" => AuthProvider::GitHub,
             "google" => AuthProvider::Google,
+            "development" => AuthProvider::Development,
             _ => AuthProvider::Email,
         }
     }

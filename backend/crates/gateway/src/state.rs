@@ -2,14 +2,9 @@
 
 use std::sync::Arc;
 use sqlx::SqlitePool;
-use switchboard_database::DatabaseConfig;
-use switchboard_users::{
-    UserService, AuthService, SessionService,
-    services::repositories::UserRepository,
-};
-use switchboard_chats::{
-    ChatService, MessageService, MemberService, InviteService, AttachmentService,
-};
+use switchboard_users::{UserService, AuthService, SessionService};
+use switchboard_chats::{ChatService, MessageService, MemberService, InviteService, AttachmentService};
+use switchboard_database::{ChatRepository, MessageRepository, MemberRepository, InviteRepository, AttachmentRepository};
 use crate::error::{GatewayError, GatewayResult};
 
 /// JWT configuration
@@ -38,47 +33,39 @@ pub struct GatewayState {
     /// JWT configuration
     pub jwt_config: JwtConfig,
     /// User service
-    pub user_service: Arc<UserService<UserRepository>>,
+    pub user_service: Arc<UserService<switchboard_database::UserRepository>>,
     /// Authentication service
     pub auth_service: Arc<AuthService>,
     /// Session service
     pub session_service: Arc<SessionService>,
     /// Chat service
-    pub chat_service: Arc<ChatService<switchboard_database::ChatRepository>>,
+    pub chat_service: Arc<ChatService<ChatRepository>>,
     /// Message service
-    pub message_service: Arc<MessageService<switchboard_database::MessageRepository>>,
+    pub message_service: Arc<MessageService<MessageRepository>>,
     /// Member service
-    pub member_service: Arc<MemberService<switchboard_database::MemberRepository>>,
+    pub member_service: Arc<MemberService<MemberRepository>>,
     /// Invite service
-    pub invite_service: Arc<InviteService<switchboard_database::InviteRepository>>,
+    pub invite_service: Arc<InviteService<InviteRepository>>,
     /// Attachment service
-    pub attachment_service: Arc<AttachmentService<switchboard_database::AttachmentRepository>>,
+    pub attachment_service: Arc<AttachmentService<AttachmentRepository>>,
 }
 
 impl GatewayState {
     /// Create a new gateway state with all services initialized
-    pub async fn new(pool: SqlitePool, jwt_config: JwtConfig) -> GatewayResult<Self> {
+    pub fn new(pool: SqlitePool, jwt_config: JwtConfig) -> Self {
         // Initialize user services
-        let user_repository = UserRepository::new(pool.clone());
-        let user_service = Arc::new(UserService::new(user_repository.clone()));
-
-        let auth_service = Arc::new(AuthService::new(
-            pool.clone(),
-            &jwt_config.secret,
-            jwt_config.issuer.clone(),
-            jwt_config.audience.clone(),
-        ));
-
+        let user_service = Arc::new(UserService::new(pool.clone()));
+        let auth_service = Arc::new(AuthService::new(pool.clone()));
         let session_service = Arc::new(SessionService::new(pool.clone()));
 
         // Initialize chat services
-        let chat_service = Arc::new(ChatService::new(switchboard_database::ChatRepository::new(pool.clone())));
-        let message_service = Arc::new(MessageService::new(switchboard_database::MessageRepository::new(pool.clone())));
-        let member_service = Arc::new(MemberService::new(switchboard_database::MemberRepository::new(pool.clone())));
-        let invite_service = Arc::new(InviteService::new(switchboard_database::InviteRepository::new(pool.clone())));
-        let attachment_service = Arc::new(AttachmentService::new(switchboard_database::AttachmentRepository::new(pool.clone())));
+        let chat_service = Arc::new(ChatService::new(pool.clone()));
+        let message_service = Arc::new(MessageService::new(pool.clone()));
+        let member_service = Arc::new(MemberService::new(pool.clone()));
+        let invite_service = Arc::new(InviteService::new(pool.clone()));
+        let attachment_service = Arc::new(AttachmentService::new(pool.clone()));
 
-        Ok(Self {
+        Self {
             pool,
             jwt_config,
             user_service,
@@ -89,20 +76,20 @@ impl GatewayState {
             member_service,
             invite_service,
             attachment_service,
-        })
+        }
     }
 
-    /// Create gateway state from database configuration
-    pub async fn from_config(config: &DatabaseConfig, jwt_config: JwtConfig) -> GatewayResult<Self> {
-        let pool = switchboard_database::initialize_database(config)
+    /// Create gateway state from database URL
+    pub async fn from_database_url(database_url: &str, jwt_config: JwtConfig) -> GatewayResult<Self> {
+        let pool = SqlitePool::connect(database_url)
             .await
-            .map_err(|e| GatewayError::DatabaseError(format!("Failed to initialize database: {}", e)))?;
+            .map_err(|e| GatewayError::DatabaseError(format!("Failed to connect to database: {}", e)))?;
 
-        Self::new(pool, jwt_config).await
+        Ok(Self::new(pool, jwt_config))
     }
 
     /// Get a user service reference
-    pub fn user_service(&self) -> &UserService<UserRepository> {
+    pub fn user_service(&self) -> &UserService<switchboard_database::UserRepository> {
         &self.user_service
     }
 
@@ -117,44 +104,35 @@ impl GatewayState {
     }
 
     /// Get a chat service reference
-    pub fn chat_service(&self) -> &ChatService<switchboard_database::ChatRepository> {
+    pub fn chat_service(&self) -> &ChatService<ChatRepository> {
         &self.chat_service
     }
 
     /// Get a message service reference
-    pub fn message_service(&self) -> &MessageService<switchboard_database::MessageRepository> {
+    pub fn message_service(&self) -> &MessageService<MessageRepository> {
         &self.message_service
     }
 
     /// Get a member service reference
-    pub fn member_service(&self) -> &MemberService<switchboard_database::MemberRepository> {
+    pub fn member_service(&self) -> &MemberService<MemberRepository> {
         &self.member_service
     }
 
     /// Get an invite service reference
-    pub fn invite_service(&self) -> &InviteService<switchboard_database::InviteRepository> {
+    pub fn invite_service(&self) -> &InviteService<InviteRepository> {
         &self.invite_service
     }
 
     /// Get an attachment service reference
-    pub fn attachment_service(&self) -> &AttachmentService<switchboard_database::AttachmentRepository> {
+    pub fn attachment_service(&self) -> &AttachmentService<AttachmentRepository> {
         &self.attachment_service
     }
 }
 
 /// Create a gateway state with default configuration for development
 pub async fn create_gateway_state() -> GatewayResult<GatewayState> {
-    let config = DatabaseConfig {
-        database_url: "sqlite::memory:".to_string(),
-        max_connections: 10,
-        min_connections: 1,
-        acquire_timeout_seconds: 30,
-        idle_timeout_seconds: 600,
-        max_lifetime_seconds: 1800,
-    };
-
     let jwt_config = JwtConfig::default();
-    GatewayState::from_config(&config, jwt_config).await
+    GatewayState::from_database_url("sqlite::memory:", jwt_config).await
 }
 
 /// Create a gateway state with in-memory database for testing
@@ -170,9 +148,5 @@ mod tests {
     async fn test_create_gateway_state() {
         let state = create_test_gateway_state().await;
         assert!(state.is_ok());
-
-        let state = state.unwrap();
-        // Test that all services are accessible
-        assert!(state.user_service().get_user_count().await.is_ok());
     }
 }

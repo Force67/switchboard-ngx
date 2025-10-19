@@ -19,7 +19,7 @@ pub struct GithubLoginResponse {
     pub authorize_url: String,
 }
 
-#[derive(Debug, Deserialize, IntoParams)]
+#[derive(Debug, Deserialize, IntoParams, ToSchema)]
 pub struct GithubLoginQuery {
     pub redirect_uri: String,
 }
@@ -77,7 +77,7 @@ impl From<switchboard_database::User> for UserResponse {
 }
 
 /// Create authentication routes
-pub fn create_auth_routes() -> Router<Arc<GatewayState>> {
+pub fn create_auth_routes() -> Router<GatewayState> {
     Router::new()
         .route("/github/login", axum::routing::get(github_login))
         .route("/github/callback", axum::routing::post(github_callback))
@@ -99,7 +99,7 @@ pub fn create_auth_routes() -> Router<Arc<GatewayState>> {
 )]
 pub async fn github_login(
     Query(params): Query<GithubLoginQuery>,
-    State(state): State<Arc<GatewayState>>,
+    State(state): State<GatewayState>,
 ) -> GatewayResult<Json<GithubLoginResponse>> {
     // TODO: Implement GitHub OAuth login
     // For now, return a placeholder response
@@ -120,7 +120,7 @@ pub async fn github_login(
 )]
 pub async fn github_callback(
     Json(payload): Json<GithubCallbackRequest>,
-    State(state): State<Arc<GatewayState>>,
+    State(state): State<GatewayState>,
 ) -> GatewayResult<Json<SessionResponse>> {
     // TODO: Implement GitHub OAuth callback
     // For now, return a placeholder response
@@ -139,10 +139,10 @@ pub async fn github_callback(
     )
 )]
 pub async fn dev_token(
-    State(state): State<Arc<GatewayState>>,
+    State(state): State<GatewayState>,
 ) -> GatewayResult<Json<SessionResponse>> {
     let (session, user) = state
-        .session_service
+        .session_service()
         .create_dev_token()
         .await
         .map_err(|e| GatewayError::InternalError(format!("Failed to create dev token: {}", e)))?;
@@ -161,7 +161,7 @@ pub async fn dev_token(
     )
 )]
 pub async fn logout(
-    State(state): State<Arc<GatewayState>>,
+    State(state): State<GatewayState>,
     request: Request,
 ) -> GatewayResult<()> {
     let user_id = extract_user_id(&request)?;
@@ -184,13 +184,13 @@ pub async fn logout(
     )
 )]
 pub async fn me(
-    State(state): State<Arc<GatewayState>>,
+    State(state): State<GatewayState>,
     request: Request,
 ) -> GatewayResult<Json<UserResponse>> {
     let user_id = extract_user_id(&request)?;
 
     let user = state
-        .user_service
+        .user_service()
         .get_user(user_id)
         .await
         .map_err(|e| GatewayError::ServiceError(format!("Failed to get user: {}", e)))?;

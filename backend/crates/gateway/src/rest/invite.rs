@@ -41,7 +41,7 @@ pub struct CreateInviteRequest {
     pub expires_in_hours: Option<i64>, // Optional custom expiration
 }
 
-#[derive(Debug, Deserialize, IntoParams)]
+#[derive(Debug, Deserialize, IntoParams, ToSchema)]
 pub struct ListInvitesQuery {
     pub status: Option<String>, // Filter by status: pending, accepted, rejected
     pub limit: Option<i64>,
@@ -75,7 +75,7 @@ impl From<switchboard_database::ChatInvite> for InviteResponse {
 }
 
 /// Create invite routes
-pub fn create_invite_routes() -> Router<Arc<GatewayState>> {
+pub fn create_invite_routes() -> Router<GatewayState> {
     Router::new()
         .route("/invites", axum::routing::get(list_user_invites))
         .route("/invites/:invite_id", axum::routing::get(get_invite).delete(delete_invite))
@@ -102,7 +102,7 @@ pub fn create_invite_routes() -> Router<Arc<GatewayState>> {
 pub async fn list_invites(
     Path(chat_id): Path<String>,
     Query(params): Query<ListInvitesQuery>,
-    State(state): State<Arc<GatewayState>>,
+    State(state): State<GatewayState>,
     request: Request,
 ) -> GatewayResult<Json<Vec<InviteResponse>>> {
     let user_id = extract_user_id(&request)?;
@@ -110,7 +110,7 @@ pub async fn list_invites(
     // Check if user is owner or admin
     state
         .invite_service
-        .check_chat_role(&chat_id, user_id, switchboard_database::ChatRole::Admin)
+        .check_chat_role(&chat_id, user_id, switchboard_database::MemberRole::Admin)
         .await
         .map_err(|e| GatewayError::AuthorizationFailed(format!("Access denied: {}", e)))?;
 
@@ -145,7 +145,7 @@ pub async fn list_invites(
 )]
 pub async fn list_user_invites(
     Query(params): Query<ListInvitesQuery>,
-    State(state): State<Arc<GatewayState>>,
+    State(state): State<GatewayState>,
     request: Request,
 ) -> GatewayResult<Json<Vec<InviteResponse>>> {
     let user_id = extract_user_id(&request)?;
@@ -187,7 +187,7 @@ pub async fn list_user_invites(
 )]
 pub async fn create_invite(
     Path(chat_id): Path<String>,
-    State(state): State<Arc<GatewayState>>,
+    State(state): State<GatewayState>,
     Json(payload): Json<CreateInviteRequest>,
     request: Request,
 ) -> GatewayResult<impl IntoResponse> {
@@ -196,7 +196,7 @@ pub async fn create_invite(
     // Check if user is owner or admin
     state
         .invite_service
-        .check_chat_role(&chat_id, user_id, switchboard_database::ChatRole::Admin)
+        .check_chat_role(&chat_id, user_id, switchboard_database::MemberRole::Admin)
         .await
         .map_err(|e| GatewayError::AuthorizationFailed(format!("Access denied: {}", e)))?;
 
@@ -243,7 +243,7 @@ pub async fn create_invite(
 )]
 pub async fn get_invite(
     Path(invite_id): Path<String>,
-    State(state): State<Arc<GatewayState>>,
+    State(state): State<GatewayState>,
     request: Request,
 ) -> GatewayResult<Json<InviteResponse>> {
     let user_id = extract_user_id(&request)?;
@@ -284,7 +284,7 @@ pub async fn get_invite(
 )]
 pub async fn respond_to_invite(
     Path(invite_id): Path<String>,
-    State(state): State<Arc<GatewayState>>,
+    State(state): State<GatewayState>,
     Json(payload): Json<RespondToInviteRequest>,
     request: Request,
 ) -> GatewayResult<Json<InviteResponse>> {
@@ -335,7 +335,7 @@ pub async fn respond_to_invite(
 )]
 pub async fn delete_invite(
     Path(invite_id): Path<String>,
-    State(state): State<Arc<GatewayState>>,
+    State(state): State<GatewayState>,
     request: Request,
 ) -> GatewayResult<impl IntoResponse> {
     let user_id = extract_user_id(&request)?;
@@ -351,7 +351,7 @@ pub async fn delete_invite(
     if invite.invited_by_public_id != user_id.to_string() {
         state
             .invite_service
-            .check_chat_role(&invite.chat_public_id, user_id, switchboard_database::ChatRole::Admin)
+            .check_chat_role(&invite.chat_public_id, user_id, switchboard_database::MemberRole::Admin)
             .await
             .map_err(|e| GatewayError::AuthorizationFailed(format!("Access denied: {}", e)))?;
     }

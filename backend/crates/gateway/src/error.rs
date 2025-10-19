@@ -73,17 +73,28 @@ impl IntoResponse for GatewayError {
 pub type GatewayResult<T> = Result<T, GatewayError>;
 
 /// Convert from common error types
-impl From<switchboard_users::UserError> for GatewayError {
-    fn from(error: switchboard_users::UserError) -> Self {
+impl From<switchboard_database::UserError> for GatewayError {
+    fn from(error: switchboard_database::UserError) -> Self {
         match error {
-            switchboard_users::UserError::UserNotFound => GatewayError::NotFound("User not found".to_string()),
-            switchboard_users::UserError::AuthenticationFailed => GatewayError::AuthenticationFailed("Invalid credentials".to_string()),
-            switchboard_users::UserError::AccountLocked => GatewayError::AuthorizationFailed("Account is locked".to_string()),
-            switchboard_users::UserError::AccountSuspended => GatewayError::AuthorizationFailed("Account is suspended".to_string()),
-            switchboard_users::UserError::InvalidEmail => GatewayError::InvalidRequest("Invalid email format".to_string()),
-            switchboard_users::UserError::InvalidPassword => GatewayError::InvalidRequest("Invalid password".to_string()),
-            switchboard_users::UserError::DatabaseError(msg) => GatewayError::DatabaseError(msg),
-            switchboard_users::UserError::SerializationError(msg) => GatewayError::InternalError(format!("Serialization error: {}", msg)),
+            switchboard_database::UserError::UserNotFound => GatewayError::NotFound("User not found".to_string()),
+            switchboard_database::UserError::AccountLocked => GatewayError::AuthorizationFailed("Account is locked".to_string()),
+            switchboard_database::UserError::AccountSuspended => GatewayError::AuthorizationFailed("Account is suspended".to_string()),
+            switchboard_database::UserError::InvalidEmail => GatewayError::InvalidRequest("Invalid email format".to_string()),
+            switchboard_database::UserError::InvalidPassword => GatewayError::InvalidRequest("Invalid password".to_string()),
+            switchboard_database::UserError::DatabaseError(msg) => GatewayError::DatabaseError(msg),
+            switchboard_database::UserError::SerializationError(msg) => GatewayError::InternalError(format!("Serialization error: {}", msg)),
+            _ => GatewayError::InternalError(error.to_string()),
+        }
+    }
+}
+
+impl From<switchboard_database::AuthError> for GatewayError {
+    fn from(error: switchboard_database::AuthError) -> Self {
+        match error {
+            switchboard_database::AuthError::AuthenticationFailed => GatewayError::AuthenticationFailed("Authentication failed".to_string()),
+            switchboard_database::AuthError::SessionExpired => GatewayError::AuthenticationFailed("Session expired".to_string()),
+            switchboard_database::AuthError::InvalidToken => GatewayError::AuthenticationFailed("Invalid token".to_string()),
+            switchboard_database::AuthError::DatabaseError(msg) => GatewayError::DatabaseError(msg),
         }
     }
 }
@@ -91,10 +102,14 @@ impl From<switchboard_users::UserError> for GatewayError {
 impl From<switchboard_chats::ChatError> for GatewayError {
     fn from(error: switchboard_chats::ChatError) -> Self {
         match error {
-            switchboard_chats::ChatError::NotFound => GatewayError::NotFound("Chat not found".to_string()),
+            switchboard_chats::ChatError::ChatNotFound => GatewayError::NotFound("Chat not found".to_string()),
+            switchboard_chats::ChatError::MessageNotFound => GatewayError::NotFound("Message not found".to_string()),
+            switchboard_chats::ChatError::MemberNotFound => GatewayError::NotFound("Member not found".to_string()),
+            switchboard_chats::ChatError::InviteNotFound => GatewayError::NotFound("Invite not found".to_string()),
+            switchboard_chats::ChatError::AttachmentNotFound => GatewayError::NotFound("Attachment not found".to_string()),
             switchboard_chats::ChatError::AccessDenied => GatewayError::AuthorizationFailed("Access denied".to_string()),
-            switchboard_chats::ChatError::InvalidInput(msg) => GatewayError::InvalidRequest(msg),
-            switchboard_chats::ChatError::RepositoryError(_) => GatewayError::ServiceError("Repository error".to_string()),
+            switchboard_chats::ChatError::Unauthorized => GatewayError::AuthenticationFailed("Unauthorized".to_string()),
+            switchboard_chats::ChatError::ChatArchived => GatewayError::AuthorizationFailed("Chat is archived".to_string()),
             switchboard_chats::ChatError::DatabaseError(msg) => GatewayError::DatabaseError(msg),
         }
     }

@@ -1,7 +1,7 @@
 use anyhow::Context;
 use clap::{Parser, Subcommand};
 use sqlx::Row;
-use switchboard_backend_api::{build_router, AppState};
+use switchboard_gateway::{build_router, AppState};
 use switchboard_backend_runtime::{telemetry, BackendServices};
 use switchboard_config::load as load_config;
 use tokio::io::{AsyncBufReadExt, BufReader};

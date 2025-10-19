@@ -27,6 +27,9 @@ tracing = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 futures-util = { workspace = true }
 
+# Database
+sqlx = { workspace = true }
+
 # OpenAPI documentation
 utoipa = { workspace = true }
 utoipa-swagger-ui = { workspace = true }

@@ -15,7 +15,7 @@ use crate::{
     ApiError, AppState,
 };
 
-#[derive(Debug, Deserialize, IntoParams)]
+#[derive(Debug, Deserialize, IntoParams, ToSchema)]
 pub struct ListNotificationsQuery {
     pub unread_only: Option<bool>,
     pub limit: Option<i64>,

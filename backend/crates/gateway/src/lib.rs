@@ -35,6 +35,10 @@ pub use state::{GatewayState, create_gateway_state};
 pub use error::{GatewayError, GatewayResult};
 pub use middleware::auth_middleware;
 
+// Legacy exports for compatibility
+pub use create_router as build_router;
+pub use GatewayState as AppState;
+
 use axum::{
     Router,
     http::Method,

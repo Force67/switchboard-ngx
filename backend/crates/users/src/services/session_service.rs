@@ -65,7 +65,7 @@ impl SessionService {
     /// Validate and refresh session
     pub async fn validate_session(&self, token: &str) -> AuthResult<AuthSession> {
         let session = self.get_session(token).await?
-            .ok_or(AuthError::InvalidSessionToken)?;
+            .ok_or(AuthError::InvalidToken)?;
 
         // Check if session is still active and not expired
         if !session.is_active {
@@ -94,7 +94,7 @@ impl SessionService {
     pub async fn delete_session(&self, token: &str) -> AuthResult<()> {
         // Check if session exists first
         let _session = self.get_session(token).await?
-            .ok_or(AuthError::InvalidSessionToken)?;
+            .ok_or(AuthError::InvalidToken)?;
 
         // Delete session
         self.session_repository.delete_by_token(token).await
@@ -171,28 +171,17 @@ impl SessionService {
     /// Validate session creation request
     fn validate_create_session_request(&self, request: &CreateSessionRequest) -> AuthResult<()> {
         if request.user_id <= 0 {
-            return Err(AuthError::InvalidSessionToken);
+            return Err(AuthError::AuthenticationFailed);
         }
 
-        // Validate user agent if provided
-        if let Some(ref user_agent) = request.user_agent {
-            if user_agent.len() > 512 {
-                return Err(AuthError::InvalidSessionToken);
-            }
+        // Validate token
+        if request.token.trim().is_empty() {
+            return Err(AuthError::AuthenticationFailed);
         }
 
-        // Validate IP address if provided
-        if let Some(ref ip_address) = request.ip_address {
-            if ip_address.len() > 45 {
-                return Err(AuthError::InvalidSessionToken);
-            }
-        }
-
-        // Validate expiration if provided
-        if let Some(expires_in) = request.expires_in_seconds {
-            if expires_in == 0 || expires_in > 30 * 24 * 60 * 60 { // Max 30 days
-                return Err(AuthError::InvalidSessionToken);
-            }
+        // Validate expires_at format
+        if chrono::DateTime::parse_from_rfc3339(&request.expires_at).is_err() {
+            return Err(AuthError::AuthenticationFailed);
         }
 
         Ok(())
@@ -212,11 +201,10 @@ impl SessionService {
 
     /// Create a development session (for testing)
     pub async fn create_dev_token(&self) -> AuthResult<(AuthSession, switchboard_database::User)> {
-        use switchboard_database::{User, CreateUserRequest, UserRole};
-        use crate::repositories::UserRepository;
+        use switchboard_database::{User, CreateUserRequest, UserRole, UserRepository};
 
         // Create or get dev user
-        let user_repo = UserRepository::new(self.session_repository.pool());
+        let user_repo = UserRepository::new(self.pool.clone());
         let dev_user = match user_repo.find_by_id(1i64).await.map_err(|e| AuthError::DatabaseError(e.to_string()))? {
             Some(user) => user,
             None => {
@@ -237,10 +225,10 @@ impl SessionService {
 
         // Create session for dev user
         let session_req = CreateSessionRequest {
-            token: crate::utils::jwt::generate_session_id(),
             user_id: dev_user.id,
+            token: uuid::Uuid::new_v4().to_string(),
+            provider: switchboard_database::AuthProvider::Development,
             expires_at: (chrono::Utc::now() + chrono::Duration::hours(24)).to_rfc3339(),
-            auth_provider: switchboard_database::AuthProvider::Local,
         };
 
         let session = self.create_session(session_req).await?;

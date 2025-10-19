@@ -71,7 +71,7 @@ pub struct UpdateMessageRequest {
     pub content: Option<String>,
 }
 
-#[derive(Debug, Deserialize, IntoParams)]
+#[derive(Debug, Deserialize, IntoParams, ToSchema)]
 pub struct ListMessagesQuery {
     pub limit: Option<i64>,
     pub offset: Option<i64>,
@@ -80,7 +80,7 @@ pub struct ListMessagesQuery {
     pub thread_id: Option<String>, // Filter by thread
 }
 
-#[derive(Debug, Deserialize, IntoParams)]
+#[derive(Debug, Deserialize, IntoParams, ToSchema)]
 pub struct GetMessageEditsQuery {
     pub limit: Option<i64>,
     pub offset: Option<i64>,
@@ -111,7 +111,7 @@ impl From<switchboard_database::ChatMessage> for MessageResponse {
 }
 
 /// Create message routes
-pub fn create_message_routes() -> Router<Arc<GatewayState>> {
+pub fn create_message_routes() -> Router<GatewayState> {
     Router::new()
         .route("/chats/:chat_id/messages", axum::routing::get(list_messages).post(create_message))
         .route("/chats/:chat_id/messages/:message_id", axum::routing::get(get_message).put(update_message).delete(delete_message))
@@ -137,7 +137,7 @@ pub fn create_message_routes() -> Router<Arc<GatewayState>> {
 pub async fn list_messages(
     Path(chat_id): Path<String>,
     Query(params): Query<ListMessagesQuery>,
-    State(state): State<Arc<GatewayState>>,
+    State(state): State<GatewayState>,
     request: Request,
 ) -> GatewayResult<Json<Vec<MessageResponse>>> {
     let user_id = extract_user_id(&request)?;
@@ -178,7 +178,7 @@ pub async fn list_messages(
 )]
 pub async fn create_message(
     Path(chat_id): Path<String>,
-    State(state): State<Arc<GatewayState>>,
+    State(state): State<GatewayState>,
     Json(payload): Json<CreateMessageRequest>,
     request: Request,
 ) -> GatewayResult<impl IntoResponse> {
@@ -192,11 +192,11 @@ pub async fn create_message(
         .map_err(|e| GatewayError::AuthorizationFailed(format!("Access denied: {}", e)))?;
 
     let message_type = match payload.message_type.as_deref() {
-        Some("text") => switchboard_database::MessageType::Text,
-        Some("image") => switchboard_database::MessageType::Image,
-        Some("file") => switchboard_database::MessageType::File,
-        Some("system") => switchboard_database::MessageType::System,
-        _ => switchboard_database::MessageType::Text,
+        Some("text") => "text".to_string(),
+        Some("image") => "image".to_string(),
+        Some("file") => "file".to_string(),
+        Some("system") => "system".to_string(),
+        _ => "text".to_string(),
     };
 
     let create_req = switchboard_database::CreateMessageRequest {
@@ -236,7 +236,7 @@ pub async fn create_message(
 )]
 pub async fn get_message(
     Path((chat_id, message_id)): Path<(String, String)>,
-    State(state): State<Arc<GatewayState>>,
+    State(state): State<GatewayState>,
     request: Request,
 ) -> GatewayResult<Json<MessageResponse>> {
     let user_id = extract_user_id(&request)?;
@@ -283,7 +283,7 @@ pub async fn get_message(
 )]
 pub async fn update_message(
     Path((chat_id, message_id)): Path<(String, String)>,
-    State(state): State<Arc<GatewayState>>,
+    State(state): State<GatewayState>,
     Json(payload): Json<UpdateMessageRequest>,
     request: Request,
 ) -> GatewayResult<Json<MessageResponse>> {
@@ -307,7 +307,7 @@ pub async fn update_message(
     if message.sender_public_id != user_id.to_string() {
         state
             .message_service
-            .check_chat_role(&chat_id, user_id, switchboard_database::ChatRole::Admin)
+            .check_chat_role(&chat_id, user_id, switchboard_database::MemberRole::Admin)
             .await
             .map_err(|e| GatewayError::AuthorizationFailed(format!("Access denied: {}", e)))?;
     }
@@ -343,7 +343,7 @@ pub async fn update_message(
 )]
 pub async fn delete_message(
     Path((chat_id, message_id)): Path<(String, String)>,
-    State(state): State<Arc<GatewayState>>,
+    State(state): State<GatewayState>,
     request: Request,
 ) -> GatewayResult<impl IntoResponse> {
     let user_id = extract_user_id(&request)?;
@@ -366,7 +366,7 @@ pub async fn delete_message(
     if message.sender_public_id != user_id.to_string() {
         state
             .message_service
-            .check_chat_role(&chat_id, user_id, switchboard_database::ChatRole::Admin)
+            .check_chat_role(&chat_id, user_id, switchboard_database::MemberRole::Admin)
             .await
             .map_err(|e| GatewayError::AuthorizationFailed(format!("Access denied: {}", e)))?;
     }
@@ -400,7 +400,7 @@ pub async fn delete_message(
 pub async fn get_message_edits(
     Path((chat_id, message_id)): Path<(String, String)>,
     Query(params): Query<GetMessageEditsQuery>,
-    State(state): State<Arc<GatewayState>>,
+    State(state): State<GatewayState>,
     request: Request,
 ) -> GatewayResult<Json<Vec<MessageEditResponse>>> {
     let user_id = extract_user_id(&request)?;

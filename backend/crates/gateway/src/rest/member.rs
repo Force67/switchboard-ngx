@@ -36,7 +36,7 @@ pub struct UpdateMemberRoleRequest {
     pub role: String, // "member", "admin", "owner"
 }
 
-#[derive(Debug, Deserialize, IntoParams)]
+#[derive(Debug, Deserialize, IntoParams, ToSchema)]
 pub struct ListMembersQuery {
     pub role: Option<String>, // Filter by role
     pub limit: Option<i64>,
@@ -62,7 +62,7 @@ impl From<switchboard_database::ChatMember> for MemberResponse {
 }
 
 /// Create member routes
-pub fn create_member_routes() -> Router<Arc<GatewayState>> {
+pub fn create_member_routes() -> Router<GatewayState> {
     Router::new()
         .route("/chats/:chat_id/members", axum::routing::get(list_members))
         .route("/chats/:chat_id/members/:member_id", axum::routing::get(get_member).put(update_member_role).delete(remove_member))
@@ -88,7 +88,7 @@ pub fn create_member_routes() -> Router<Arc<GatewayState>> {
 pub async fn list_members(
     Path(chat_id): Path<String>,
     Query(params): Query<ListMembersQuery>,
-    State(state): State<Arc<GatewayState>>,
+    State(state): State<GatewayState>,
     request: Request,
 ) -> GatewayResult<Json<Vec<MemberResponse>>> {
     let user_id = extract_user_id(&request)?;
@@ -101,9 +101,9 @@ pub async fn list_members(
         .map_err(|e| GatewayError::AuthorizationFailed(format!("Access denied: {}", e)))?;
 
     let role_filter = match params.role.as_deref() {
-        Some("owner") => Some(switchboard_database::ChatRole::Owner),
-        Some("admin") => Some(switchboard_database::ChatRole::Admin),
-        Some("member") => Some(switchboard_database::ChatRole::Member),
+        Some("owner") => Some(switchboard_database::MemberRole::Owner),
+        Some("admin") => Some(switchboard_database::MemberRole::Admin),
+        Some("member") => Some(switchboard_database::MemberRole::Member),
         _ => None,
     };
 
@@ -135,7 +135,7 @@ pub async fn list_members(
 )]
 pub async fn get_member(
     Path((chat_id, member_id)): Path<(String, String)>,
-    State(state): State<Arc<GatewayState>>,
+    State(state): State<GatewayState>,
     request: Request,
 ) -> GatewayResult<Json<MemberResponse>> {
     let user_id = extract_user_id(&request)?;
@@ -182,7 +182,7 @@ pub async fn get_member(
 )]
 pub async fn update_member_role(
     Path((chat_id, member_id)): Path<(String, String)>,
-    State(state): State<Arc<GatewayState>>,
+    State(state): State<GatewayState>,
     Json(payload): Json<UpdateMemberRoleRequest>,
     request: Request,
 ) -> GatewayResult<Json<MemberResponse>> {
@@ -191,7 +191,7 @@ pub async fn update_member_role(
     // Check if user is owner or admin
     state
         .member_service
-        .check_chat_role(&chat_id, user_id, switchboard_database::ChatRole::Admin)
+        .check_chat_role(&chat_id, user_id, switchboard_database::MemberRole::Admin)
         .await
         .map_err(|e| GatewayError::AuthorizationFailed(format!("Access denied: {}", e)))?;
 
@@ -208,22 +208,22 @@ pub async fn update_member_role(
     }
 
     let new_role = match payload.role.as_str() {
-        "owner" => switchboard_database::ChatRole::Owner,
-        "admin" => switchboard_database::ChatRole::Admin,
-        "member" => switchboard_database::ChatRole::Member,
+        "owner" => switchboard_database::MemberRole::Owner,
+        "admin" => switchboard_database::MemberRole::Admin,
+        "member" => switchboard_database::MemberRole::Member,
         _ => return Err(GatewayError::InvalidRequest("Role must be 'owner', 'admin', or 'member'".to_string())),
     };
 
     // Additional checks: Only owners can promote others to owner, and owners cannot demote themselves
-    if new_role == switchboard_database::ChatRole::Owner {
+    if new_role == switchboard_database::MemberRole::Owner {
         state
             .member_service
-            .check_chat_role(&chat_id, user_id, switchboard_database::ChatRole::Owner)
+            .check_chat_role(&chat_id, user_id, switchboard_database::MemberRole::Owner)
             .await
             .map_err(|e| GatewayError::AuthorizationFailed(format!("Access denied: {}", e)))?;
     }
 
-    if member.user_public_id == user_id.to_string() && new_role != switchboard_database::ChatRole::Owner {
+    if member.user_public_id == user_id.to_string() && new_role != switchboard_database::MemberRole::Owner {
         return Err(GatewayError::InvalidRequest("You cannot demote yourself from owner role".to_string()));
     }
 
@@ -258,7 +258,7 @@ pub async fn update_member_role(
 )]
 pub async fn remove_member(
     Path((chat_id, member_id)): Path<(String, String)>,
-    State(state): State<Arc<GatewayState>>,
+    State(state): State<GatewayState>,
     request: Request,
 ) -> GatewayResult<impl IntoResponse> {
     let user_id = extract_user_id(&request)?;
@@ -266,7 +266,7 @@ pub async fn remove_member(
     // Check if user is owner or admin
     state
         .member_service
-        .check_chat_role(&chat_id, user_id, switchboard_database::ChatRole::Admin)
+        .check_chat_role(&chat_id, user_id, switchboard_database::MemberRole::Admin)
         .await
         .map_err(|e| GatewayError::AuthorizationFailed(format!("Access denied: {}", e)))?;
 
@@ -283,7 +283,7 @@ pub async fn remove_member(
     }
 
     // Cannot remove the last owner
-    if member.role == switchboard_database::ChatRole::Owner {
+    if member.role == switchboard_database::MemberRole::Owner {
         return Err(GatewayError::InvalidRequest("Cannot remove the last owner from the chat".to_string()));
     }
 
@@ -291,7 +291,7 @@ pub async fn remove_member(
     if member.user_public_id != user_id.to_string() {
         state
             .member_service
-            .check_chat_role(&chat_id, user_id, switchboard_database::ChatRole::Admin)
+            .check_chat_role(&chat_id, user_id, switchboard_database::MemberRole::Admin)
             .await
             .map_err(|e| GatewayError::AuthorizationFailed(format!("Access denied: {}", e)))?;
     }
@@ -322,7 +322,7 @@ pub async fn remove_member(
 )]
 pub async fn leave_chat(
     Path(chat_id): Path<String>,
-    State(state): State<Arc<GatewayState>>,
+    State(state): State<GatewayState>,
     request: Request,
 ) -> GatewayResult<impl IntoResponse> {
     let user_id = extract_user_id(&request)?;
@@ -337,12 +337,12 @@ pub async fn leave_chat(
     // Get user's membership
     let members = state
         .member_service
-        .list_by_chat(&chat_id, Some(switchboard_database::ChatRole::Owner), None, None)
+        .list_by_chat(&chat_id, Some(switchboard_database::MemberRole::Owner), None, None)
         .await
         .map_err(|e| GatewayError::ServiceError(format!("Failed to check membership: {}", e)))?;
 
     // Check if user is the last owner
-    let is_owner = members.iter().any(|m| m.user_public_id == user_id.to_string() && m.role == switchboard_database::ChatRole::Owner);
+    let is_owner = members.iter().any(|m| m.user_public_id == user_id.to_string() && m.role == switchboard_database::MemberRole::Owner);
     if is_owner && members.len() == 1 {
         return Err(GatewayError::InvalidRequest("Cannot leave chat as the last owner".to_string()));
     }

@@ -1,9 +1,6 @@
 //! Notification service for managing user notifications.
 
-use crate::entities::{Notification};
-use crate::entities::notification::{NotificationType, NotificationPriority};
-use crate::types::{NotificationResult};
-use crate::types::errors::NotificationError;
+use switchboard_database::{Notification, NotificationResult, NotificationError};
 use sqlx::SqlitePool;
 
 /// Service for managing notification operations

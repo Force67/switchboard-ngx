@@ -11,7 +11,7 @@ use utoipa::IntoParams;
 
 use crate::state::{AppState, ClientEvent, ServerEvent};
 
-#[derive(Debug, Deserialize, IntoParams)]
+#[derive(Debug, Deserialize, IntoParams, ToSchema)]
 pub struct WebSocketQuery {
     token: Option<String>,
 }

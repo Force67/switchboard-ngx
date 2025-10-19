@@ -85,7 +85,7 @@ pub struct UpdateChatRequest {
     pub folder_id: Option<String>,
 }
 
-#[derive(Debug, Deserialize, IntoParams)]
+#[derive(Debug, Deserialize, IntoParams, ToSchema)]
 pub struct ListChatsQuery {
     pub folder_id: Option<String>,
     pub limit: Option<i64>,
@@ -113,7 +113,7 @@ impl From<switchboard_database::Chat> for ChatResponse {
 }
 
 /// Create chat routes
-pub fn create_chat_routes() -> Router<Arc<GatewayState>> {
+pub fn create_chat_routes() -> Router<GatewayState> {
     Router::new()
         .route("/chats", axum::routing::get(list_chats).post(create_chat))
         .route("/chats/:chat_id", axum::routing::get(get_chat).put(update_chat).delete(delete_chat))
@@ -132,7 +132,7 @@ pub fn create_chat_routes() -> Router<Arc<GatewayState>> {
 )]
 pub async fn list_chats(
     Query(params): Query<ListChatsQuery>,
-    State(state): State<Arc<GatewayState>>,
+    State(state): State<GatewayState>,
     request: Request,
 ) -> GatewayResult<Json<Vec<ChatResponse>>> {
     let user_id = extract_user_id(&request)?;
@@ -160,7 +160,7 @@ pub async fn list_chats(
     )
 )]
 pub async fn create_chat(
-    State(state): State<Arc<GatewayState>>,
+    State(state): State<GatewayState>,
     Json(payload): Json<CreateChatRequest>,
     request: Request,
 ) -> GatewayResult<impl IntoResponse> {
@@ -201,7 +201,7 @@ pub async fn create_chat(
 )]
 pub async fn get_chat(
     Path(chat_id): Path<String>,
-    State(state): State<Arc<GatewayState>>,
+    State(state): State<GatewayState>,
     request: Request,
 ) -> GatewayResult<Json<ChatResponse>> {
     let user_id = extract_user_id(&request)?;
@@ -242,7 +242,7 @@ pub async fn get_chat(
 )]
 pub async fn update_chat(
     Path(chat_id): Path<String>,
-    State(state): State<Arc<GatewayState>>,
+    State(state): State<GatewayState>,
     Json(payload): Json<UpdateChatRequest>,
     request: Request,
 ) -> GatewayResult<Json<ChatResponse>> {
@@ -258,7 +258,7 @@ pub async fn update_chat(
     // Check if user is owner or admin
     state
         .chat_service
-        .check_role(chat.id, user_id, switchboard_database::ChatRole::Admin)
+        .check_role(chat.id, user_id, switchboard_database::MemberRole::Admin)
         .await
         .map_err(|e| GatewayError::AuthorizationFailed(format!("Access denied: {}", e)))?;
 
@@ -295,7 +295,7 @@ pub async fn update_chat(
 )]
 pub async fn delete_chat(
     Path(chat_id): Path<String>,
-    State(state): State<Arc<GatewayState>>,
+    State(state): State<GatewayState>,
     request: Request,
 ) -> GatewayResult<impl IntoResponse> {
     let user_id = extract_user_id(&request)?;
@@ -310,7 +310,7 @@ pub async fn delete_chat(
     // Check if user is owner
     state
         .chat_service
-        .check_role(chat.id, user_id, switchboard_database::ChatRole::Owner)
+        .check_role(chat.id, user_id, switchboard_database::MemberRole::Owner)
         .await
         .map_err(|e| GatewayError::AuthorizationFailed(format!("Access denied: {}", e)))?;
 

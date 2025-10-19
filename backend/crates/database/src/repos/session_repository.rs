@@ -16,6 +16,11 @@ impl SessionRepository {
         Self { pool }
     }
 
+    /// Get a reference to the database pool
+    pub fn pool(&self) -> &SqlitePool {
+        &self.pool
+    }
+
     /// Find session by database ID
     async fn find_by_id(&self, id: i64) -> AuthResult<Option<AuthSession>> {
         let row = sqlx::query(

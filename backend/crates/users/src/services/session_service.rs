@@ -1,26 +1,31 @@
 //! Session service for managing user sessions.
 
-use crate::entities::auth::{AuthSession, CreateSessionRequest};
-use crate::types::{AuthResult};
-use crate::types::errors::AuthError;
-use crate::repositories::SessionRepository;
+use switchboard_database::{
+    AuthSession, CreateSessionRequest, AuthResult, AuthError,
+    SessionRepository,
+};
 use sqlx::SqlitePool;
 
 /// Service for managing session operations
 pub struct SessionService {
     session_repository: SessionRepository,
+    pool: SqlitePool,
 }
 
 impl SessionService {
     pub fn new(pool: SqlitePool) -> Self {
         Self {
-            session_repository: SessionRepository::new(pool),
+            session_repository: SessionRepository::new(pool.clone()),
+            pool,
         }
     }
 
     /// Create session service with custom repository (for testing)
-    pub fn with_repository(session_repository: SessionRepository) -> Self {
-        Self { session_repository }
+    pub fn with_repository(session_repository: SessionRepository, pool: SqlitePool) -> Self {
+        Self {
+            session_repository,
+            pool,
+        }
     }
 
     /// Create a new session
@@ -203,6 +208,44 @@ impl SessionService {
             active_sessions: 0,
             expired_cleaned,
         })
+    }
+
+    /// Create a development session (for testing)
+    pub async fn create_dev_token(&self) -> AuthResult<(AuthSession, switchboard_database::User)> {
+        use switchboard_database::{User, CreateUserRequest, UserRole};
+        use crate::repositories::UserRepository;
+
+        // Create or get dev user
+        let user_repo = UserRepository::new(self.session_repository.pool());
+        let dev_user = match user_repo.find_by_id(1i64).await.map_err(|e| AuthError::DatabaseError(e.to_string()))? {
+            Some(user) => user,
+            None => {
+                // Create dev user
+                let create_req = CreateUserRequest {
+                    email: "dev@example.com".to_string(),
+                    username: "dev-user".to_string(),
+                    display_name: "Dev User".to_string(),
+                    password: "dev-password".to_string(),
+                    avatar_url: None,
+                    bio: None,
+                };
+
+                user_repo.create(&create_req).await
+                    .map_err(|e| AuthError::DatabaseError(e.to_string()))?
+            }
+        };
+
+        // Create session for dev user
+        let session_req = CreateSessionRequest {
+            token: crate::utils::jwt::generate_session_id(),
+            user_id: dev_user.id,
+            expires_at: (chrono::Utc::now() + chrono::Duration::hours(24)).to_rfc3339(),
+            auth_provider: switchboard_database::AuthProvider::Local,
+        };
+
+        let session = self.create_session(session_req).await?;
+
+        Ok((session, dev_user))
     }
 }
 

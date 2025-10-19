@@ -20,8 +20,13 @@ impl InviteRepository {
     /// Find invite by public ID
     pub async fn find_by_public_id(&self, public_id: &str) -> ChatResult<Option<ChatInvite>> {
         let row = sqlx::query(
-            "SELECT id, public_id, chat_id, inviter_id, invitee_email, invite_code, status, expires_at, created_at
-             FROM chat_invites WHERE public_id = ?"
+            "SELECT i.id, i.public_id, i.chat_id, i.inviter_id, i.invited_email, i.invite_code, i.status, i.expires_at, i.created_at, i.accepted_at,
+                    c.public_id as chat_public_id, c.title as chat_title,
+                    u.public_id as invited_by_public_id, u.display_name as inviter_display_name, u.avatar_url as inviter_avatar_url
+             FROM chat_invites i
+             LEFT JOIN chats c ON i.chat_id = c.id
+             LEFT JOIN users u ON i.inviter_id = u.id
+             WHERE i.public_id = ?"
         )
         .bind(public_id)
         .fetch_optional(&self.pool)
@@ -35,12 +40,18 @@ impl InviteRepository {
                 id: row.try_get("id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
                 public_id: row.try_get("public_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
                 chat_id: row.try_get("chat_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                chat_public_id: row.try_get("chat_public_id").unwrap_or("unknown".to_string()),
+                chat_title: row.try_get("chat_title").unwrap_or("Unknown Chat".to_string()),
                 inviter_id: row.try_get("inviter_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
-                invitee_email: row.try_get("invitee_email").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                invited_by_public_id: row.try_get("invited_by_public_id").unwrap_or("unknown".to_string()),
+                inviter_display_name: row.try_get("inviter_display_name").ok(),
+                inviter_avatar_url: row.try_get("inviter_avatar_url").ok(),
+                invited_email: row.try_get("invited_email").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
                 invite_code: row.try_get("invite_code").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
                 status: InviteStatus::from(status_str.as_str()),
                 expires_at: row.try_get("expires_at").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
                 created_at: row.try_get("created_at").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                accepted_at: row.try_get("accepted_at").ok(),
             }))
         } else {
             Ok(None)
@@ -50,8 +61,14 @@ impl InviteRepository {
     /// Find invite by invite code
     pub async fn find_by_invite_code(&self, invite_code: &str) -> ChatResult<Option<ChatInvite>> {
         let row = sqlx::query(
-            "SELECT id, public_id, chat_id, inviter_id, invitee_email, invite_code, status, expires_at, created_at
-             FROM chat_invites WHERE invite_code = ?"
+            "SELECT i.id, i.public_id, i.chat_id, i.inviter_id, i.invited_email, i.invite_code,
+                    i.status, i.expires_at, i.created_at, i.accepted_at,
+                    c.public_id as chat_public_id, c.title as chat_title,
+                    u.public_id as invited_by_public_id, u.display_name as inviter_display_name, u.avatar_url as inviter_avatar_url
+             FROM chat_invites i
+             LEFT JOIN chats c ON i.chat_id = c.id
+             LEFT JOIN users u ON i.inviter_id = u.id
+             WHERE i.invite_code = ?"
         )
         .bind(invite_code)
         .fetch_optional(&self.pool)
@@ -65,12 +82,18 @@ impl InviteRepository {
                 id: row.try_get("id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
                 public_id: row.try_get("public_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
                 chat_id: row.try_get("chat_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                chat_public_id: row.try_get("chat_public_id").unwrap_or("unknown".to_string()),
+                chat_title: row.try_get("chat_title").unwrap_or("Unknown Chat".to_string()),
                 inviter_id: row.try_get("inviter_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
-                invitee_email: row.try_get("invitee_email").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                invited_by_public_id: row.try_get("invited_by_public_id").unwrap_or("unknown".to_string()),
+                inviter_display_name: row.try_get("inviter_display_name").ok(),
+                inviter_avatar_url: row.try_get("inviter_avatar_url").ok(),
+                invited_email: row.try_get("invited_email").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
                 invite_code: row.try_get("invite_code").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
                 status: InviteStatus::from(status_str.as_str()),
                 expires_at: row.try_get("expires_at").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
                 created_at: row.try_get("created_at").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                accepted_at: row.try_get("accepted_at").ok(),
             }))
         } else {
             Ok(None)
@@ -80,8 +103,14 @@ impl InviteRepository {
     /// Find all invites for a chat
     pub async fn find_by_chat_id(&self, chat_id: i64) -> ChatResult<Vec<ChatInvite>> {
         let rows = sqlx::query(
-            "SELECT id, public_id, chat_id, inviter_id, invitee_email, invite_code, status, expires_at, created_at
-             FROM chat_invites WHERE chat_id = ? ORDER BY created_at DESC"
+            "SELECT i.id, i.public_id, i.chat_id, i.inviter_id, i.invited_email, i.invite_code,
+                    i.status, i.expires_at, i.created_at, i.accepted_at,
+                    c.public_id as chat_public_id, c.title as chat_title,
+                    u.public_id as invited_by_public_id, u.display_name as inviter_display_name, u.avatar_url as inviter_avatar_url
+             FROM chat_invites i
+             LEFT JOIN chats c ON i.chat_id = c.id
+             LEFT JOIN users u ON i.inviter_id = u.id
+             WHERE i.chat_id = ? ORDER BY i.created_at DESC"
         )
         .bind(chat_id)
         .fetch_all(&self.pool)
@@ -95,12 +124,18 @@ impl InviteRepository {
                 id: row.try_get("id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
                 public_id: row.try_get("public_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
                 chat_id: row.try_get("chat_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                chat_public_id: row.try_get("chat_public_id").unwrap_or("unknown".to_string()),
+                chat_title: row.try_get("chat_title").unwrap_or("Unknown Chat".to_string()),
                 inviter_id: row.try_get("inviter_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
-                invitee_email: row.try_get("invitee_email").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                invited_by_public_id: row.try_get("invited_by_public_id").unwrap_or("unknown".to_string()),
+                inviter_display_name: row.try_get("inviter_display_name").ok(),
+                inviter_avatar_url: row.try_get("inviter_avatar_url").ok(),
+                invited_email: row.try_get("invited_email").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
                 invite_code: row.try_get("invite_code").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
                 status: InviteStatus::from(status_str.as_str()),
                 expires_at: row.try_get("expires_at").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
                 created_at: row.try_get("created_at").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                accepted_at: row.try_get("accepted_at").ok(),
             })
         }).collect::<Result<Vec<_>, _>>()?;
 
@@ -110,8 +145,14 @@ impl InviteRepository {
     /// Find invites sent by a user
     pub async fn find_by_inviter_id(&self, inviter_id: i64) -> ChatResult<Vec<ChatInvite>> {
         let rows = sqlx::query(
-            "SELECT id, public_id, chat_id, inviter_id, invitee_email, invite_code, status, expires_at, created_at
-             FROM chat_invites WHERE inviter_id = ? ORDER BY created_at DESC"
+            "SELECT i.id, i.public_id, i.chat_id, i.inviter_id, i.invited_email, i.invite_code,
+                    i.status, i.expires_at, i.created_at, i.accepted_at,
+                    c.public_id as chat_public_id, c.title as chat_title,
+                    u.public_id as invited_by_public_id, u.display_name as inviter_display_name, u.avatar_url as inviter_avatar_url
+             FROM chat_invites i
+             LEFT JOIN chats c ON i.chat_id = c.id
+             LEFT JOIN users u ON i.inviter_id = u.id
+             WHERE i.inviter_id = ? ORDER BY i.created_at DESC"
         )
         .bind(inviter_id)
         .fetch_all(&self.pool)
@@ -125,12 +166,18 @@ impl InviteRepository {
                 id: row.try_get("id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
                 public_id: row.try_get("public_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
                 chat_id: row.try_get("chat_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                chat_public_id: row.try_get("chat_public_id").unwrap_or("unknown".to_string()),
+                chat_title: row.try_get("chat_title").unwrap_or("Unknown Chat".to_string()),
                 inviter_id: row.try_get("inviter_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
-                invitee_email: row.try_get("invitee_email").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                invited_by_public_id: row.try_get("invited_by_public_id").unwrap_or("unknown".to_string()),
+                inviter_display_name: row.try_get("inviter_display_name").ok(),
+                inviter_avatar_url: row.try_get("inviter_avatar_url").ok(),
+                invited_email: row.try_get("invited_email").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
                 invite_code: row.try_get("invite_code").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
                 status: InviteStatus::from(status_str.as_str()),
                 expires_at: row.try_get("expires_at").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
                 created_at: row.try_get("created_at").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                accepted_at: row.try_get("accepted_at").ok(),
             })
         }).collect::<Result<Vec<_>, _>>()?;
 
@@ -140,8 +187,14 @@ impl InviteRepository {
     /// Find invites for a specific email
     pub async fn find_by_email(&self, email: &str) -> ChatResult<Vec<ChatInvite>> {
         let rows = sqlx::query(
-            "SELECT id, public_id, chat_id, inviter_id, invitee_email, invite_code, status, expires_at, created_at
-             FROM chat_invites WHERE invitee_email = ? ORDER BY created_at DESC"
+            "SELECT i.id, i.public_id, i.chat_id, i.inviter_id, i.invited_email, i.invite_code,
+                    i.status, i.expires_at, i.created_at, i.accepted_at,
+                    c.public_id as chat_public_id, c.title as chat_title,
+                    u.public_id as invited_by_public_id, u.display_name as inviter_display_name, u.avatar_url as inviter_avatar_url
+             FROM chat_invites i
+             LEFT JOIN chats c ON i.chat_id = c.id
+             LEFT JOIN users u ON i.inviter_id = u.id
+             WHERE i.invited_email = ? ORDER BY i.created_at DESC"
         )
         .bind(email)
         .fetch_all(&self.pool)
@@ -155,12 +208,18 @@ impl InviteRepository {
                 id: row.try_get("id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
                 public_id: row.try_get("public_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
                 chat_id: row.try_get("chat_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                chat_public_id: row.try_get("chat_public_id").unwrap_or("unknown".to_string()),
+                chat_title: row.try_get("chat_title").unwrap_or("Unknown Chat".to_string()),
                 inviter_id: row.try_get("inviter_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
-                invitee_email: row.try_get("invitee_email").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                invited_by_public_id: row.try_get("invited_by_public_id").unwrap_or("unknown".to_string()),
+                inviter_display_name: row.try_get("inviter_display_name").ok(),
+                inviter_avatar_url: row.try_get("inviter_avatar_url").ok(),
+                invited_email: row.try_get("invited_email").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
                 invite_code: row.try_get("invite_code").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
                 status: InviteStatus::from(status_str.as_str()),
                 expires_at: row.try_get("expires_at").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
                 created_at: row.try_get("created_at").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                accepted_at: row.try_get("accepted_at").ok(),
             })
         }).collect::<Result<Vec<_>, _>>()?;
 
@@ -173,17 +232,21 @@ impl InviteRepository {
         let invite_code = self.generate_invite_code().await?;
         let now = chrono::Utc::now().to_rfc3339();
 
+        // Calculate expires_at from expires_in_hours
+        let expires_at = chrono::Utc::now() + chrono::Duration::hours(request.expires_in_hours);
+        let expires_at_str = expires_at.to_rfc3339();
+
         let result = sqlx::query(
-            "INSERT INTO chat_invites (public_id, chat_id, inviter_id, invitee_email, invite_code, status, expires_at, created_at)
+            "INSERT INTO chat_invites (public_id, chat_id, inviter_id, invited_email, invite_code, status, expires_at, created_at)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
         )
         .bind(&public_id)
         .bind(request.chat_id)
         .bind(inviter_id)
-        .bind(&request.invitee_email)
+        .bind(&request.invited_email)
         .bind(&invite_code)
         .bind(InviteStatus::Pending.to_string())
-        .bind(&request.expires_at)
+        .bind(&expires_at_str)
         .bind(&now)
         .execute(&self.pool)
         .await
@@ -200,16 +263,45 @@ impl InviteRepository {
             "created new chat invite"
         );
 
+        // Get chat details for the response
+        let chat_row = sqlx::query("SELECT public_id, title FROM chats WHERE id = ?")
+            .bind(request.chat_id)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(|e| ChatError::DatabaseError(e.to_string()))?;
+
+        // Get inviter details for the response
+        let inviter_row = sqlx::query("SELECT public_id, display_name, avatar_url FROM users WHERE id = ?")
+            .bind(inviter_id)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(|e| ChatError::DatabaseError(e.to_string()))?;
+
         Ok(ChatInvite {
             id: invite_id,
             public_id,
             chat_id: request.chat_id,
+            chat_public_id: chat_row
+                .as_ref()
+                .and_then(|r| r.try_get::<String, _>("public_id").ok())
+                .unwrap_or("unknown".to_string()),
+            chat_title: chat_row
+                .as_ref()
+                .and_then(|r| r.try_get::<String, _>("title").ok())
+                .unwrap_or("Unknown Chat".to_string()),
             inviter_id,
-            invitee_email: request.invitee_email.clone(),
+            invited_by_public_id: inviter_row
+                .as_ref()
+                .and_then(|r| r.try_get::<String, _>("public_id").ok())
+                .unwrap_or("unknown".to_string()),
+            inviter_display_name: inviter_row.as_ref().and_then(|r| r.try_get("display_name").ok()),
+            inviter_avatar_url: inviter_row.as_ref().and_then(|r| r.try_get("avatar_url").ok()),
+            invited_email: request.invited_email.clone(),
             invite_code,
             status: InviteStatus::Pending,
-            expires_at: request.expires_at.clone(),
+            expires_at: expires_at_str,
             created_at: now,
+            accepted_at: None,
         })
     }
 
@@ -228,12 +320,10 @@ impl InviteRepository {
         }
 
         // Check if invite has expired
-        if let Some(expires_at) = &invite.expires_at {
-            let expiry_time = chrono::DateTime::parse_from_rfc3339(expires_at)
-                .map_err(|e| ChatError::DatabaseError(e.to_string()))?;
-            if expiry_time < chrono::Utc::now() {
-                return Err(ChatError::InviteExpired);
-            }
+        let expiry_time = chrono::DateTime::parse_from_rfc3339(&invite.expires_at)
+            .map_err(|e| ChatError::DatabaseError(e.to_string()))?;
+        if expiry_time < chrono::Utc::now() {
+            return Err(ChatError::InviteExpired);
         }
 
         let now = chrono::Utc::now().to_rfc3339();
@@ -272,7 +362,7 @@ impl InviteRepository {
 
         let now = chrono::Utc::now().to_rfc3339();
 
-        sqlx::query("UPDATE chat_invites SET status = 'declined' WHERE public_id = ?")
+        sqlx::query("UPDATE chat_invites SET status = 'rejected' WHERE public_id = ?")
             .bind(public_id)
             .execute(&self.pool)
             .await
@@ -286,7 +376,7 @@ impl InviteRepository {
 
         // Return updated invite
         let mut updated_invite = invite;
-        updated_invite.status = InviteStatus::Declined;
+        updated_invite.status = InviteStatus::Rejected;
         Ok(updated_invite)
     }
 
@@ -425,15 +515,17 @@ mod tests {
 
         let request = CreateInviteRequest {
             chat_id: 1,
-            invitee_email: Some("test@example.com".to_string()),
-            expires_at: None,
+            chat_public_id: "test_chat".to_string(),
+            invited_by_public_id: "test_user".to_string(),
+            invited_email: "test@example.com".to_string(),
+            expires_in_hours: 24,
         };
 
         let invite = repo.create(1, &request).await.unwrap();
         assert!(invite.id > 0);
         assert_eq!(invite.chat_id, 1);
         assert_eq!(invite.inviter_id, 1);
-        assert_eq!(invite.invitee_email.as_ref().unwrap(), "test@example.com");
+        assert_eq!(invite.invited_email, "test@example.com");
         assert_eq!(invite.status, InviteStatus::Pending);
         assert!(!invite.invite_code.is_empty());
     }
@@ -445,8 +537,10 @@ mod tests {
 
         let request = CreateInviteRequest {
             chat_id: 1,
-            invitee_email: None,
-            expires_at: None,
+            chat_public_id: "test_chat".to_string(),
+            invited_by_public_id: "test_user".to_string(),
+            invited_email: "test@example.com".to_string(),
+            expires_in_hours: 24,
         };
 
         let created = repo.create(1, &request).await.unwrap();
@@ -465,8 +559,10 @@ mod tests {
 
         let request = CreateInviteRequest {
             chat_id: 1,
-            invitee_email: None,
-            expires_at: None,
+            chat_public_id: "test_chat".to_string(),
+            invited_by_public_id: "test_user".to_string(),
+            invited_email: "test@example.com".to_string(),
+            expires_in_hours: 24,
         };
 
         let created = repo.create(1, &request).await.unwrap();
@@ -484,8 +580,10 @@ mod tests {
 
         let request = CreateInviteRequest {
             chat_id: 1,
-            invitee_email: None,
-            expires_at: None,
+            chat_public_id: "test_chat".to_string(),
+            invited_by_public_id: "test_user".to_string(),
+            invited_email: "test@example.com".to_string(),
+            expires_in_hours: 24,
         };
 
         let created = repo.create(1, &request).await.unwrap();
@@ -501,14 +599,16 @@ mod tests {
 
         let request = CreateInviteRequest {
             chat_id: 1,
-            invitee_email: None,
-            expires_at: None,
+            chat_public_id: "test_chat".to_string(),
+            invited_by_public_id: "test_user".to_string(),
+            invited_email: "test@example.com".to_string(),
+            expires_in_hours: 24,
         };
 
         let created = repo.create(1, &request).await.unwrap();
         let declined = repo.decline(&created.public_id, 2).await.unwrap();
 
-        assert_eq!(declined.status, InviteStatus::Declined);
+        assert_eq!(declined.status, InviteStatus::Rejected);
     }
 
     #[tokio::test]
@@ -518,8 +618,10 @@ mod tests {
 
         let request = CreateInviteRequest {
             chat_id: 1,
-            invitee_email: None,
-            expires_at: None,
+            chat_public_id: "test_chat".to_string(),
+            invited_by_public_id: "test_user".to_string(),
+            invited_email: "test@example.com".to_string(),
+            expires_in_hours: 24,
         };
 
         let created = repo.create(1, &request).await.unwrap();
@@ -536,14 +638,18 @@ mod tests {
 
         let request1 = CreateInviteRequest {
             chat_id: 1,
-            invitee_email: Some("test1@example.com".to_string()),
-            expires_at: None,
+            chat_public_id: "test_chat".to_string(),
+            invited_by_public_id: "test_user".to_string(),
+            invited_email: "test1@example.com".to_string(),
+            expires_in_hours: 24,
         };
 
         let request2 = CreateInviteRequest {
             chat_id: 1,
-            invitee_email: Some("test2@example.com".to_string()),
-            expires_at: None,
+            chat_public_id: "test_chat".to_string(),
+            invited_by_public_id: "test_user".to_string(),
+            invited_email: "test2@example.com".to_string(),
+            expires_in_hours: 24,
         };
 
         repo.create(1, &request1).await.unwrap();

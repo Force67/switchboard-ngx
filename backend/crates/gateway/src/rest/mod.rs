@@ -9,9 +9,10 @@ pub mod attachment;
 
 use axum::Router;
 use crate::state::GatewayState;
+use std::sync::Arc;
 
 /// Create all REST API routes
-pub fn create_rest_routes() -> Router<GatewayState> {
+pub fn create_rest_routes() -> Router<Arc<GatewayState>> {
     Router::new()
         // Authentication routes
         .merge(auth::create_auth_routes())

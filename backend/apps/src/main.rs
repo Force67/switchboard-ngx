@@ -152,7 +152,7 @@ impl ApiClient {
     }
 
     async fn list_chats(&self, token: &str) -> Result<Vec<Chat>> {
-        println!("=Ë Fetching chats for user");
+        println!("=> Fetching chats for user");
 
         let response = self
             .client
@@ -175,12 +175,12 @@ impl ApiClient {
         let chats_response: ChatsResponse = response.json().await
             .context("Failed to parse chats response")?;
 
-        println!("=Ê Found {} chats", chats_response.chats.len().to_string().yellow());
+        println!("=ï¿½ Found {} chats", chats_response.chats.len().to_string().yellow());
         Ok(chats_response.chats)
     }
 
     async fn create_chat(&self, token: &str, request: CreateChatRequest) -> Result<Chat> {
-        println!("<• Creating chat: {}", request.title);
+        println!("<ï¿½ Creating chat: {}", request.title);
 
         let response = self
             .client
@@ -209,7 +209,7 @@ impl ApiClient {
     }
 
     async fn get_chat(&self, token: &str, chat_id: &str) -> Result<Chat> {
-        println!("= Fetching chat: {}", chat_id);
+        println!("=> Fetching chat: {}", chat_id);
 
         let response = self
             .client
@@ -236,7 +236,7 @@ impl ApiClient {
     }
 
     async fn send_message(&self, token: &str, chat_id: &str, message: CreateMessageRequest) -> Result<Message> {
-        println!("=¬ Sending message to chat: {}", chat_id);
+        println!("=ï¿½ Sending message to chat: {}", chat_id);
 
         let response = self
             .client
@@ -265,7 +265,7 @@ impl ApiClient {
     }
 
     async fn get_messages(&self, token: &str, chat_id: &str) -> Result<Vec<Message>> {
-        println!("=Ü Fetching messages for chat: {}", chat_id);
+        println!("=ï¿½ Fetching messages for chat: {}", chat_id);
 
         let response = self
             .client
@@ -288,12 +288,12 @@ impl ApiClient {
         let messages_response: MessagesResponse = response.json().await
             .context("Failed to parse messages response")?;
 
-        println!("=Ê Found {} messages", messages_response.messages.len().to_string().yellow());
+        println!("=ï¿½ Found {} messages", messages_response.messages.len().to_string().yellow());
         Ok(messages_response.messages)
     }
 
     async fn configure_provider(&self, token: &str, provider_name: &str, api_base: &str, models: Vec<String>) -> Result<Provider> {
-        println!("™ Configuring provider: {}", provider_name);
+        println!("ï¿½ Configuring provider: {}", provider_name);
 
         let mut provider_data = HashMap::new();
         provider_data.insert("name", provider_name);
@@ -322,7 +322,7 @@ impl ApiClient {
             }
             status => {
                 let error = response.text().await?;
-                println!("  Provider configuration returned {}: {}", status, error);
+                println!("ï¿½ Provider configuration returned {}: {}", status, error);
                 Err(anyhow::anyhow!("Provider configuration failed: {}", error))
             }
         }
@@ -334,7 +334,7 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
     let api_client = ApiClient::new(cli.api_url);
 
-    println!("=€ Switchboard API Test App");
+    println!("=ï¿½ Switchboard API Test App");
     println!("========================");
 
     match cli.command {
@@ -357,7 +357,7 @@ async fn main() -> Result<()> {
 }
 
 async fn test_user_creation(api_client: &ApiClient, count: u32) -> Result<()> {
-    println!("\n>ê Testing User Creation");
+    println!("\n>ï¿½ Testing User Creation");
     println!("=======================");
 
     let mut users = Vec::new();
@@ -380,11 +380,11 @@ async fn test_user_creation(api_client: &ApiClient, count: u32) -> Result<()> {
 }
 
 async fn test_chat_management(api_client: &ApiClient, user_token: &str, count: u32) -> Result<()> {
-    println!("\n>ê Testing Chat Management");
+    println!("\n>ï¿½ Testing Chat Management");
     println!("==========================");
 
     let existing_chats = api_client.list_chats(user_token).await?;
-    println!("=Ê User currently has {} chats", existing_chats.len());
+    println!("=ï¿½ User currently has {} chats", existing_chats.len());
 
     let mut created_chats = Vec::new();
     for i in 1..=count {
@@ -421,11 +421,11 @@ async fn test_chat_management(api_client: &ApiClient, user_token: &str, count: u
 }
 
 async fn test_complete_workflow(api_client: &ApiClient, user_count: u32, chats_per_user: u32, messages_per_chat: u32) -> Result<()> {
-    println!("\n>ê Testing Complete Workflow");
+    println!("\n>ï¿½ Testing Complete Workflow");
     println!("===========================");
 
     // Step 1: Create users
-    println!("\n=Ý Step 1: Creating {} users", user_count);
+    println!("\n=ï¿½ Step 1: Creating {} users", user_count);
     let mut users = Vec::new();
     for i in 1..=user_count {
         let email = format!("workflowuser{}@example.com", i);
@@ -446,7 +446,7 @@ async fn test_complete_workflow(api_client: &ApiClient, user_count: u32, chats_p
     }
 
     // Step 2: Create chats for each user
-    println!("\n=¬ Step 2: Creating {} chats per user", chats_per_user);
+    println!("\n=ï¿½ Step 2: Creating {} chats per user", chats_per_user);
     let mut all_chats = Vec::new();
 
     for (user_idx, user) in users.iter().enumerate() {
@@ -471,7 +471,7 @@ async fn test_complete_workflow(api_client: &ApiClient, user_count: u32, chats_p
     }
 
     // Step 3: Send messages to chats
-    println!("\n=è Step 3: Sending {} messages per chat", messages_per_chat);
+    println!("\n=ï¿½ Step 3: Sending {} messages per chat", messages_per_chat);
     let mut message_count = 0;
 
     for (token, chat) in &all_chats {
@@ -497,14 +497,14 @@ async fn test_complete_workflow(api_client: &ApiClient, user_count: u32, chats_p
     }
 
     // Step 4: Verify messages
-    println!("\n= Step 4: Verifying messages");
+    println!("\n=> Step 4: Verifying messages");
     let mut verified_messages = 0;
 
     for (token, chat) in &all_chats {
         match api_client.get_messages(token, &chat.public_id).await {
             Ok(messages) => {
                 verified_messages += messages.len();
-                println!("=Ê Chat '{}' has {} messages", chat.title, messages.len());
+                println!("=ï¿½ Chat '{}' has {} messages", chat.title, messages.len());
             }
             Err(e) => {
                 println!("L Failed to verify messages for chat {}: {}", chat.public_id, e);
@@ -513,7 +513,7 @@ async fn test_complete_workflow(api_client: &ApiClient, user_count: u32, chats_p
     }
 
     // Step 5: Test provider configuration (for first user)
-    println!("\n™ Step 5: Testing provider configuration");
+    println!("\nï¿½ Step 5: Testing provider configuration");
     if let Some(first_user) = users.first() {
         let models = vec![
             "gpt-3.5-turbo".to_string(),
@@ -531,13 +531,13 @@ async fn test_complete_workflow(api_client: &ApiClient, user_count: u32, chats_p
                 println!(" Provider configuration test completed");
             }
             Err(e) => {
-                println!("  Provider configuration test failed (this may be expected): {}", e);
+                println!("ï¿½ Provider configuration test failed (this may be expected): {}", e);
             }
         }
     }
 
     // Summary
-    println!("\n=Ê Workflow Summary");
+    println!("\n=ï¿½ Workflow Summary");
     println!("===================");
     println!(" Users created: {}/{}", users.len(), user_count);
     println!(" Chats created: {}", all_chats.len());
@@ -548,7 +548,7 @@ async fn test_complete_workflow(api_client: &ApiClient, user_count: u32, chats_p
 }
 
 async fn run_all_tests(api_client: &ApiClient) -> Result<()> {
-    println!(">ê Running All Tests");
+    println!(">ï¿½ Running All Tests");
     println!("==================");
 
     // Test 1: User creation
@@ -563,6 +563,6 @@ async fn run_all_tests(api_client: &ApiClient) -> Result<()> {
     // Test 3: Complete workflow
     test_complete_workflow(api_client, 2, 3, 2).await?;
 
-    println!("\n<‰ All tests completed successfully!");
+    println!("\n<ï¿½ All tests completed successfully!");
     Ok(())
 }

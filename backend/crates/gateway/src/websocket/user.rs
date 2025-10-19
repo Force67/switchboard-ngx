@@ -6,13 +6,14 @@ use axum::{
         State,
         Query,
     },
-    response::Response,
+    response::{Response, IntoResponse},
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{broadcast, RwLock};
 use uuid::Uuid;
+use futures_util::{StreamExt, SinkExt};
 
 use crate::state::GatewayState;
 use crate::error::GatewayError;
@@ -240,7 +241,7 @@ pub async fn user_websocket_handler(
         }
     };
 
-    ws.on_upgrade(move |socket| handle_user_websocket(socket, user_ws_state, user_id, user))
+    Ok(ws.on_upgrade(move |socket| handle_user_websocket(socket, user_ws_state, user_id, user)))
 }
 
 /// Authenticate user from token
@@ -372,11 +373,11 @@ async fn handle_user_client_event(
                     display_name: user.display_name.clone(),
                     avatar_url: user.avatar_url.clone(),
                     bio: user.bio.clone(),
-                    status: user.status.clone(),
-                    role: user.role.clone(),
-                    created_at: user.created_at.to_rfc3339(),
-                    updated_at: user.updated_at.to_rfc3339(),
-                    last_login_at: user.last_login_at.map(|dt| dt.to_rfc3339()),
+                    status: user.status.to_string(),
+                    role: user.role.to_string(),
+                    created_at: user.created_at.clone(),
+                    updated_at: user.updated_at.clone(),
+                    last_login_at: user.last_login_at.clone(),
                     email_verified: user.email_verified,
                     is_active: user.is_active,
                 };
@@ -396,11 +397,11 @@ async fn handle_user_client_event(
                 display_name: display_name.or(user.display_name.clone()),
                 avatar_url: avatar_url.or(user.avatar_url.clone()),
                 bio: bio.or(user.bio.clone()),
-                status: user.status.clone(),
-                role: user.role.clone(),
-                created_at: user.created_at.to_rfc3339(),
+                status: user.status.to_string(),
+                role: user.role.to_string(),
+                created_at: user.created_at.clone(),
                 updated_at: chrono::Utc::now().to_rfc3339(),
-                last_login_at: user.last_login_at.map(|dt| dt.to_rfc3339()),
+                last_login_at: user.last_login_at.clone(),
                 email_verified: user.email_verified,
                 is_active: user.is_active,
             };

@@ -1,6 +1,6 @@
 //! Repository for attachment data access operations.
 
-use crate::entities::{MessageAttachment, CreateAttachmentRequest};
+use crate::{MessageAttachment, CreateAttachmentRequest, AttachmentType};
 use crate::types::{ChatResult, ChatError};
 use sqlx::{SqlitePool, Row};
 use tracing::{info, warn};
@@ -19,8 +19,14 @@ impl AttachmentRepository {
     /// Find all attachments for a message
     pub async fn find_by_message_id(&self, message_id: i64) -> ChatResult<Vec<MessageAttachment>> {
         let rows = sqlx::query(
-            "SELECT id, public_id, message_id, filename, content_type, file_size, file_path, created_at
-             FROM message_attachments WHERE message_id = ? ORDER BY created_at ASC"
+            "SELECT ma.id, ma.public_id, ma.message_id, ma.file_name, ma.file_type, ma.file_size, ma.file_url, ma.created_at, ma.uploader_id,
+                    m.public_id as message_public_id, m.chat_id, c.public_id as chat_public_id,
+                    u.public_id as uploader_public_id, u.display_name as uploader_display_name, u.avatar_url as uploader_avatar_url
+             FROM message_attachments ma
+             LEFT JOIN messages m ON ma.message_id = m.id
+             LEFT JOIN chats c ON m.chat_id = c.id
+             LEFT JOIN users u ON ma.uploader_id = u.id
+             WHERE ma.message_id = ? ORDER BY ma.created_at ASC"
         )
         .bind(message_id)
         .fetch_all(&self.pool)
@@ -28,15 +34,24 @@ impl AttachmentRepository {
         .map_err(|e| ChatError::DatabaseError(e.to_string()))?;
 
         let attachments = rows.into_iter().map(|row| {
+            let file_type_str: String = row.try_get("file_type").map_err(|e| ChatError::DatabaseError(e.to_string()))?;
+
             Ok(MessageAttachment {
                 id: row.try_get("id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
                 public_id: row.try_get("public_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
                 message_id: row.try_get("message_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
-                filename: row.try_get("filename").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
-                content_type: row.try_get("content_type").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                message_public_id: row.try_get("message_public_id").unwrap_or("unknown".to_string()),
+                chat_id: row.try_get("chat_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                chat_public_id: row.try_get("chat_public_id").unwrap_or("unknown".to_string()),
+                file_name: row.try_get("file_name").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                file_type: AttachmentType::from(file_type_str.as_str()),
                 file_size: row.try_get("file_size").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
-                file_path: row.try_get("file_path").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                file_url: row.try_get("file_url").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
                 created_at: row.try_get("created_at").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                uploader_id: row.try_get("uploader_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                uploader_public_id: row.try_get("uploader_public_id").unwrap_or("unknown".to_string()),
+                uploader_display_name: row.try_get("uploader_display_name").ok(),
+                uploader_avatar_url: row.try_get("uploader_avatar_url").ok(),
             })
         }).collect::<Result<Vec<_>, _>>()?;
 
@@ -46,8 +61,14 @@ impl AttachmentRepository {
     /// Find an attachment by its public ID
     pub async fn find_by_public_id(&self, public_id: &str) -> ChatResult<Option<MessageAttachment>> {
         let row = sqlx::query(
-            "SELECT id, public_id, message_id, filename, content_type, file_size, file_path, created_at
-             FROM message_attachments WHERE public_id = ?"
+            "SELECT ma.id, ma.public_id, ma.message_id, ma.file_name, ma.file_type, ma.file_size, ma.file_url, ma.created_at, ma.uploader_id,
+                    m.public_id as message_public_id, m.chat_id, c.public_id as chat_public_id,
+                    u.public_id as uploader_public_id, u.display_name as uploader_display_name, u.avatar_url as uploader_avatar_url
+             FROM message_attachments ma
+             LEFT JOIN messages m ON ma.message_id = m.id
+             LEFT JOIN chats c ON m.chat_id = c.id
+             LEFT JOIN users u ON ma.uploader_id = u.id
+             WHERE ma.public_id = ?"
         )
         .bind(public_id)
         .fetch_optional(&self.pool)
@@ -55,15 +76,24 @@ impl AttachmentRepository {
         .map_err(|e| ChatError::DatabaseError(e.to_string()))?;
 
         if let Some(row) = row {
+            let file_type_str: String = row.try_get("file_type").map_err(|e| ChatError::DatabaseError(e.to_string()))?;
+
             Ok(Some(MessageAttachment {
                 id: row.try_get("id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
                 public_id: row.try_get("public_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
                 message_id: row.try_get("message_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
-                filename: row.try_get("filename").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
-                content_type: row.try_get("content_type").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                message_public_id: row.try_get("message_public_id").unwrap_or("unknown".to_string()),
+                chat_id: row.try_get("chat_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                chat_public_id: row.try_get("chat_public_id").unwrap_or("unknown".to_string()),
+                file_name: row.try_get("file_name").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                file_type: AttachmentType::from(file_type_str.as_str()),
                 file_size: row.try_get("file_size").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
-                file_path: row.try_get("file_path").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                file_url: row.try_get("file_url").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
                 created_at: row.try_get("created_at").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                uploader_id: row.try_get("uploader_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                uploader_public_id: row.try_get("uploader_public_id").unwrap_or("unknown".to_string()),
+                uploader_display_name: row.try_get("uploader_display_name").ok(),
+                uploader_avatar_url: row.try_get("uploader_avatar_url").ok(),
             }))
         } else {
             Ok(None)
@@ -76,16 +106,17 @@ impl AttachmentRepository {
         let now = chrono::Utc::now().to_rfc3339();
 
         let result = sqlx::query(
-            "INSERT INTO message_attachments (public_id, message_id, filename, content_type, file_size, file_path, created_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?)"
+            "INSERT INTO message_attachments (public_id, message_id, file_name, file_type, file_size, file_url, created_at, uploader_id)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
         )
         .bind(&public_id)
         .bind(request.message_id)
-        .bind(&request.filename)
-        .bind(&request.content_type)
+        .bind(&request.file_name)
+        .bind(request.file_type.to_string())
         .bind(request.file_size)
-        .bind(&request.file_path)
+        .bind(&request.file_url)
         .bind(&now)
+        .bind(request.uploader_id)
         .execute(&self.pool)
         .await
         .map_err(|e| ChatError::DatabaseError(e.to_string()))?;
@@ -95,19 +126,60 @@ impl AttachmentRepository {
         info!(
             attachment_id = attachment_id,
             message_id = request.message_id,
-            filename = %request.filename,
+            file_name = %request.file_name,
             "created new attachment"
         );
+
+        // Get related data for the response
+        let message_row = sqlx::query("SELECT public_id, chat_id FROM messages WHERE id = ?")
+            .bind(request.message_id)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(|e| ChatError::DatabaseError(e.to_string()))?;
+
+        let chat_row = if let Some(msg_row) = &message_row {
+            sqlx::query("SELECT public_id FROM chats WHERE id = ?")
+                .bind(msg_row.try_get::<i64, _>("chat_id").unwrap_or(0))
+                .fetch_optional(&self.pool)
+                .await
+                .map_err(|e| ChatError::DatabaseError(e.to_string()))?
+        } else {
+            None
+        };
+
+        let user_row = sqlx::query("SELECT public_id, display_name, avatar_url FROM users WHERE id = ?")
+            .bind(request.uploader_id)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(|e| ChatError::DatabaseError(e.to_string()))?;
 
         Ok(MessageAttachment {
             id: attachment_id,
             public_id,
             message_id: request.message_id,
-            filename: request.filename.clone(),
-            content_type: request.content_type.clone(),
+            message_public_id: message_row
+                .as_ref()
+                .and_then(|r| r.try_get::<String, _>("public_id").ok())
+                .unwrap_or("unknown".to_string()),
+            chat_id: message_row
+                .as_ref()
+                .and_then(|r| r.try_get("chat_id").ok())
+                .unwrap_or(0),
+            chat_public_id: chat_row
+                .and_then(|r| r.try_get("public_id").ok())
+                .unwrap_or("unknown".to_string()),
+            file_name: request.file_name.clone(),
+            file_type: request.file_type.clone(),
             file_size: request.file_size,
-            file_path: request.file_path.clone(),
+            file_url: request.file_url.clone(),
             created_at: now,
+            uploader_id: request.uploader_id,
+            uploader_public_id: user_row
+                .as_ref()
+                .and_then(|r| r.try_get::<String, _>("public_id").ok())
+                .unwrap_or("unknown".to_string()),
+            uploader_display_name: user_row.as_ref().and_then(|r| r.try_get("display_name").ok()),
+            uploader_avatar_url: user_row.as_ref().and_then(|r| r.try_get("avatar_url").ok()),
         })
     }
 

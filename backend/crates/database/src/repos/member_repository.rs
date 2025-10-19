@@ -19,8 +19,14 @@ impl MemberRepository {
     /// Find all members for a chat
     pub async fn find_by_chat_id(&self, chat_id: i64) -> ChatResult<Vec<ChatMember>> {
         let rows = sqlx::query(
-            "SELECT id, chat_id, user_id, role, joined_at
-             FROM chat_members WHERE chat_id = ? ORDER BY joined_at ASC"
+            "SELECT cm.id, cm.chat_id, cm.user_id, cm.role, cm.joined_at,
+                    u.public_id as user_public_id, u.display_name as user_display_name,
+                    u.avatar_url as user_avatar_url, u.email as user_email,
+                    c.public_id as chat_public_id
+             FROM chat_members cm
+             LEFT JOIN users u ON cm.user_id = u.id
+             LEFT JOIN chats c ON cm.chat_id = c.id
+             WHERE cm.chat_id = ? ORDER BY cm.joined_at ASC"
         )
         .bind(chat_id)
         .fetch_all(&self.pool)
@@ -32,10 +38,16 @@ impl MemberRepository {
 
             Ok(ChatMember {
                 id: row.try_get("id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                public_id: format!("member_{}", row.try_get::<i64, _>("id").map_err(|e| ChatError::DatabaseError(e.to_string()))?),
                 chat_id: row.try_get("chat_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                chat_public_id: row.try_get("chat_public_id").unwrap_or("unknown".to_string()),
                 user_id: row.try_get("user_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                user_public_id: row.try_get("user_public_id").unwrap_or("unknown".to_string()),
                 role: MemberRole::from(role_str.as_str()),
                 joined_at: row.try_get("joined_at").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                user_display_name: row.try_get("user_display_name").ok(),
+                user_avatar_url: row.try_get("user_avatar_url").ok(),
+                user_email: row.try_get("user_email").ok(),
             })
         }).collect::<Result<Vec<_>, _>>()?;
 
@@ -45,8 +57,14 @@ impl MemberRepository {
     /// Find member by chat ID and user ID
     pub async fn find_by_chat_and_user(&self, chat_id: i64, user_id: i64) -> ChatResult<Option<ChatMember>> {
         let row = sqlx::query(
-            "SELECT id, chat_id, user_id, role, joined_at
-             FROM chat_members WHERE chat_id = ? AND user_id = ?"
+            "SELECT cm.id, cm.chat_id, cm.user_id, cm.role, cm.joined_at,
+                    u.public_id as user_public_id, u.display_name as user_display_name,
+                    u.avatar_url as user_avatar_url, u.email as user_email,
+                    c.public_id as chat_public_id
+             FROM chat_members cm
+             LEFT JOIN users u ON cm.user_id = u.id
+             LEFT JOIN chats c ON cm.chat_id = c.id
+             WHERE cm.chat_id = ? AND cm.user_id = ?"
         )
         .bind(chat_id)
         .bind(user_id)
@@ -59,10 +77,16 @@ impl MemberRepository {
 
             Ok(Some(ChatMember {
                 id: row.try_get("id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                public_id: format!("member_{}", row.try_get::<i64, _>("id").map_err(|e| ChatError::DatabaseError(e.to_string()))?),
                 chat_id: row.try_get("chat_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                chat_public_id: row.try_get("chat_public_id").unwrap_or("unknown".to_string()),
                 user_id: row.try_get("user_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                user_public_id: row.try_get("user_public_id").unwrap_or("unknown".to_string()),
                 role: MemberRole::from(role_str.as_str()),
                 joined_at: row.try_get("joined_at").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                user_display_name: row.try_get("user_display_name").ok(),
+                user_avatar_url: row.try_get("user_avatar_url").ok(),
+                user_email: row.try_get("user_email").ok(),
             }))
         } else {
             Ok(None)
@@ -72,8 +96,14 @@ impl MemberRepository {
     /// Find all chats for a user
     pub async fn find_chats_by_user_id(&self, user_id: i64) -> ChatResult<Vec<ChatMember>> {
         let rows = sqlx::query(
-            "SELECT id, chat_id, user_id, role, joined_at
-             FROM chat_members WHERE user_id = ? ORDER BY joined_at DESC"
+            "SELECT cm.id, cm.chat_id, cm.user_id, cm.role, cm.joined_at,
+                    u.public_id as user_public_id, u.display_name as user_display_name,
+                    u.avatar_url as user_avatar_url, u.email as user_email,
+                    c.public_id as chat_public_id
+             FROM chat_members cm
+             LEFT JOIN users u ON cm.user_id = u.id
+             LEFT JOIN chats c ON cm.chat_id = c.id
+             WHERE cm.user_id = ? ORDER BY cm.joined_at DESC"
         )
         .bind(user_id)
         .fetch_all(&self.pool)
@@ -85,10 +115,16 @@ impl MemberRepository {
 
             Ok(ChatMember {
                 id: row.try_get("id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                public_id: format!("member_{}", row.try_get::<i64, _>("id").map_err(|e| ChatError::DatabaseError(e.to_string()))?),
                 chat_id: row.try_get("chat_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                chat_public_id: row.try_get("chat_public_id").unwrap_or("unknown".to_string()),
                 user_id: row.try_get("user_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                user_public_id: row.try_get("user_public_id").unwrap_or("unknown".to_string()),
                 role: MemberRole::from(role_str.as_str()),
                 joined_at: row.try_get("joined_at").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                user_display_name: row.try_get("user_display_name").ok(),
+                user_avatar_url: row.try_get("user_avatar_url").ok(),
+                user_email: row.try_get("user_email").ok(),
             })
         }).collect::<Result<Vec<_>, _>>()?;
 
@@ -125,12 +161,36 @@ impl MemberRepository {
             "added new member to chat"
         );
 
+        // Get user and chat details for the response
+        let user_row = sqlx::query("SELECT public_id, display_name, avatar_url, email FROM users WHERE id = ?")
+            .bind(request.user_id)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(|e| ChatError::DatabaseError(e.to_string()))?;
+
+        let chat_row = sqlx::query("SELECT public_id FROM chats WHERE id = ?")
+            .bind(request.chat_id)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(|e| ChatError::DatabaseError(e.to_string()))?;
+
         Ok(ChatMember {
             id: member_id,
+            public_id: format!("member_{}", member_id),
             chat_id: request.chat_id,
+            chat_public_id: chat_row
+                .and_then(|r| r.try_get("public_id").ok())
+                .unwrap_or("unknown".to_string()),
             user_id: request.user_id,
+            user_public_id: user_row
+                .as_ref()
+                .and_then(|r| r.try_get::<String, _>("public_id").ok())
+                .unwrap_or("unknown".to_string()),
             role: request.role.clone(),
             joined_at: now,
+            user_display_name: user_row.as_ref().and_then(|r| r.try_get("display_name").ok()),
+            user_avatar_url: user_row.as_ref().and_then(|r| r.try_get("avatar_url").ok()),
+            user_email: user_row.as_ref().and_then(|r| r.try_get("email").ok()),
         })
     }
 
@@ -273,6 +333,246 @@ impl MemberRepository {
     pub async fn is_owner(&self, chat_id: i64, user_id: i64) -> ChatResult<bool> {
         let role = self.get_member_role(chat_id, user_id).await?;
         Ok(matches!(role, Some(MemberRole::Owner)))
+    }
+
+    /// Find member by user and chat public IDs
+    pub async fn find_by_user_and_chat_public(&self, chat_public_id: &str, user_id: i64) -> ChatResult<Option<ChatMember>> {
+        let row = sqlx::query(
+            "SELECT cm.id, cm.chat_id, cm.user_id, cm.role, cm.joined_at,
+                    u.public_id as user_public_id, u.display_name as user_display_name,
+                    u.avatar_url as user_avatar_url, u.email as user_email,
+                    c.public_id as chat_public_id
+             FROM chat_members cm
+             LEFT JOIN users u ON cm.user_id = u.id
+             LEFT JOIN chats c ON cm.chat_id = c.id
+             WHERE c.public_id = ? AND cm.user_id = ?"
+        )
+        .bind(chat_public_id)
+        .bind(user_id)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| ChatError::DatabaseError(e.to_string()))?;
+
+        if let Some(row) = row {
+            let role_str: String = row.try_get("role").map_err(|e| ChatError::DatabaseError(e.to_string()))?;
+
+            Ok(Some(ChatMember {
+                id: row.try_get("id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                public_id: format!("member_{}", row.try_get::<i64, _>("id").map_err(|e| ChatError::DatabaseError(e.to_string()))?),
+                chat_id: row.try_get("chat_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                chat_public_id: row.try_get("chat_public_id").unwrap_or("unknown".to_string()),
+                user_id: row.try_get("user_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                user_public_id: row.try_get("user_public_id").unwrap_or("unknown".to_string()),
+                role: MemberRole::from(role_str.as_str()),
+                joined_at: row.try_get("joined_at").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                user_display_name: row.try_get("user_display_name").ok(),
+                user_avatar_url: row.try_get("user_avatar_url").ok(),
+                user_email: row.try_get("user_email").ok(),
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Find member by user and chat public IDs (alias for backward compatibility)
+    pub async fn find_by_user_and_chat(&self, user_id: i64, chat_public_id: &str) -> ChatResult<Option<ChatMember>> {
+        self.find_by_user_and_chat_public(chat_public_id, user_id).await
+    }
+
+    /// Find member by public ID
+    pub async fn find_by_public_id(&self, public_id: &str) -> ChatResult<Option<ChatMember>> {
+        let row = sqlx::query(
+            "SELECT cm.id, cm.chat_id, cm.user_id, cm.role, cm.joined_at,
+                    u.public_id as user_public_id, u.display_name as user_display_name,
+                    u.avatar_url as user_avatar_url, u.email as user_email,
+                    c.public_id as chat_public_id
+             FROM chat_members cm
+             LEFT JOIN users u ON cm.user_id = u.id
+             LEFT JOIN chats c ON cm.chat_id = c.id
+             WHERE cm.public_id = ?"
+        )
+        .bind(public_id)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| ChatError::DatabaseError(e.to_string()))?;
+
+        if let Some(row) = row {
+            let role_str: String = row.try_get("role").map_err(|e| ChatError::DatabaseError(e.to_string()))?;
+
+            Ok(Some(ChatMember {
+                id: row.try_get("id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                public_id: row.try_get("public_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                chat_id: row.try_get("chat_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                chat_public_id: row.try_get("chat_public_id").unwrap_or("unknown".to_string()),
+                user_id: row.try_get("user_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                user_public_id: row.try_get("user_public_id").unwrap_or("unknown".to_string()),
+                role: MemberRole::from(role_str.as_str()),
+                joined_at: row.try_get("joined_at").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                user_display_name: row.try_get("user_display_name").ok(),
+                user_avatar_url: row.try_get("user_avatar_url").ok(),
+                user_email: row.try_get("user_email").ok(),
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// List members by chat public ID with optional filtering
+    pub async fn list_by_chat_public(
+        &self,
+        chat_public_id: &str,
+        role_filter: Option<MemberRole>,
+        limit: Option<i64>,
+        offset: Option<i64>,
+    ) -> ChatResult<Vec<ChatMember>> {
+        let mut query = String::from(
+            "SELECT cm.id, cm.chat_id, cm.user_id, cm.role, cm.joined_at,
+                    u.public_id as user_public_id, u.display_name as user_display_name,
+                    u.avatar_url as user_avatar_url, u.email as user_email,
+                    c.public_id as chat_public_id
+             FROM chat_members cm
+             LEFT JOIN users u ON cm.user_id = u.id
+             LEFT JOIN chats c ON cm.chat_id = c.id
+             WHERE c.public_id = ?"
+        );
+
+        let mut binds = vec![chat_public_id.to_string()];
+
+        if let Some(ref role) = role_filter {
+            query.push_str(" AND cm.role = ?");
+            binds.push(role.to_string());
+        }
+
+        query.push_str(" ORDER BY cm.joined_at ASC");
+
+        if let Some(limit_val) = limit {
+            query.push_str(" LIMIT ?");
+            binds.push(limit_val.to_string());
+        }
+
+        if let Some(offset_val) = offset {
+            query.push_str(" OFFSET ?");
+            binds.push(offset_val.to_string());
+        }
+
+        let mut sql_query = sqlx::query(&query);
+        for bind in binds {
+            sql_query = sql_query.bind(bind);
+        }
+
+        let rows = sql_query
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|e| ChatError::DatabaseError(e.to_string()))?;
+
+        let members = rows.into_iter().map(|row| {
+            let role_str: String = row.try_get("role").map_err(|e| ChatError::DatabaseError(e.to_string()))?;
+
+            Ok(ChatMember {
+                id: row.try_get("id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                public_id: format!("member_{}", row.try_get::<i64, _>("id").map_err(|e| ChatError::DatabaseError(e.to_string()))?),
+                chat_id: row.try_get("chat_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                chat_public_id: row.try_get("chat_public_id").unwrap_or("unknown".to_string()),
+                user_id: row.try_get("user_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                user_public_id: row.try_get("user_public_id").unwrap_or("unknown".to_string()),
+                role: MemberRole::from(role_str.as_str()),
+                joined_at: row.try_get("joined_at").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                user_display_name: row.try_get("user_display_name").ok(),
+                user_avatar_url: row.try_get("user_avatar_url").ok(),
+                user_email: row.try_get("user_email").ok(),
+            })
+        }).collect::<Result<Vec<_>, _>>()?;
+
+        Ok(members)
+    }
+
+    /// Update a member's role by member ID
+    pub async fn update_role_by_id(
+        &self,
+        member_id: i64,
+        new_role: &MemberRole,
+        updated_by: i64,
+    ) -> ChatResult<ChatMember> {
+        // Get the member to find chat_id and user_id
+        let member = sqlx::query("SELECT chat_id, user_id FROM chat_members WHERE id = ?")
+            .bind(member_id)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(|e| ChatError::DatabaseError(e.to_string()))?
+            .ok_or(ChatError::MemberNotFound)?;
+
+        let chat_id: i64 = member.try_get("chat_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?;
+        let user_id: i64 = member.try_get("user_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?;
+
+        let now = chrono::Utc::now().to_rfc3339();
+
+        sqlx::query("UPDATE chat_members SET role = ?, joined_at = ? WHERE id = ?")
+            .bind(new_role.to_string())
+            .bind(&now)
+            .bind(member_id)
+            .execute(&self.pool)
+            .await
+            .map_err(|e| ChatError::DatabaseError(e.to_string()))?;
+
+        info!(
+            member_id = member_id,
+            new_role = %new_role.to_string(),
+            updated_by = updated_by,
+            "updated member role"
+        );
+
+        // Return the updated member
+        self.find_by_chat_and_user(chat_id, user_id)
+            .await
+            .map(|m| m.unwrap())
+    }
+
+    /// Delete a member by member ID
+    pub async fn delete_by_id(&self, member_id: i64, deleted_by: i64) -> ChatResult<()> {
+        let result = sqlx::query("DELETE FROM chat_members WHERE id = ?")
+            .bind(member_id)
+            .execute(&self.pool)
+            .await
+            .map_err(|e| ChatError::DatabaseError(e.to_string()))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ChatError::MemberNotFound);
+        }
+
+        info!(
+            member_id = member_id,
+            deleted_by = deleted_by,
+            "deleted member"
+        );
+
+        Ok(())
+    }
+
+    /// Delete a member by user and chat public IDs
+    pub async fn delete_by_user_and_chat_public(&self, chat_public_id: &str, user_id: i64) -> ChatResult<()> {
+        let result = sqlx::query(
+            "DELETE FROM chat_members
+             WHERE user_id = ? AND chat_id IN (
+                 SELECT id FROM chats WHERE public_id = ?
+             )"
+        )
+        .bind(user_id)
+        .bind(chat_public_id)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| ChatError::DatabaseError(e.to_string()))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ChatError::MemberNotFound);
+        }
+
+        info!(
+            chat_public_id = chat_public_id,
+            user_id = user_id,
+            "deleted member by user and chat public IDs"
+        );
+
+        Ok(())
     }
 }
 

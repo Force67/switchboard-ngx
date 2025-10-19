@@ -4,7 +4,8 @@ use anyhow::{Context, Result};
 use redis::aio::ConnectionManager;
 use switchboard_auth::Authenticator;
 use switchboard_config::AppConfig;
-use switchboard_database::{initialize_database, sqlx::SqlitePool};
+use switchboard_database::{initialize_database};
+use sqlx::SqlitePool;
 use switchboard_orchestrator::Orchestrator;
 use tracing::info;
 

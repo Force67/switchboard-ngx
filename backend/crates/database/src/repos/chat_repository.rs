@@ -19,8 +19,12 @@ impl ChatRepository {
     /// Find chat by public ID
     pub async fn find_by_public_id(&self, public_id: &str) -> ChatResult<Option<Chat>> {
         let row = sqlx::query(
-            "SELECT id, public_id, title, description, chat_type, status, created_by, created_at, updated_at
-             FROM chats WHERE public_id = ? AND status != 'deleted'"
+            "SELECT c.id, c.public_id, c.title, c.description, c.avatar_url, c.folder_id, c.chat_type, c.status,
+                    c.created_by, c.created_at, c.updated_at,
+                    (SELECT COUNT(*) FROM chat_members WHERE chat_id = c.id) as member_count,
+                    (SELECT COUNT(*) FROM messages WHERE chat_id = c.id AND deleted_at IS NULL) as message_count,
+                    (SELECT MAX(created_at) FROM messages WHERE chat_id = c.id AND deleted_at IS NULL) as last_message_at
+             FROM chats c WHERE c.public_id = ? AND c.status != 'deleted'"
         )
         .bind(public_id)
         .fetch_optional(&self.pool)
@@ -36,11 +40,16 @@ impl ChatRepository {
                 public_id: row.try_get("public_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
                 title: row.try_get("title").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
                 description: row.try_get("description").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                avatar_url: row.try_get("avatar_url").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                folder_id: row.try_get("folder_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
                 chat_type: ChatType::from(chat_type_str.as_str()),
                 status: ChatStatus::from(status_str.as_str()),
                 created_by: row.try_get("created_by").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
                 created_at: row.try_get("created_at").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
                 updated_at: row.try_get("updated_at").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                member_count: row.try_get("member_count").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                message_count: row.try_get("message_count").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                last_message_at: row.try_get("last_message_at").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
             }))
         } else {
             Ok(None)
@@ -51,7 +60,11 @@ impl ChatRepository {
     pub async fn find_by_user_id(&self, user_id: i64) -> ChatResult<Vec<Chat>> {
         let rows = sqlx::query(
             r#"
-            SELECT DISTINCT c.id, c.public_id, c.title, c.description, c.chat_type, c.status, c.created_by, c.created_at, c.updated_at
+            SELECT DISTINCT c.id, c.public_id, c.title, c.description, c.avatar_url, c.folder_id, c.chat_type, c.status,
+                    c.created_by, c.created_at, c.updated_at,
+                    (SELECT COUNT(*) FROM chat_members WHERE chat_id = c.id) as member_count,
+                    (SELECT COUNT(*) FROM messages WHERE chat_id = c.id AND deleted_at IS NULL) as message_count,
+                    (SELECT MAX(created_at) FROM messages WHERE chat_id = c.id AND deleted_at IS NULL) as last_message_at
             FROM chats c
             LEFT JOIN chat_members cm ON c.id = cm.chat_id
             WHERE (c.created_by = ? OR cm.user_id = ?) AND c.status != 'deleted'
@@ -73,11 +86,16 @@ impl ChatRepository {
                 public_id: row.try_get("public_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
                 title: row.try_get("title").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
                 description: row.try_get("description").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                avatar_url: row.try_get("avatar_url").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                folder_id: row.try_get("folder_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
                 chat_type: ChatType::from(chat_type_str.as_str()),
                 status: ChatStatus::from(status_str.as_str()),
                 created_by: row.try_get("created_by").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
                 created_at: row.try_get("created_at").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
                 updated_at: row.try_get("updated_at").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                member_count: row.try_get("member_count").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                message_count: row.try_get("message_count").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                last_message_at: row.try_get("last_message_at").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
             })
         }).collect::<Result<Vec<_>, _>>()?;
 
@@ -88,7 +106,11 @@ impl ChatRepository {
     pub async fn find_direct_chat(&self, user1_id: i64, user2_id: i64) -> ChatResult<Option<Chat>> {
         let row = sqlx::query(
             r#"
-            SELECT c.id, c.public_id, c.title, c.description, c.chat_type, c.status, c.created_by, c.created_at, c.updated_at
+            SELECT c.id, c.public_id, c.title, c.description, c.avatar_url, c.folder_id, c.chat_type, c.status,
+                    c.created_by, c.created_at, c.updated_at,
+                    (SELECT COUNT(*) FROM chat_members WHERE chat_id = c.id) as member_count,
+                    (SELECT COUNT(*) FROM messages WHERE chat_id = c.id AND deleted_at IS NULL) as message_count,
+                    (SELECT MAX(created_at) FROM messages WHERE chat_id = c.id AND deleted_at IS NULL) as last_message_at
             FROM chats c
             JOIN chat_members cm1 ON c.id = cm1.chat_id
             JOIN chat_members cm2 ON c.id = cm2.chat_id
@@ -115,11 +137,16 @@ impl ChatRepository {
                 public_id: row.try_get("public_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
                 title: row.try_get("title").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
                 description: row.try_get("description").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                avatar_url: row.try_get("avatar_url").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                folder_id: row.try_get("folder_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
                 chat_type: ChatType::from(chat_type_str.as_str()),
                 status: ChatStatus::from(status_str.as_str()),
                 created_by: row.try_get("created_by").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
                 created_at: row.try_get("created_at").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
                 updated_at: row.try_get("updated_at").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                member_count: row.try_get("member_count").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                message_count: row.try_get("message_count").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                last_message_at: row.try_get("last_message_at").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
             }))
         } else {
             Ok(None)
@@ -132,12 +159,14 @@ impl ChatRepository {
         let now = chrono::Utc::now().to_rfc3339();
 
         let result = sqlx::query(
-            "INSERT INTO chats (public_id, title, description, chat_type, status, created_by, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+            "INSERT INTO chats (public_id, title, description, avatar_url, folder_id, chat_type, status, created_by, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         )
         .bind(&public_id)
         .bind(&request.title)
         .bind(&request.description)
+        .bind(&request.avatar_url)
+        .bind(&request.folder_id)
         .bind(request.chat_type.to_string())
         .bind(ChatStatus::Active.to_string())
         .bind(user_id)
@@ -152,7 +181,7 @@ impl ChatRepository {
         info!(
             chat_id = chat_id,
             public_id = %public_id,
-            created_by = user_id,
+            created_by = %request.created_by,
             chat_type = %request.chat_type.to_string(),
             "created new chat"
         );
@@ -162,11 +191,16 @@ impl ChatRepository {
             public_id,
             title: request.title.clone(),
             description: request.description.clone(),
+            avatar_url: request.avatar_url.clone(),
+            folder_id: request.folder_id.clone(),
             chat_type: request.chat_type.clone(),
             status: ChatStatus::Active,
-            created_by: user_id,
+            created_by: request.created_by.clone(),
             created_at: now.clone(),
             updated_at: now,
+            member_count: 0,
+            message_count: 0,
+            last_message_at: None,
         })
     }
 
@@ -181,7 +215,7 @@ impl ChatRepository {
         let chat = chat.unwrap();
 
         // Check if user is the creator or has admin permissions
-        if chat.created_by != user_id {
+        if chat.created_by != user_id.to_string() {
             // TODO: Check if user has admin role in chat_members
             return Err(ChatError::Unauthorized);
         }
@@ -197,6 +231,16 @@ impl ChatRepository {
         if let Some(description) = &request.description {
             update_fields.push("description = ?");
             values.push(description.clone());
+        }
+
+        if let Some(avatar_url) = &request.avatar_url {
+            update_fields.push("avatar_url = ?");
+            values.push(avatar_url.clone());
+        }
+
+        if let Some(folder_id) = &request.folder_id {
+            update_fields.push("folder_id = ?");
+            values.push(folder_id.clone());
         }
 
         if let Some(status) = &request.status {
@@ -242,7 +286,7 @@ impl ChatRepository {
         let chat = chat.unwrap();
 
         // Check if user is the creator or has admin permissions
-        if chat.created_by != user_id {
+        if chat.created_by != user_id.to_string() {
             // TODO: Check if user has admin role in chat_members
             return Err(ChatError::Unauthorized);
         }
@@ -270,6 +314,8 @@ impl ChatRepository {
         let request = UpdateChatRequest {
             title: None,
             description: None,
+            avatar_url: None,
+            folder_id: None,
             status: Some(ChatStatus::Archived),
         };
 
@@ -281,6 +327,8 @@ impl ChatRepository {
         let request = UpdateChatRequest {
             title: None,
             description: None,
+            avatar_url: None,
+            folder_id: None,
             status: Some(ChatStatus::Active),
         };
 
@@ -331,6 +379,8 @@ mod tests {
                 public_id TEXT NOT NULL UNIQUE,
                 title TEXT,
                 description TEXT,
+                avatar_url TEXT,
+                folder_id TEXT,
                 chat_type TEXT NOT NULL,
                 status TEXT NOT NULL,
                 created_by INTEGER NOT NULL,
@@ -351,17 +401,20 @@ mod tests {
         let repo = ChatRepository::new(pool);
 
         let request = CreateChatRequest {
-            title: Some("Test Chat".to_string()),
+            title: "Test Chat".to_string(),
             description: Some("A test chat".to_string()),
+            avatar_url: None,
+            folder_id: None,
             chat_type: ChatType::Group,
+            created_by: "1".to_string(),
         };
 
         let chat = repo.create(1, &request).await.unwrap();
         assert!(chat.id > 0);
-        assert_eq!(chat.title.as_ref().unwrap(), "Test Chat");
+        assert_eq!(chat.title, "Test Chat");
         assert_eq!(chat.chat_type, ChatType::Group);
         assert_eq!(chat.status, ChatStatus::Active);
-        assert_eq!(chat.created_by, 1);
+        assert_eq!(chat.created_by, "1");
     }
 
     #[tokio::test]
@@ -370,9 +423,12 @@ mod tests {
         let repo = ChatRepository::new(pool);
 
         let request = CreateChatRequest {
-            title: Some("Test Chat".to_string()),
+            title: "Test Chat".to_string(),
             description: None,
+            avatar_url: None,
+            folder_id: None,
             chat_type: ChatType::Direct,
+            created_by: "1".to_string(),
         };
 
         let created = repo.create(1, &request).await.unwrap();
@@ -390,9 +446,12 @@ mod tests {
         let repo = ChatRepository::new(pool);
 
         let create_request = CreateChatRequest {
-            title: Some("Original Title".to_string()),
+            title: "Original Title".to_string(),
             description: None,
+            avatar_url: None,
+            folder_id: None,
             chat_type: ChatType::Group,
+            created_by: "1".to_string(),
         };
 
         let created = repo.create(1, &create_request).await.unwrap();
@@ -400,11 +459,13 @@ mod tests {
         let update_request = UpdateChatRequest {
             title: Some("Updated Title".to_string()),
             description: Some("Updated description".to_string()),
+            avatar_url: None,
+            folder_id: None,
             status: None,
         };
 
         let updated = repo.update(&created.public_id, 1, &update_request).await.unwrap();
-        assert_eq!(updated.title.as_ref().unwrap(), "Updated Title");
+        assert_eq!(updated.title, "Updated Title");
         assert_eq!(updated.description.as_ref().unwrap(), "Updated description");
     }
 
@@ -414,9 +475,12 @@ mod tests {
         let repo = ChatRepository::new(pool);
 
         let request = CreateChatRequest {
-            title: Some("Test Chat".to_string()),
+            title: "Test Chat".to_string(),
             description: None,
+            avatar_url: None,
+            folder_id: None,
             chat_type: ChatType::Group,
+            created_by: "1".to_string(),
         };
 
         let created = repo.create(1, &request).await.unwrap();
@@ -432,9 +496,12 @@ mod tests {
         let repo = ChatRepository::new(pool);
 
         let request = CreateChatRequest {
-            title: Some("Test Chat".to_string()),
+            title: "Test Chat".to_string(),
             description: None,
+            avatar_url: None,
+            folder_id: None,
             chat_type: ChatType::Group,
+            created_by: "1".to_string(),
         };
 
         let created = repo.create(1, &request).await.unwrap();

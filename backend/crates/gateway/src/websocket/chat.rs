@@ -6,13 +6,14 @@ use axum::{
         State,
         Query,
     },
-    response::Response,
+    response::{Response, IntoResponse},
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{broadcast, RwLock};
 use uuid::Uuid;
+use futures_util::{StreamExt, SinkExt};
 
 use crate::state::GatewayState;
 use crate::error::GatewayError;
@@ -40,9 +41,11 @@ impl ChatWebSocketState {
     /// Get or create a broadcaster for a specific chat
     pub async fn get_chat_broadcaster(&self, chat_id: &str) -> broadcast::Sender<ChatServerEvent> {
         let mut subscriptions = self.chat_subscriptions.write().await;
+        let (sender, _) = tokio::sync::broadcast::channel(100);
         subscriptions
             .entry(chat_id.to_string())
-            .or_insert_with(|| tokio::sync::broadcast::channel(100).0)
+            .or_insert_with(|| (0, sender))
+            .1
             .clone()
     }
 
@@ -335,7 +338,7 @@ pub async fn chat_websocket_handler(
         }
     };
 
-    ws.on_upgrade(move |socket| handle_chat_websocket(socket, chat_ws_state, user_id))
+    Ok(ws.on_upgrade(move |socket| handle_chat_websocket(socket, chat_ws_state, user_id)))
 }
 
 /// Authenticate user from token
@@ -458,7 +461,7 @@ async fn handle_chat_client_event(
             // Check if user is member of chat
             if let Ok(()) = state.gateway_state.member_service.check_chat_membership(&chat_id, user_id).await {
                 let typing_event = ChatServerEvent::UserTyping {
-                    chat_id,
+                    chat_id: chat_id.clone(),
                     user_id: user_id.to_string(),
                     is_typing,
                 };
@@ -475,7 +478,10 @@ async fn handle_chat_client_event(
                     _ => switchboard_database::MessageType::Text,
                 };
 
+                let chat_id_clone = chat_id.clone();
                 let create_req = switchboard_database::CreateMessageRequest {
+                    chat_id: 0, // This should be resolved from chat_public_id
+                    sender_id: user_id,
                     chat_public_id: chat_id.clone(),
                     sender_public_id: user_id.to_string(),
                     content,
@@ -493,14 +499,14 @@ async fn handle_chat_client_event(
                         message_type: message.message_type.to_string(),
                         reply_to: message.reply_to_public_id,
                         thread_id: message.thread_public_id,
-                        created_at: message.created_at.to_rfc3339(),
-                        updated_at: message.updated_at.map(|dt| dt.to_rfc3339()),
+                        created_at: message.created_at.clone(),
+                        updated_at: message.updated_at.clone(),
                         edited: message.updated_at.is_some(),
                         deleted: message.deleted_at.is_some(),
                     };
 
                     let message_event = ChatServerEvent::Message {
-                        chat_id,
+                        chat_id: chat_id_clone,
                         message: message_response,
                     };
                     let _ = state.broadcast_to_chat(&chat_id, &message_event).await;

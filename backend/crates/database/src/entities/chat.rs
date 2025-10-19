@@ -6,30 +6,41 @@ use serde::{Deserialize, Serialize};
 pub struct Chat {
     pub id: i64,
     pub public_id: String,
-    pub title: Option<String>,
+    pub title: String,
     pub description: Option<String>,
+    pub avatar_url: Option<String>,
+    pub folder_id: Option<String>,
     pub chat_type: ChatType,
     pub status: ChatStatus,
-    pub created_by: i64,
+    pub created_by: String,
     pub created_at: String,
     pub updated_at: String,
+    pub member_count: i64,
+    pub message_count: i64,
+    pub last_message_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateChatRequest {
-    pub title: Option<String>,
+    pub title: String,
     pub description: Option<String>,
+    pub avatar_url: Option<String>,
+    pub folder_id: Option<String>,
     pub chat_type: ChatType,
+    pub created_by: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpdateChatRequest {
     pub title: Option<String>,
     pub description: Option<String>,
+    pub avatar_url: Option<String>,
+    pub folder_id: Option<String>,
     pub status: Option<ChatStatus>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, sqlx::Type)]
+#[sqlx(type_name = "TEXT", rename_all = "lowercase")]
 pub enum ChatType {
     Direct,
     Group,
@@ -62,7 +73,8 @@ impl ToString for ChatType {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, sqlx::Type)]
+#[sqlx(type_name = "TEXT", rename_all = "lowercase")]
 pub enum ChatStatus {
     Active,
     Archived,

@@ -47,15 +47,16 @@ use axum::{
 use tower_http::cors::{CorsLayer, Any};
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
+use std::sync::Arc;
 
 /// Create the main application router with all routes
 pub fn create_router(state: GatewayState) -> Router {
+    let arc_state = Arc::new(state);
     let mut router = Router::new()
         // REST API routes
-        .merge(rest::create_rest_routes())
+        .merge(rest::create_rest_routes().with_state(arc_state.as_ref().clone()))
         // WebSocket routes
-        .merge(websocket::create_websocket_routes())
-        .with_state(state)
+        .merge(websocket::create_websocket_routes().with_state(arc_state))
         // CORS middleware
         .layer(
             CorsLayer::new()
@@ -65,7 +66,7 @@ pub fn create_router(state: GatewayState) -> Router {
                 .allow_credentials(true)
         )
         // Logging middleware
-        .layer(axum_middleware::from_fn(tower_http::trace::trace_request));
+        .layer(axum_middleware::from_fn(middleware::logging_middleware));
 
     // Add Swagger UI if in debug mode
     #[cfg(debug_assertions)]
@@ -88,8 +89,7 @@ pub fn create_router(state: GatewayState) -> Router {
                 rest::message::get_message,
                 rest::message::update_message,
                 rest::message::delete_message,
-                rest::message::get_message_edits,
-                rest::invite::list_invites,
+                                rest::invite::list_invites,
                 rest::invite::list_user_invites,
                 rest::invite::create_invite,
                 rest::invite::get_invite,
@@ -124,9 +124,7 @@ pub fn create_router(state: GatewayState) -> Router {
                     rest::message::CreateMessageRequest,
                     rest::message::UpdateMessageRequest,
                     rest::message::ListMessagesQuery,
-                    rest::message::GetMessageEditsQuery,
-                    rest::message::MessageEditResponse,
-                    rest::message::ErrorResponse,
+                                        rest::message::ErrorResponse,
                     rest::invite::InviteResponse,
                     rest::invite::CreateInviteRequest,
                     rest::invite::ListInvitesQuery,

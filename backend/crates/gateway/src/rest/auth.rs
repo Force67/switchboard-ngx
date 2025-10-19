@@ -4,6 +4,7 @@ use axum::{
     extract::{Query, State, Request},
     Json,
     response::{IntoResponse, Response},
+    Router,
     middleware,
 };
 use serde::{Deserialize, Serialize};
@@ -77,7 +78,7 @@ impl From<switchboard_database::User> for UserResponse {
 }
 
 /// Create authentication routes
-pub fn create_auth_routes() -> Router<GatewayState> {
+pub fn create_auth_routes() -> Router<Arc<GatewayState>> {
     Router::new()
         .route("/github/login", axum::routing::get(github_login))
         .route("/github/callback", axum::routing::post(github_callback))
@@ -99,7 +100,7 @@ pub fn create_auth_routes() -> Router<GatewayState> {
 )]
 pub async fn github_login(
     Query(params): Query<GithubLoginQuery>,
-    State(state): State<GatewayState>,
+    State(state): State<Arc<GatewayState>>,
 ) -> GatewayResult<Json<GithubLoginResponse>> {
     // TODO: Implement GitHub OAuth login
     // For now, return a placeholder response
@@ -119,8 +120,8 @@ pub async fn github_login(
     )
 )]
 pub async fn github_callback(
+    State(state): State<Arc<GatewayState>>,
     Json(payload): Json<GithubCallbackRequest>,
-    State(state): State<GatewayState>,
 ) -> GatewayResult<Json<SessionResponse>> {
     // TODO: Implement GitHub OAuth callback
     // For now, return a placeholder response
@@ -139,7 +140,7 @@ pub async fn github_callback(
     )
 )]
 pub async fn dev_token(
-    State(state): State<GatewayState>,
+    State(state): State<Arc<GatewayState>>,
 ) -> GatewayResult<Json<SessionResponse>> {
     let (session, user) = state
         .session_service()
@@ -161,7 +162,7 @@ pub async fn dev_token(
     )
 )]
 pub async fn logout(
-    State(state): State<GatewayState>,
+    State(state): State<Arc<GatewayState>>,
     request: Request,
 ) -> GatewayResult<()> {
     let user_id = extract_user_id(&request)?;
@@ -184,7 +185,7 @@ pub async fn logout(
     )
 )]
 pub async fn me(
-    State(state): State<GatewayState>,
+    State(state): State<Arc<GatewayState>>,
     request: Request,
 ) -> GatewayResult<Json<UserResponse>> {
     let user_id = extract_user_id(&request)?;

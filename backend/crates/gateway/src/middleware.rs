@@ -8,13 +8,14 @@ use axum::{
 };
 use tower_http::trace::{TraceLayer, DefaultMakeSpan, DefaultOnRequest, DefaultOnResponse};
 use tracing::Level;
+use std::sync::Arc;
 
 use crate::state::GatewayState;
 use crate::error::{GatewayError, GatewayResult};
 
 /// Authentication middleware that validates JWT tokens
 pub async fn auth_middleware(
-    State(state): State<GatewayState>,
+    State(state): State<Arc<GatewayState>>,
     mut request: Request,
     next: Next,
 ) -> Result<Response, GatewayError> {
@@ -36,9 +37,17 @@ pub async fn auth_middleware(
         .uri()
         .query()
         .and_then(|query| {
-            form_urlencoded::parse(query.as_bytes())
-                .find(|(key, _)| key == "token")
-                .map(|(_, value)| value.into_owned())
+            urlencoding::decode(query).ok()
+                .and_then(|decoded| {
+                    decoded.split('&')
+                        .find_map(|pair| {
+                            let mut parts = pair.splitn(2, '=');
+                            match (parts.next(), parts.next()) {
+                                (Some("token"), Some(value)) => Some(value.to_string()),
+                                _ => None,
+                            }
+                        })
+                })
         });
 
     let token = auth_header.or(query_token.as_deref());
@@ -91,7 +100,7 @@ async fn get_dev_user_id(state: &GatewayState) -> GatewayResult<i64> {
 /// Optional authentication middleware that allows unauthenticated access
 /// but adds user ID to request extensions if token is present
 pub async fn optional_auth_middleware(
-    State(state): State<GatewayState>,
+    State(state): State<Arc<GatewayState>>,
     mut request: Request,
     next: Next,
 ) -> Response {
@@ -127,11 +136,34 @@ pub fn extract_user_id(request: &Request) -> GatewayResult<i64> {
 }
 
 /// Create tracing middleware
-pub fn create_trace_middleware() -> TraceLayer {
+pub fn create_trace_middleware() -> TraceLayer<tower_http::classify::SharedClassifier<tower_http::classify::ServerErrorsAsFailures>> {
     TraceLayer::new_for_http()
         .make_span_with(DefaultMakeSpan::new().level(Level::INFO))
         .on_request(DefaultOnRequest::new().level(Level::INFO))
         .on_response(DefaultOnResponse::new().level(Level::INFO))
+}
+
+/// Logging middleware for request/response logging
+pub async fn logging_middleware(
+    request: Request,
+    next: Next,
+) -> Result<impl IntoResponse, (StatusCode, String)> {
+    let method = request.method().clone();
+    let uri = request.uri().clone();
+
+    let start = std::time::Instant::now();
+    let response = next.run(request).await;
+    let duration = start.elapsed();
+
+    tracing::info!(
+        method = %method,
+        uri = %uri,
+        status = %response.status(),
+        duration_ms = duration.as_millis(),
+        "Request completed"
+    );
+
+    Ok(response)
 }
 
 /// Rate limiting middleware (placeholder implementation)

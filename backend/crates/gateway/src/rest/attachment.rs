@@ -6,6 +6,7 @@ use axum::{
     body::Body,
     http::{StatusCode, header},
     response::{IntoResponse, Response},
+    Router,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
@@ -61,7 +62,7 @@ impl From<switchboard_database::MessageAttachment> for AttachmentResponse {
             file_type: attachment.file_type.to_string(),
             file_size: attachment.file_size,
             file_url: attachment.file_url,
-            created_at: attachment.created_at.to_rfc3339(),
+            created_at: attachment.created_at,
             uploader: AttachmentUploaderResponse {
                 id: attachment.uploader_public_id,
                 display_name: attachment.uploader_display_name,
@@ -71,8 +72,14 @@ impl From<switchboard_database::MessageAttachment> for AttachmentResponse {
     }
 }
 
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ErrorResponse {
+    pub error: String,
+    pub message: String,
+}
+
 /// Create attachment routes
-pub fn create_attachment_routes() -> Router<GatewayState> {
+pub fn create_attachment_routes() -> Router<Arc<GatewayState>> {
     Router::new()
         .route("/chats/:chat_id/attachments", axum::routing::get(list_attachments))
         .route("/chats/:chat_id/messages/:message_id/attachments", axum::routing::get(list_message_attachments).post(create_attachment))
@@ -99,7 +106,7 @@ pub fn create_attachment_routes() -> Router<GatewayState> {
 pub async fn list_attachments(
     Path(chat_id): Path<String>,
     Query(params): Query<ListAttachmentsQuery>,
-    State(state): State<GatewayState>,
+    State(state): State<Arc<GatewayState>>,
     request: Request,
 ) -> GatewayResult<Json<Vec<AttachmentResponse>>> {
     let user_id = extract_user_id(&request)?;
@@ -148,7 +155,7 @@ pub async fn list_attachments(
 )]
 pub async fn list_message_attachments(
     Path((chat_id, message_id)): Path<(String, String)>,
-    State(state): State<GatewayState>,
+    State(state): State<Arc<GatewayState>>,
     request: Request,
 ) -> GatewayResult<Json<Vec<AttachmentResponse>>> {
     let user_id = extract_user_id(&request)?;
@@ -191,7 +198,7 @@ pub async fn list_message_attachments(
 )]
 pub async fn create_attachment(
     Path((chat_id, message_id)): Path<(String, String)>,
-    State(state): State<GatewayState>,
+    State(state): State<Arc<GatewayState>>,
     Json(payload): Json<CreateAttachmentRequest>,
     request: Request,
 ) -> GatewayResult<impl IntoResponse> {
@@ -220,8 +227,18 @@ pub async fn create_attachment(
     // Generate a unique file URL
     let file_url = format!("/attachments/{}_{}", chrono::Utc::now().timestamp(), payload.file_name);
 
+    // Get the actual message ID from the public ID
+    let message = state
+        .attachment_service
+        .get_message_by_public_id(&message_id)
+        .await
+        .map_err(|e| GatewayError::ServiceError(format!("Failed to get message: {}", e)))?
+        .ok_or(GatewayError::NotFound("Message not found".to_string()))?;
+
     let create_req = switchboard_database::CreateAttachmentRequest {
+        message_id: message.id,
         message_public_id: message_id,
+        uploader_id: user_id,
         uploader_public_id: user_id.to_string(),
         file_name: payload.file_name,
         file_type,
@@ -256,7 +273,7 @@ pub async fn create_attachment(
 )]
 pub async fn get_attachment(
     Path(attachment_id): Path<String>,
-    State(state): State<GatewayState>,
+    State(state): State<Arc<GatewayState>>,
     request: Request,
 ) -> GatewayResult<Json<AttachmentResponse>> {
     let user_id = extract_user_id(&request)?;
@@ -295,7 +312,7 @@ pub async fn get_attachment(
 )]
 pub async fn download_attachment(
     Path(attachment_id): Path<String>,
-    State(state): State<GatewayState>,
+    State(state): State<Arc<GatewayState>>,
     request: Request,
 ) -> GatewayResult<Response<Body>> {
     let user_id = extract_user_id(&request)?;
@@ -344,7 +361,7 @@ pub async fn download_attachment(
 )]
 pub async fn delete_attachment(
     Path(attachment_id): Path<String>,
-    State(state): State<GatewayState>,
+    State(state): State<Arc<GatewayState>>,
     request: Request,
 ) -> GatewayResult<impl IntoResponse> {
     let user_id = extract_user_id(&request)?;
@@ -367,7 +384,7 @@ pub async fn delete_attachment(
 
     state
         .attachment_service
-        .delete(attachment.id, user_id)
+        .delete_by_public_id(&attachment_id)
         .await
         .map_err(|e| GatewayError::ServiceError(format!("Failed to delete attachment: {}", e)))?;
 

@@ -4,6 +4,7 @@ use axum::{
     extract::{Path, Query, State, Request},
     Json,
     response::IntoResponse,
+    Router,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
@@ -47,10 +48,10 @@ impl From<switchboard_database::ChatMember> for MemberResponse {
     fn from(member: switchboard_database::ChatMember) -> Self {
         Self {
             id: member.public_id,
-            user_id: member.user_public_id,
+            user_id: member.user_public_id.clone(),
             chat_id: member.chat_public_id,
             role: member.role.to_string(),
-            joined_at: member.joined_at.to_rfc3339(),
+            joined_at: member.joined_at,
             user: MemberUserResponse {
                 id: member.user_public_id,
                 display_name: member.user_display_name,
@@ -61,11 +62,18 @@ impl From<switchboard_database::ChatMember> for MemberResponse {
     }
 }
 
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ErrorResponse {
+    pub error: String,
+    pub message: String,
+}
+
 /// Create member routes
-pub fn create_member_routes() -> Router<GatewayState> {
+pub fn create_member_routes() -> Router<Arc<GatewayState>> {
     Router::new()
         .route("/chats/:chat_id/members", axum::routing::get(list_members))
-        .route("/chats/:chat_id/members/:member_id", axum::routing::get(get_member).put(update_member_role).delete(remove_member))
+        .route("/chats/:chat_id/members/:member_id", axum::routing::get(get_member).delete(remove_member))
+        .route("/chats/:chat_id/members/:member_id/role", axum::routing::put(update_member_role))
         .route("/chats/:chat_id/leave", axum::routing::post(leave_chat))
 }
 
@@ -88,7 +96,7 @@ pub fn create_member_routes() -> Router<GatewayState> {
 pub async fn list_members(
     Path(chat_id): Path<String>,
     Query(params): Query<ListMembersQuery>,
-    State(state): State<GatewayState>,
+    State(state): State<Arc<GatewayState>>,
     request: Request,
 ) -> GatewayResult<Json<Vec<MemberResponse>>> {
     let user_id = extract_user_id(&request)?;
@@ -135,7 +143,7 @@ pub async fn list_members(
 )]
 pub async fn get_member(
     Path((chat_id, member_id)): Path<(String, String)>,
-    State(state): State<GatewayState>,
+    State(state): State<Arc<GatewayState>>,
     request: Request,
 ) -> GatewayResult<Json<MemberResponse>> {
     let user_id = extract_user_id(&request)?;
@@ -182,7 +190,7 @@ pub async fn get_member(
 )]
 pub async fn update_member_role(
     Path((chat_id, member_id)): Path<(String, String)>,
-    State(state): State<GatewayState>,
+    State(state): State<Arc<GatewayState>>,
     Json(payload): Json<UpdateMemberRoleRequest>,
     request: Request,
 ) -> GatewayResult<Json<MemberResponse>> {
@@ -258,7 +266,7 @@ pub async fn update_member_role(
 )]
 pub async fn remove_member(
     Path((chat_id, member_id)): Path<(String, String)>,
-    State(state): State<GatewayState>,
+    State(state): State<Arc<GatewayState>>,
     request: Request,
 ) -> GatewayResult<impl IntoResponse> {
     let user_id = extract_user_id(&request)?;
@@ -322,7 +330,7 @@ pub async fn remove_member(
 )]
 pub async fn leave_chat(
     Path(chat_id): Path<String>,
-    State(state): State<GatewayState>,
+    State(state): State<Arc<GatewayState>>,
     request: Request,
 ) -> GatewayResult<impl IntoResponse> {
     let user_id = extract_user_id(&request)?;

@@ -9,7 +9,7 @@ pub struct User {
     pub id: i64,
     pub public_id: String,
     pub email: Option<String>,
-    pub username: Option<String>,
+    pub username: String,
     pub display_name: Option<String>,
     pub avatar_url: Option<String>,
     pub bio: Option<String>,
@@ -43,7 +43,8 @@ pub struct UpdateUserRequest {
 }
 
 /// User status enum
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, sqlx::Type)]
+#[sqlx(type_name = "TEXT", rename_all = "lowercase")]
 pub enum UserStatus {
     Active,
     Inactive,
@@ -81,7 +82,8 @@ impl ToString for UserStatus {
 }
 
 /// User role enum
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, sqlx::Type)]
+#[sqlx(type_name = "TEXT", rename_all = "lowercase")]
 pub enum UserRole {
     User,
     Admin,

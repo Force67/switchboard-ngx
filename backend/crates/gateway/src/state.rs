@@ -39,15 +39,15 @@ pub struct GatewayState {
     /// Session service
     pub session_service: Arc<SessionService>,
     /// Chat service
-    pub chat_service: Arc<ChatService<ChatRepository>>,
+    pub chat_service: Arc<ChatService>,
     /// Message service
-    pub message_service: Arc<MessageService<MessageRepository>>,
+    pub message_service: Arc<MessageService>,
     /// Member service
-    pub member_service: Arc<MemberService<MemberRepository>>,
+    pub member_service: Arc<MemberService>,
     /// Invite service
-    pub invite_service: Arc<InviteService<InviteRepository>>,
+    pub invite_service: Arc<InviteService>,
     /// Attachment service
-    pub attachment_service: Arc<AttachmentService<AttachmentRepository>>,
+    pub attachment_service: Arc<AttachmentService>,
 }
 
 impl GatewayState {
@@ -104,27 +104,27 @@ impl GatewayState {
     }
 
     /// Get a chat service reference
-    pub fn chat_service(&self) -> &ChatService<ChatRepository> {
+    pub fn chat_service(&self) -> &ChatService {
         &self.chat_service
     }
 
     /// Get a message service reference
-    pub fn message_service(&self) -> &MessageService<MessageRepository> {
+    pub fn message_service(&self) -> &MessageService {
         &self.message_service
     }
 
     /// Get a member service reference
-    pub fn member_service(&self) -> &MemberService<MemberRepository> {
+    pub fn member_service(&self) -> &MemberService {
         &self.member_service
     }
 
     /// Get an invite service reference
-    pub fn invite_service(&self) -> &InviteService<InviteRepository> {
+    pub fn invite_service(&self) -> &InviteService {
         &self.invite_service
     }
 
     /// Get an attachment service reference
-    pub fn attachment_service(&self) -> &AttachmentService<AttachmentRepository> {
+    pub fn attachment_service(&self) -> &AttachmentService {
         &self.attachment_service
     }
 }

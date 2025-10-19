@@ -149,7 +149,10 @@ impl ChatEvent {
     /// Get the user IDs that should receive this event
     pub fn target_users(&self) -> Vec<i64> {
         match self {
-            ChatEvent::ChatCreated { chat, .. } => vec![chat.created_by],
+            ChatEvent::ChatCreated { chat, .. } => {
+                // Parse created_by from string to i64, default to 0 if parsing fails
+                vec![chat.created_by.parse().unwrap_or(0)]
+            },
             ChatEvent::ChatUpdated { member_ids, .. } => member_ids.clone(),
             ChatEvent::ChatDeleted { member_ids, .. } => member_ids.clone(),
             ChatEvent::MessageCreated { message, .. } => vec![message.sender_id],

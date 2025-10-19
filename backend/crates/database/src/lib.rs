@@ -31,10 +31,10 @@ pub use entities::{
     session::{AuthSession, CreateSessionRequest, AuthProvider},
     notification::{Notification, NotificationType, NotificationPriority},
     settings::{UserSettings, UserPreferences},
-    attachment::{MessageAttachment, CreateAttachmentRequest},
+    attachment::{MessageAttachment, CreateAttachmentRequest, AttachmentType},
     chat::{Chat, ChatType, ChatStatus, CreateChatRequest, UpdateChatRequest},
-    message::{ChatMessage, CreateMessageRequest, UpdateMessageRequest, MessageStatus},
-    member::{ChatMember, MemberRole, CreateMemberRequest},
+    message::{ChatMessage, CreateMessageRequest, UpdateMessageRequest, MessageStatus, MessageType},
+    member::{ChatMember, MemberRole, CreateMemberRequest, UpdateMemberRoleRequest},
     invite::{ChatInvite, InviteStatus, CreateInviteRequest},
 };
 

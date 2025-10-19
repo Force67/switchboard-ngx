@@ -1,6 +1,6 @@
 //! Repository for message data access operations.
 
-use crate::entities::{ChatMessage, MessageStatus, CreateMessageRequest, UpdateMessageRequest};
+use crate::{ChatMessage, MessageStatus, MessageType, CreateMessageRequest, UpdateMessageRequest};
 use crate::types::{ChatResult, ChatError};
 use sqlx::{SqlitePool, Row};
 use tracing::{info, warn};
@@ -27,8 +27,16 @@ impl MessageRepository {
         let offset = offset.unwrap_or(0);
 
         let rows = sqlx::query(
-            "SELECT id, public_id, chat_id, sender_id, content, message_type, status, created_at, updated_at
-             FROM messages WHERE chat_id = ? AND status != 'deleted' ORDER BY created_at DESC LIMIT ? OFFSET ?"
+            "SELECT m.id, m.public_id, m.chat_id, m.sender_id, m.content, m.message_type, m.status,
+                    m.created_at, m.updated_at, m.deleted_at, m.reply_to_id, m.reply_to_public_id,
+                    m.thread_id, m.thread_public_id,
+                    u.public_id as sender_public_id, u.display_name as sender_display_name,
+                    u.avatar_url as sender_avatar_url, c.public_id as chat_public_id
+             FROM messages m
+             LEFT JOIN users u ON m.sender_id = u.id
+             LEFT JOIN chats c ON m.chat_id = c.id
+             WHERE m.chat_id = ? AND m.status != 'deleted'
+             ORDER BY m.created_at DESC LIMIT ? OFFSET ?"
         )
         .bind(chat_id)
         .bind(limit)
@@ -39,17 +47,27 @@ impl MessageRepository {
 
         let messages = rows.into_iter().map(|row| {
             let status_str: String = row.try_get("status").map_err(|e| ChatError::DatabaseError(e.to_string()))?;
+            let message_type_str: String = row.try_get("message_type").map_err(|e| ChatError::DatabaseError(e.to_string()))?;
 
             Ok(ChatMessage {
                 id: row.try_get("id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
                 public_id: row.try_get("public_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
                 chat_id: row.try_get("chat_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                chat_public_id: row.try_get("chat_public_id").unwrap_or("unknown".to_string()),
                 sender_id: row.try_get("sender_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                sender_public_id: row.try_get("sender_public_id").unwrap_or("unknown".to_string()),
                 content: row.try_get("content").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
-                message_type: row.try_get("message_type").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                message_type: MessageType::from(message_type_str.as_str()),
+                reply_to_id: row.try_get("reply_to_id").ok(),
+                reply_to_public_id: row.try_get("reply_to_public_id").ok(),
+                thread_id: row.try_get("thread_id").ok(),
+                thread_public_id: row.try_get("thread_public_id").ok(),
                 status: MessageStatus::from(status_str.as_str()),
                 created_at: row.try_get("created_at").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
-                updated_at: row.try_get("updated_at").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                updated_at: row.try_get("updated_at").ok(),
+                deleted_at: row.try_get("deleted_at").ok(),
+                sender_display_name: row.try_get("sender_display_name").ok(),
+                sender_avatar_url: row.try_get("sender_avatar_url").ok(),
             })
         }).collect::<Result<Vec<_>, _>>()?;
 
@@ -59,8 +77,15 @@ impl MessageRepository {
     /// Find a message by its public ID
     pub async fn find_by_public_id(&self, public_id: &str) -> ChatResult<Option<ChatMessage>> {
         let row = sqlx::query(
-            "SELECT id, public_id, chat_id, sender_id, content, message_type, status, created_at, updated_at
-             FROM messages WHERE public_id = ?"
+            "SELECT m.id, m.public_id, m.chat_id, m.sender_id, m.content, m.message_type, m.status,
+                    m.created_at, m.updated_at, m.deleted_at, m.reply_to_id, m.reply_to_public_id,
+                    m.thread_id, m.thread_public_id,
+                    u.public_id as sender_public_id, u.display_name as sender_display_name,
+                    u.avatar_url as sender_avatar_url, c.public_id as chat_public_id
+             FROM messages m
+             LEFT JOIN users u ON m.sender_id = u.id
+             LEFT JOIN chats c ON m.chat_id = c.id
+             WHERE m.public_id = ?"
         )
         .bind(public_id)
         .fetch_optional(&self.pool)
@@ -69,17 +94,27 @@ impl MessageRepository {
 
         if let Some(row) = row {
             let status_str: String = row.try_get("status").map_err(|e| ChatError::DatabaseError(e.to_string()))?;
+            let message_type_str: String = row.try_get("message_type").map_err(|e| ChatError::DatabaseError(e.to_string()))?;
 
             Ok(Some(ChatMessage {
                 id: row.try_get("id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
                 public_id: row.try_get("public_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
                 chat_id: row.try_get("chat_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                chat_public_id: row.try_get("chat_public_id").unwrap_or("unknown".to_string()),
                 sender_id: row.try_get("sender_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                sender_public_id: row.try_get("sender_public_id").unwrap_or("unknown".to_string()),
                 content: row.try_get("content").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
-                message_type: row.try_get("message_type").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                message_type: MessageType::from(message_type_str.as_str()),
+                reply_to_id: row.try_get("reply_to_id").ok(),
+                reply_to_public_id: row.try_get("reply_to_public_id").ok(),
+                thread_id: row.try_get("thread_id").ok(),
+                thread_public_id: row.try_get("thread_public_id").ok(),
                 status: MessageStatus::from(status_str.as_str()),
                 created_at: row.try_get("created_at").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
-                updated_at: row.try_get("updated_at").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                updated_at: row.try_get("updated_at").ok(),
+                deleted_at: row.try_get("deleted_at").ok(),
+                sender_display_name: row.try_get("sender_display_name").ok(),
+                sender_avatar_url: row.try_get("sender_avatar_url").ok(),
             }))
         } else {
             Ok(None)
@@ -90,7 +125,7 @@ impl MessageRepository {
     pub async fn create(&self, sender_id: i64, request: &CreateMessageRequest) -> ChatResult<ChatMessage> {
         let public_id = cuid2::cuid();
         let now = chrono::Utc::now().to_rfc3339();
-        let message_type = request.message_type.as_deref().unwrap_or("text");
+        let message_type_str = request.message_type.as_str();
 
         let result = sqlx::query(
             "INSERT INTO messages (public_id, chat_id, sender_id, content, message_type, status, created_at, updated_at)
@@ -100,7 +135,7 @@ impl MessageRepository {
         .bind(request.chat_id)
         .bind(sender_id)
         .bind(&request.content)
-        .bind(message_type)
+        .bind(message_type_str)
         .bind(MessageStatus::Sent.to_string())
         .bind(&now)
         .bind(&now)
@@ -118,16 +153,43 @@ impl MessageRepository {
             "created new message"
         );
 
+        // Get user and chat details for the response
+        let user_row = sqlx::query("SELECT public_id, display_name, avatar_url FROM users WHERE id = ?")
+            .bind(sender_id)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(|e| ChatError::DatabaseError(e.to_string()))?;
+
+        let chat_row = sqlx::query("SELECT public_id FROM chats WHERE id = ?")
+            .bind(request.chat_id)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(|e| ChatError::DatabaseError(e.to_string()))?;
+
         Ok(ChatMessage {
             id: message_id,
             public_id,
             chat_id: request.chat_id,
+            chat_public_id: chat_row
+                .and_then(|r| r.try_get("public_id").ok())
+                .unwrap_or("unknown".to_string()),
             sender_id,
+            sender_public_id: user_row
+                .as_ref()
+                .and_then(|r| r.try_get::<String, _>("public_id").ok())
+                .unwrap_or("unknown".to_string()),
             content: request.content.clone(),
-            message_type: message_type.to_string(),
+            message_type: request.message_type.clone(),
+            reply_to_id: None,
+            reply_to_public_id: None,
+            thread_id: None,
+            thread_public_id: None,
             status: MessageStatus::Sent,
             created_at: now.clone(),
-            updated_at: now,
+            updated_at: Some(now),
+            deleted_at: None,
+            sender_display_name: user_row.as_ref().and_then(|r| r.try_get("display_name").ok()),
+            sender_avatar_url: user_row.as_ref().and_then(|r| r.try_get("avatar_url").ok()),
         })
     }
 
@@ -257,8 +319,15 @@ impl MessageRepository {
     /// Get last message for a chat
     pub async fn get_last_message(&self, chat_id: i64) -> ChatResult<Option<ChatMessage>> {
         let row = sqlx::query(
-            "SELECT id, public_id, chat_id, sender_id, content, message_type, status, created_at, updated_at
-             FROM messages WHERE chat_id = ? AND status != 'deleted' ORDER BY created_at DESC LIMIT 1"
+            "SELECT m.id, m.public_id, m.chat_id, m.sender_id, m.content, m.message_type, m.status,
+                    m.created_at, m.updated_at, m.deleted_at, m.reply_to_id, m.reply_to_public_id,
+                    m.thread_id, m.thread_public_id,
+                    u.public_id as sender_public_id, u.display_name as sender_display_name,
+                    u.avatar_url as sender_avatar_url, c.public_id as chat_public_id
+             FROM messages m
+             LEFT JOIN users u ON m.sender_id = u.id
+             LEFT JOIN chats c ON m.chat_id = c.id
+             WHERE m.chat_id = ? AND m.status != 'deleted' ORDER BY m.created_at DESC LIMIT 1"
         )
         .bind(chat_id)
         .fetch_optional(&self.pool)
@@ -267,17 +336,27 @@ impl MessageRepository {
 
         if let Some(row) = row {
             let status_str: String = row.try_get("status").map_err(|e| ChatError::DatabaseError(e.to_string()))?;
+            let message_type_str: String = row.try_get("message_type").map_err(|e| ChatError::DatabaseError(e.to_string()))?;
 
             Ok(Some(ChatMessage {
                 id: row.try_get("id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
                 public_id: row.try_get("public_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
                 chat_id: row.try_get("chat_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                chat_public_id: row.try_get("chat_public_id").unwrap_or("unknown".to_string()),
                 sender_id: row.try_get("sender_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                sender_public_id: row.try_get("sender_public_id").unwrap_or("unknown".to_string()),
                 content: row.try_get("content").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
-                message_type: row.try_get("message_type").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                message_type: MessageType::from(message_type_str.as_str()),
+                reply_to_id: row.try_get("reply_to_id").ok(),
+                reply_to_public_id: row.try_get("reply_to_public_id").ok(),
+                thread_id: row.try_get("thread_id").ok(),
+                thread_public_id: row.try_get("thread_public_id").ok(),
                 status: MessageStatus::from(status_str.as_str()),
                 created_at: row.try_get("created_at").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
-                updated_at: row.try_get("updated_at").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                updated_at: row.try_get("updated_at").ok(),
+                deleted_at: row.try_get("deleted_at").ok(),
+                sender_display_name: row.try_get("sender_display_name").ok(),
+                sender_avatar_url: row.try_get("sender_avatar_url").ok(),
             }))
         } else {
             Ok(None)
@@ -290,8 +369,15 @@ impl MessageRepository {
         let search_pattern = format!("%{}%", query);
 
         let rows = sqlx::query(
-            "SELECT id, public_id, chat_id, sender_id, content, message_type, status, created_at, updated_at
-             FROM messages WHERE chat_id = ? AND status != 'deleted' AND content LIKE ? ORDER BY created_at DESC LIMIT ?"
+            "SELECT m.id, m.public_id, m.chat_id, m.sender_id, m.content, m.message_type, m.status,
+                    m.created_at, m.updated_at, m.deleted_at, m.reply_to_id, m.reply_to_public_id,
+                    m.thread_id, m.thread_public_id,
+                    u.public_id as sender_public_id, u.display_name as sender_display_name,
+                    u.avatar_url as sender_avatar_url, c.public_id as chat_public_id
+             FROM messages m
+             LEFT JOIN users u ON m.sender_id = u.id
+             LEFT JOIN chats c ON m.chat_id = c.id
+             WHERE m.chat_id = ? AND m.status != 'deleted' AND m.content LIKE ? ORDER BY m.created_at DESC LIMIT ?"
         )
         .bind(chat_id)
         .bind(&search_pattern)
@@ -302,17 +388,27 @@ impl MessageRepository {
 
         let messages = rows.into_iter().map(|row| {
             let status_str: String = row.try_get("status").map_err(|e| ChatError::DatabaseError(e.to_string()))?;
+            let message_type_str: String = row.try_get("message_type").map_err(|e| ChatError::DatabaseError(e.to_string()))?;
 
             Ok(ChatMessage {
                 id: row.try_get("id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
                 public_id: row.try_get("public_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
                 chat_id: row.try_get("chat_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                chat_public_id: row.try_get("chat_public_id").unwrap_or("unknown".to_string()),
                 sender_id: row.try_get("sender_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                sender_public_id: row.try_get("sender_public_id").unwrap_or("unknown".to_string()),
                 content: row.try_get("content").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
-                message_type: row.try_get("message_type").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                message_type: MessageType::from(message_type_str.as_str()),
+                reply_to_id: row.try_get("reply_to_id").ok(),
+                reply_to_public_id: row.try_get("reply_to_public_id").ok(),
+                thread_id: row.try_get("thread_id").ok(),
+                thread_public_id: row.try_get("thread_public_id").ok(),
                 status: MessageStatus::from(status_str.as_str()),
                 created_at: row.try_get("created_at").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
-                updated_at: row.try_get("updated_at").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                updated_at: row.try_get("updated_at").ok(),
+                deleted_at: row.try_get("deleted_at").ok(),
+                sender_display_name: row.try_get("sender_display_name").ok(),
+                sender_avatar_url: row.try_get("sender_avatar_url").ok(),
             })
         }).collect::<Result<Vec<_>, _>>()?;
 

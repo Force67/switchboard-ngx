@@ -7,26 +7,35 @@ pub struct ChatInvite {
     pub id: i64,
     pub public_id: String,
     pub chat_id: i64,
+    pub chat_public_id: String,
+    pub chat_title: String,
     pub inviter_id: i64,
-    pub invitee_email: Option<String>,
+    pub invited_by_public_id: String,
+    pub inviter_display_name: Option<String>,
+    pub inviter_avatar_url: Option<String>,
+    pub invited_email: String,
     pub invite_code: String,
     pub status: InviteStatus,
-    pub expires_at: Option<String>,
+    pub expires_at: String,
     pub created_at: String,
+    pub accepted_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateInviteRequest {
     pub chat_id: i64,
-    pub invitee_email: Option<String>,
-    pub expires_at: Option<String>,
+    pub chat_public_id: String,
+    pub invited_by_public_id: String,
+    pub invited_email: String,
+    pub expires_in_hours: i64,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, sqlx::Type)]
+#[sqlx(type_name = "TEXT", rename_all = "lowercase")]
 pub enum InviteStatus {
     Pending,
     Accepted,
-    Declined,
+    Rejected,
     Expired,
 }
 
@@ -35,7 +44,7 @@ impl InviteStatus {
         match self {
             InviteStatus::Pending => "pending",
             InviteStatus::Accepted => "accepted",
-            InviteStatus::Declined => "declined",
+            InviteStatus::Rejected => "rejected",
             InviteStatus::Expired => "expired",
         }
     }
@@ -45,7 +54,7 @@ impl From<&str> for InviteStatus {
     fn from(s: &str) -> Self {
         match s {
             "accepted" => InviteStatus::Accepted,
-            "declined" => InviteStatus::Declined,
+            "rejected" => InviteStatus::Rejected,
             "expired" => InviteStatus::Expired,
             _ => InviteStatus::Pending,
         }

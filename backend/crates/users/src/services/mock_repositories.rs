@@ -51,7 +51,7 @@ impl MockUserRepository {
             id: user_id,
             public_id: format!("user_{}", user_id),
             email: Some(request.email.clone()),
-            username: Some(request.username.clone()),
+            username: request.username.clone(),
             display_name: Some(request.display_name.clone()),
             avatar_url: request.avatar_url.clone(),
             bio: request.bio.clone(),

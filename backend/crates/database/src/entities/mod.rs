@@ -15,8 +15,8 @@ pub mod settings;
 // Re-export all entity types
 pub use user::{User, CreateUserRequest, UpdateUserRequest, UserStatus, UserRole};
 pub use chat::{Chat, CreateChatRequest, UpdateChatRequest, ChatType, ChatStatus};
-pub use message::{ChatMessage, CreateMessageRequest, UpdateMessageRequest, MessageStatus};
-pub use attachment::{MessageAttachment, CreateAttachmentRequest};
+pub use message::{ChatMessage, CreateMessageRequest, UpdateMessageRequest, MessageStatus, MessageType};
+pub use attachment::{MessageAttachment, CreateAttachmentRequest, AttachmentType};
 pub use member::{ChatMember, CreateMemberRequest, MemberRole};
 pub use invite::{ChatInvite, CreateInviteRequest, InviteStatus};
 pub use notification::{Notification, CreateNotificationRequest, NotificationType, NotificationPriority};

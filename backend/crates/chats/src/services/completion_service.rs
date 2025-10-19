@@ -1,18 +1,19 @@
 //! Completion service for AI chat completions.
 
-use crate::entities::{ChatMessage, CreateMessageRequest};
-use crate::types::{ChatResult, ChatError};
+use switchboard_database::{ChatMessage, CreateMessageRequest, MessageRepository, ChatResult};
 use sqlx::SqlitePool;
 
 /// Service for managing AI chat completion operations
 pub struct CompletionService {
-    pool: SqlitePool,
+    message_repository: MessageRepository,
 }
 
 impl CompletionService {
     /// Create a new completion service instance
     pub fn new(pool: SqlitePool) -> Self {
-        Self { pool }
+        Self {
+            message_repository: MessageRepository::new(pool),
+        }
     }
 
     /// Generate AI completion for a chat

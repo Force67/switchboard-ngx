@@ -1,18 +1,19 @@
 //! Invite service for managing chat invitations.
 
-use crate::entities::{ChatInvite, CreateInviteRequest};
-use crate::types::{ChatResult, ChatError};
+use switchboard_database::{ChatInvite, CreateInviteRequest, InviteRepository, ChatResult};
 use sqlx::SqlitePool;
 
 /// Service for managing chat invitation operations
 pub struct InviteService {
-    pool: SqlitePool,
+    invite_repository: InviteRepository,
 }
 
 impl InviteService {
     /// Create a new invite service instance
     pub fn new(pool: SqlitePool) -> Self {
-        Self { pool }
+        Self {
+            invite_repository: InviteRepository::new(pool),
+        }
     }
 
     /// Create a new invitation

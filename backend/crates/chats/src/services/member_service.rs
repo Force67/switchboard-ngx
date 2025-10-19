@@ -1,18 +1,19 @@
-//! Member service for managing chat membership.
+//! Member service for managing chat members.
 
-use crate::entities::{ChatMember, MemberRole};
-use crate::types::{ChatResult, ChatError};
+use switchboard_database::{ChatMember, CreateMemberRequest, MemberRepository, ChatResult};
 use sqlx::SqlitePool;
 
-/// Service for managing chat membership operations
+/// Service for managing member operations
 pub struct MemberService {
-    pool: SqlitePool,
+    member_repository: MemberRepository,
 }
 
 impl MemberService {
     /// Create a new member service instance
     pub fn new(pool: SqlitePool) -> Self {
-        Self { pool }
+        Self {
+            member_repository: MemberRepository::new(pool),
+        }
     }
 
     /// List members of a chat
@@ -20,23 +21,33 @@ impl MemberService {
         todo!("Implement list_members")
     }
 
+    /// Add a member to a chat
+    pub async fn add_member(
+        &self,
+        chat_id: &str,
+        user_id: i64,
+        request: CreateMemberRequest,
+    ) -> ChatResult<ChatMember> {
+        todo!("Implement add_member")
+    }
+
     /// Update member role
     pub async fn update_member_role(
         &self,
         chat_id: &str,
+        user_id: i64,
         member_user_id: i64,
-        requester_user_id: i64,
-        new_role: MemberRole,
+        new_role: String,
     ) -> ChatResult<ChatMember> {
         todo!("Implement update_member_role")
     }
 
-    /// Remove member from chat
+    /// Remove a member from a chat
     pub async fn remove_member(
         &self,
         chat_id: &str,
+        user_id: i64,
         member_user_id: i64,
-        requester_user_id: i64,
     ) -> ChatResult<()> {
         todo!("Implement remove_member")
     }

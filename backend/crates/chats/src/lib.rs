@@ -1,16 +1,15 @@
 //! # Switchboard Chats Crate
 //!
 //! This crate provides the core business logic for chat functionality in Switchboard.
-//! It contains domain entities, services, repositories, and types for managing
-//! chats, messages, attachments, and real-time interactions.
+//! It contains services, types, and utilities for managing chats, messages, attachments,
+//! and real-time interactions. All entities are now provided by the database crate.
 //!
 //! ## Architecture
 //!
-//! - **Entities**: Domain models (Chat, Message, Attachment, etc.)
 //! - **Services**: Business logic layer
-//! - **Repositories**: Data access layer
-//! - **Types**: Shared types and interfaces
+//! - **Types**: Request/Response types and events
 //! - **Utils**: Internal utilities
+//! - **Entities**: Imported from database crate
 //!
 //! ## Usage
 //!
@@ -21,24 +20,33 @@
 //! let chat = service.create_chat(user_id, request).await?;
 //! ```
 
-pub mod entities;
-pub mod repositories;
 pub mod services;
-pub mod types;
+pub mod types {
+    pub mod events;
+    pub mod requests;
+    pub mod responses;
+}
 pub mod utils;
 
-// Re-export main types for convenience
-pub use entities::{
-    Chat, ChatType, ChatMessage, MessageAttachment, ChatMember, ChatInvite,
+// Re-export database types and repositories
+pub use switchboard_database::{
+    ChatRepository, MessageRepository, AttachmentRepository, MemberRepository, InviteRepository,
+    ChatResult, ChatError,
+    Chat, ChatMessage, MessageAttachment, ChatMember, ChatInvite,
     CreateChatRequest, UpdateChatRequest, CreateMessageRequest, UpdateMessageRequest,
+    CreateAttachmentRequest, CreateMemberRequest, CreateInviteRequest,
+    ChatType, ChatStatus, MessageStatus, MemberRole, InviteStatus,
+    AuthProvider,
 };
+
+// Re-export sqlx for pool access
+pub use sqlx::SqlitePool;
+
+// Re-export main types for convenience
 pub use services::{
     ChatService, MessageService, AttachmentService, MemberService, InviteService, CompletionService,
 };
-pub use types::{
-    ChatError, ChatResult, ChatEvent, MemberRole, MessageRole, AttachmentType,
-    ChatWithMessages, MemberWithUser, InviteWithDetails,
-};
+pub use types::events::ChatEvent;
 
 #[cfg(test)]
 mod tests {

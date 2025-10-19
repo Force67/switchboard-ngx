@@ -6,7 +6,8 @@ description = "Chat business logic and domain entities for Switchboard"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-sqlx = { workspace = true, default-features = false, features = ["runtime-tokio", "sqlite", "macros", "chrono"] }
+switchboard-database = { path = "../database" }
+sqlx = { workspace = true }
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

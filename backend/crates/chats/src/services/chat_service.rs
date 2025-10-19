@@ -1,23 +1,23 @@
 //! Chat service for managing chat operations.
 
-use crate::entities::{Chat, CreateChatRequest, UpdateChatRequest};
-use crate::entities::chat::ChatWithMessages;
-use crate::types::ChatResult;
+use switchboard_database::{Chat, CreateChatRequest, UpdateChatRequest, ChatRepository, ChatResult};
 use sqlx::SqlitePool;
 
 /// Service for managing chat operations
 pub struct ChatService {
-    pool: SqlitePool,
+    chat_repository: ChatRepository,
 }
 
 impl ChatService {
     /// Create a new chat service instance
     pub fn new(pool: SqlitePool) -> Self {
-        Self { pool }
+        Self {
+            chat_repository: ChatRepository::new(pool),
+        }
     }
 
     /// List all chats for a user
-    pub async fn list_chats(&self, user_id: i64) -> ChatResult<Vec<ChatWithMessages>> {
+    pub async fn list_chats(&self, user_id: i64) -> ChatResult<Vec<Chat>> {
         // TODO: Implement chat listing logic
         todo!("Implement list_chats")
     }

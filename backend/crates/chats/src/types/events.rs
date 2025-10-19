@@ -2,6 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+use switchboard_database::{Chat, ChatMessage, MessageAttachment, ChatMember, ChatInvite};
 
 /// Main chat event type
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -10,13 +11,13 @@ pub enum ChatEvent {
     /// Chat was created
     ChatCreated {
         chat_id: String,
-        chat: crate::entities::Chat,
+        chat: Chat,
     },
 
     /// Chat was updated
     ChatUpdated {
         chat_id: String,
-        chat: crate::entities::Chat,
+        chat: Chat,
         member_ids: Vec<i64>,
     },
 
@@ -29,13 +30,13 @@ pub enum ChatEvent {
     /// Message was created
     MessageCreated {
         chat_id: String,
-        message: crate::entities::ChatMessage,
+        message: ChatMessage,
     },
 
     /// Message was updated
     MessageUpdated {
         chat_id: String,
-        message: crate::entities::ChatMessage,
+        message: ChatMessage,
     },
 
     /// Message was deleted
@@ -49,7 +50,7 @@ pub enum ChatEvent {
     AttachmentCreated {
         chat_id: String,
         message_id: String,
-        attachment: crate::entities::MessageAttachment,
+        attachment: MessageAttachment,
     },
 
     /// Attachment was deleted
@@ -63,13 +64,13 @@ pub enum ChatEvent {
     /// Member was added to chat
     MemberAdded {
         chat_id: String,
-        member: crate::entities::ChatMember,
+        member: ChatMember,
     },
 
     /// Member role was updated
     MemberUpdated {
         chat_id: String,
-        member: crate::entities::ChatMember,
+        member: ChatMember,
     },
 
     /// Member was removed from chat
@@ -82,20 +83,20 @@ pub enum ChatEvent {
     /// Invitation was created
     InviteCreated {
         chat_id: String,
-        invite: crate::entities::ChatInvite,
+        invite: ChatInvite,
     },
 
     /// Invitation was accepted
     InviteAccepted {
         chat_id: String,
-        invite: crate::entities::ChatInvite,
-        member: crate::entities::ChatMember,
+        invite: ChatInvite,
+        member: ChatMember,
     },
 
     /// Invitation was declined
     InviteDeclined {
         chat_id: String,
-        invite: crate::entities::ChatInvite,
+        invite: ChatInvite,
     },
 
     /// User is typing
@@ -148,11 +149,11 @@ impl ChatEvent {
     /// Get the user IDs that should receive this event
     pub fn target_users(&self) -> Vec<i64> {
         match self {
-            ChatEvent::ChatCreated { chat, .. } => vec![chat.user_id.unwrap_or(0)],
+            ChatEvent::ChatCreated { chat, .. } => vec![chat.created_by],
             ChatEvent::ChatUpdated { member_ids, .. } => member_ids.clone(),
             ChatEvent::ChatDeleted { member_ids, .. } => member_ids.clone(),
-            ChatEvent::MessageCreated { message, .. } => vec![message.user_id],
-            ChatEvent::MessageUpdated { message, .. } => vec![message.user_id],
+            ChatEvent::MessageCreated { message, .. } => vec![message.sender_id],
+            ChatEvent::MessageUpdated { message, .. } => vec![message.sender_id],
             ChatEvent::MessageDeleted { user_id, .. } => vec![*user_id],
             ChatEvent::AttachmentCreated { attachment, .. } => vec![], // TODO: Add user_id to attachment
             ChatEvent::AttachmentDeleted { user_id, .. } => vec![*user_id],

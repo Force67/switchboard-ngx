@@ -2,8 +2,8 @@
 
 use serde::{Deserialize, Serialize};
 
-// Re-export request types from entities
-pub use crate::entities::{
+// Re-export request types from database
+pub use switchboard_database::{
     CreateChatRequest, UpdateChatRequest, CreateMessageRequest, UpdateMessageRequest,
     CreateAttachmentRequest, CreateInviteRequest,
 };

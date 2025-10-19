@@ -1,7 +1,6 @@
 //! Permission checking utilities.
 
-use crate::entities::{ChatMember, MemberRole};
-use crate::types::ChatError;
+use switchboard_database::{ChatMember, MemberRole, ChatError};
 
 /// Permission checking utilities
 pub struct PermissionChecker;
@@ -10,42 +9,41 @@ impl PermissionChecker {
     /// Check if a user can access a chat
     pub fn can_access_chat(member: &ChatMember, user_id: i64) -> Result<(), ChatError> {
         if member.user_id != user_id {
-            return Err(ChatError::access_denied("User is not a member of this chat"));
+            return Err(ChatError::DatabaseError("User is not a member of this chat".to_string()));
         }
         Ok(())
     }
 
     /// Check if a user can manage members in a chat
     pub fn can_manage_members(member: &ChatMember) -> Result<(), ChatError> {
-        if !member.can_manage_members() {
-            return Err(ChatError::permission_denied("Insufficient permissions to manage members"));
+        match member.role {
+            MemberRole::Owner | MemberRole::Admin => Ok(()),
+            MemberRole::Member => Err(ChatError::DatabaseError("Only owners and admins can manage members".to_string())),
         }
-        Ok(())
     }
 
     /// Check if a user can delete a chat
     pub fn can_delete_chat(member: &ChatMember) -> Result<(), ChatError> {
-        if !member.can_delete_chat() {
-            return Err(ChatError::permission_denied("Only chat owners can delete chats"));
+        match member.role {
+            MemberRole::Owner => Ok(()),
+            MemberRole::Admin | MemberRole::Member => Err(ChatError::DatabaseError("Only chat owners can delete chats".to_string())),
         }
-        Ok(())
     }
 
     /// Check if a user can invite others to a chat
     pub fn can_invite_members(member: &ChatMember) -> Result<(), ChatError> {
-        if !member.can_invite() {
-            return Err(ChatError::permission_denied("Insufficient permissions to invite members"));
+        match member.role {
+            MemberRole::Owner | MemberRole::Admin => Ok(()),
+            MemberRole::Member => Err(ChatError::DatabaseError("Only owners and admins can invite members".to_string())),
         }
-        Ok(())
     }
 
     /// Check if a user can update a chat
     pub fn can_update_chat(member: &ChatMember) -> Result<(), ChatError> {
-        // Members can update basic chat info, but only owners/admins can change sensitive settings
-        if matches!(member.role, MemberRole::Member) {
-            return Err(ChatError::permission_denied("Only owners and admins can update chat settings"));
+        match member.role {
+            MemberRole::Owner | MemberRole::Admin => Ok(()),
+            MemberRole::Member => Err(ChatError::DatabaseError("Only owners and admins can update chat settings".to_string())),
         }
-        Ok(())
     }
 
     /// Check if a user can perform an action on another member
@@ -56,7 +54,7 @@ impl PermissionChecker {
     ) -> Result<(), ChatError> {
         // Cannot perform actions on yourself
         if requester.user_id == target.user_id {
-            return Err(ChatError::permission_denied("Cannot perform actions on yourself"));
+            return Err(ChatError::DatabaseError("Cannot perform actions on yourself".to_string()));
         }
 
         // Check permission based on action
@@ -65,29 +63,29 @@ impl PermissionChecker {
                 // Only owners can update roles of admins and owners
                 if matches!(target.role, MemberRole::Owner | MemberRole::Admin) {
                     if !matches!(requester.role, MemberRole::Owner) {
-                        return Err(ChatError::permission_denied("Only owners can manage admins and other owners"));
+                        return Err(ChatError::DatabaseError("Only owners can manage admins and other owners".to_string()));
                     }
                 } else {
                     // Admins can update regular members, owners can update anyone
-                    if !requester.can_manage_members() {
-                        return Err(ChatError::permission_denied("Insufficient permissions to update member role"));
+                    if !matches!(requester.role, MemberRole::Owner | MemberRole::Admin) {
+                        return Err(ChatError::DatabaseError("Insufficient permissions to update member role".to_string()));
                     }
                 }
             }
             MemberAction::Remove => {
                 // Cannot remove owners
                 if matches!(target.role, MemberRole::Owner) {
-                    return Err(ChatError::permission_denied("Cannot remove chat owner"));
+                    return Err(ChatError::DatabaseError("Cannot remove chat owner".to_string()));
                 }
 
                 // Admins cannot remove other admins
                 if matches!(target.role, MemberRole::Admin) && matches!(requester.role, MemberRole::Admin) {
-                    return Err(ChatError::permission_denied("Admins cannot remove other admins"));
+                    return Err(ChatError::DatabaseError("Admins cannot remove other admins".to_string()));
                 }
 
                 // Only owners and admins can remove members
-                if !requester.can_manage_members() {
-                    return Err(ChatError::permission_denied("Insufficient permissions to remove member"));
+                if !matches!(requester.role, MemberRole::Owner | MemberRole::Admin) {
+                    return Err(ChatError::DatabaseError("Insufficient permissions to remove member".to_string()));
                 }
             }
         }
@@ -106,7 +104,7 @@ pub enum MemberAction {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::entities::ChatType;
+    use switchboard_database::ChatType;
 
     #[test]
     fn test_permission_checker_can_access_chat() {

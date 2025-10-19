@@ -1,18 +1,19 @@
 //! Message service for managing message operations.
 
-use crate::entities::{ChatMessage, CreateMessageRequest, UpdateMessageRequest};
-use crate::types::{ChatResult, ChatError};
+use switchboard_database::{ChatMessage, CreateMessageRequest, UpdateMessageRequest, MessageRepository, ChatResult};
 use sqlx::SqlitePool;
 
 /// Service for managing message operations
 pub struct MessageService {
-    pool: SqlitePool,
+    message_repository: MessageRepository,
 }
 
 impl MessageService {
     /// Create a new message service instance
     pub fn new(pool: SqlitePool) -> Self {
-        Self { pool }
+        Self {
+            message_repository: MessageRepository::new(pool),
+        }
     }
 
     /// Get messages for a chat

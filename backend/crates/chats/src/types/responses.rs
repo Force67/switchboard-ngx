@@ -2,11 +2,72 @@
 
 use serde::{Deserialize, Serialize};
 
-// Re-export response types from entities
-pub use crate::entities::chat::ChatWithMessages;
-pub use crate::entities::member::MemberWithUser;
-pub use crate::entities::invite::InviteWithDetails;
-pub use crate::entities::message::TokenUsage;
+// Chat with messages response type
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChatWithMessages {
+    pub id: i64,
+    pub public_id: String,
+    pub user_id: Option<i64>,
+    pub folder_id: Option<i64>,
+    pub title: String,
+    pub chat_type: String,
+    pub created_at: String,
+    pub updated_at: String,
+    pub is_group: bool,
+    pub messages: Option<String>,
+}
+
+// Member with user response type
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MemberWithUser {
+    pub id: i64,
+    pub chat_id: String,
+    pub user_id: i64,
+    pub role: String,
+    pub joined_at: String,
+    pub user: Option<UserSummary>,
+}
+
+// Invite with details response type
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InviteWithDetails {
+    pub id: i64,
+    pub chat_id: String,
+    pub inviter_user_id: i64,
+    pub invitee_email: Option<String>,
+    pub role: String,
+    pub status: String,
+    pub created_at: String,
+    pub expires_at: Option<String>,
+    pub chat: Option<ChatSummary>,
+}
+
+// Token usage for AI completions
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TokenUsage {
+    pub prompt_tokens: u32,
+    pub completion_tokens: u32,
+    pub total_tokens: u32,
+}
+
+// User summary for nested responses
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UserSummary {
+    pub id: i64,
+    pub public_id: String,
+    pub username: Option<String>,
+    pub display_name: Option<String>,
+    pub avatar_url: Option<String>,
+}
+
+// Chat summary for nested responses
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChatSummary {
+    pub id: i64,
+    pub public_id: String,
+    pub title: String,
+    pub chat_type: String,
+}
 
 /// Paginated response wrapper
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -57,43 +118,43 @@ impl<T> PaginatedResponse<T> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateChatResponse {
     /// Created chat
-    pub chat: crate::entities::Chat,
+    pub chat: switchboard_database::Chat,
     /// Initial messages if any
-    pub messages: Vec<crate::entities::ChatMessage>,
+    pub messages: Vec<switchboard_database::ChatMessage>,
 }
 
 /// Response for message creation
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateMessageResponse {
     /// Created message
-    pub message: crate::entities::ChatMessage,
+    pub message: switchboard_database::ChatMessage,
     /// Updated chat information
-    pub chat: crate::entities::Chat,
+    pub chat: switchboard_database::Chat,
 }
 
 /// Response for attachment creation
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateAttachmentResponse {
     /// Created attachment
-    pub attachment: crate::entities::MessageAttachment,
+    pub attachment: switchboard_database::MessageAttachment,
     /// Message the attachment belongs to
-    pub message: crate::entities::ChatMessage,
+    pub message: switchboard_database::ChatMessage,
 }
 
 /// Response for invitation creation
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateInviteResponse {
     /// Created invitation
-    pub invite: crate::entities::ChatInvite,
+    pub invite: switchboard_database::ChatInvite,
     /// Chat the invitation is for
-    pub chat: crate::entities::Chat,
+    pub chat: switchboard_database::Chat,
 }
 
 /// Response for chat completion
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CompletionResponse {
     /// Generated message
-    pub message: crate::entities::ChatMessage,
+    pub message: switchboard_database::ChatMessage,
     /// Token usage information
     pub usage: Option<TokenUsage>,
     /// Model used
@@ -106,9 +167,9 @@ pub struct CompletionResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpdateMemberRoleResponse {
     /// Updated member
-    pub member: crate::entities::ChatMember,
+    pub member: switchboard_database::ChatMember,
     /// Chat information
-    pub chat: crate::entities::Chat,
+    pub chat: switchboard_database::Chat,
 }
 
 /// Response statistics

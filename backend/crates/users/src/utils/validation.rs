@@ -1,19 +1,19 @@
 //! Input validation utilities.
 
 use regex::Regex;
-use crate::types::UserError;
+use switchboard_database::UserError;
 
 /// Validate email format
 pub fn validate_email(email: &str) -> Result<(), UserError> {
     let email_regex = Regex::new(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
-        .map_err(|_| UserError::ValidationFailed("Invalid email regex".to_string()))?;
+        .map_err(|_| UserError::DatabaseError("Invalid email regex".to_string()))?;
 
     if !email_regex.is_match(email) {
-        return Err(UserError::ValidationFailed("Invalid email format".to_string()));
+        return Err(UserError::DatabaseError("Invalid email format".to_string()));
     }
 
     if email.len() > 255 {
-        return Err(UserError::ValidationFailed("Email too long".to_string()));
+        return Err(UserError::DatabaseError("Email too long".to_string()));
     }
 
     Ok(())
@@ -22,11 +22,11 @@ pub fn validate_email(email: &str) -> Result<(), UserError> {
 /// Validate password strength requirements
 pub fn validate_password(password: &str) -> Result<(), UserError> {
     if password.len() < 8 {
-        return Err(UserError::ValidationFailed("Password must be at least 8 characters long".to_string()));
+        return Err(UserError::DatabaseError("Password must be at least 8 characters long".to_string()));
     }
 
     if password.len() > 128 {
-        return Err(UserError::ValidationFailed("Password must be less than 128 characters long".to_string()));
+        return Err(UserError::DatabaseError("Password must be less than 128 characters long".to_string()));
     }
 
     let has_lowercase = password.chars().any(|c| c.is_lowercase());
@@ -34,15 +34,15 @@ pub fn validate_password(password: &str) -> Result<(), UserError> {
     let has_digit = password.chars().any(|c| c.is_ascii_digit());
 
     if !has_lowercase {
-        return Err(UserError::ValidationFailed("Password must contain at least one lowercase letter".to_string()));
+        return Err(UserError::DatabaseError("Password must contain at least one lowercase letter".to_string()));
     }
 
     if !has_uppercase {
-        return Err(UserError::ValidationFailed("Password must contain at least one uppercase letter".to_string()));
+        return Err(UserError::DatabaseError("Password must contain at least one uppercase letter".to_string()));
     }
 
     if !has_digit {
-        return Err(UserError::ValidationFailed("Password must contain at least one digit".to_string()));
+        return Err(UserError::DatabaseError("Password must contain at least one digit".to_string()));
     }
 
     Ok(())
@@ -51,18 +51,18 @@ pub fn validate_password(password: &str) -> Result<(), UserError> {
 /// Validate username
 pub fn validate_username(username: &str) -> Result<(), UserError> {
     if username.len() < 3 {
-        return Err(UserError::ValidationFailed("Username must be at least 3 characters long".to_string()));
+        return Err(UserError::DatabaseError("Username must be at least 3 characters long".to_string()));
     }
 
     if username.len() > 30 {
-        return Err(UserError::ValidationFailed("Username must be less than 30 characters long".to_string()));
+        return Err(UserError::DatabaseError("Username must be less than 30 characters long".to_string()));
     }
 
     let username_regex = Regex::new(r"^[a-zA-Z0-9_-]+$")
-        .map_err(|_| UserError::ValidationFailed("Invalid username regex".to_string()))?;
+        .map_err(|_| UserError::DatabaseError("Invalid username regex".to_string()))?;
 
     if !username_regex.is_match(username) {
-        return Err(UserError::ValidationFailed("Username can only contain letters, numbers, underscores, and hyphens".to_string()));
+        return Err(UserError::DatabaseError("Username can only contain letters, numbers, underscores, and hyphens".to_string()));
     }
 
     Ok(())
@@ -71,17 +71,17 @@ pub fn validate_username(username: &str) -> Result<(), UserError> {
 /// Validate display name
 pub fn validate_display_name(display_name: &str) -> Result<(), UserError> {
     if display_name.trim().is_empty() {
-        return Err(UserError::ValidationFailed("Display name cannot be empty".to_string()));
+        return Err(UserError::DatabaseError("Display name cannot be empty".to_string()));
     }
 
     if display_name.len() > 50 {
-        return Err(UserError::ValidationFailed("Display name must be less than 50 characters long".to_string()));
+        return Err(UserError::DatabaseError("Display name must be less than 50 characters long".to_string()));
     }
 
     // Allow most characters but prevent obvious problematic ones
     let disallowed_chars = ['\n', '\r', '\t', '\0'];
     if display_name.chars().any(|c| disallowed_chars.contains(&c)) {
-        return Err(UserError::ValidationFailed("Display name contains invalid characters".to_string()));
+        return Err(UserError::DatabaseError("Display name contains invalid characters".to_string()));
     }
 
     Ok(())
@@ -94,14 +94,14 @@ pub fn validate_url(url: &str) -> Result<(), UserError> {
     }
 
     if url.len() > 2048 {
-        return Err(UserError::ValidationFailed("URL too long".to_string()));
+        return Err(UserError::DatabaseError("URL too long".to_string()));
     }
 
     let url_regex = Regex::new(r"^https?://[^\s/$.?#].[^\s]*$")
-        .map_err(|_| UserError::ValidationFailed("Invalid URL regex".to_string()))?;
+        .map_err(|_| UserError::DatabaseError("Invalid URL regex".to_string()))?;
 
     if !url_regex.is_match(url) {
-        return Err(UserError::ValidationFailed("Invalid URL format".to_string()));
+        return Err(UserError::DatabaseError("Invalid URL format".to_string()));
     }
 
     Ok(())

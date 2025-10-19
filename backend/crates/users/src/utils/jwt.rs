@@ -3,7 +3,7 @@
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use crate::types::UserError;
+use switchboard_database::UserError;
 
 /// JWT claims structure
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -53,7 +53,7 @@ impl JwtManager {
     pub fn generate_token(&self, user_id: &str, session_id: &str, user_role: &str) -> Result<String, UserError> {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .map_err(|_| UserError::TokenCreationFailed("System time error".to_string()))?;
+            .map_err(|_| UserError::DatabaseError("System time error".to_string()))?;
 
         let exp = now + self.token_duration;
 
@@ -70,7 +70,7 @@ impl JwtManager {
         };
 
         encode(&Header::default(), &claims, &self.encoding_key)
-            .map_err(|_| UserError::TokenCreationFailed("Failed to encode token".to_string()))
+            .map_err(|_| UserError::DatabaseError("Failed to encode token".to_string()))
     }
 
     /// Validate and decode a JWT token
@@ -80,7 +80,7 @@ impl JwtManager {
         validation.set_audience(&[&self.audience]);
 
         let token_data = decode::<Claims>(token, &self.decoding_key, &validation)
-            .map_err(|err| UserError::InvalidToken(format!("Token validation failed: {}", err)))?;
+            .map_err(|err| UserError::DatabaseError(format!("Token validation failed: {}", err)))?;
 
         Ok(token_data.claims)
     }
@@ -92,11 +92,11 @@ impl JwtManager {
         // Check if token is still valid and not expired
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .map_err(|_| UserError::TokenRefreshFailed("System time error".to_string()))?
+            .map_err(|_| UserError::DatabaseError("System time error".to_string()))?
             .as_secs() as usize;
 
         if claims.exp < now {
-            return Err(UserError::TokenRefreshFailed("Token has expired".to_string()));
+            return Err(UserError::DatabaseError("Token has expired".to_string()));
         }
 
         // Generate new token with same session info
@@ -111,7 +111,7 @@ impl JwtManager {
             &self.decoding_key,
             &Validation::new(jsonwebtoken::Algorithm::HS256),
         )
-        .map_err(|_| UserError::InvalidToken("Failed to decode token".to_string()))?;
+        .map_err(|_| UserError::DatabaseError("Failed to decode token".to_string()))?;
 
         Ok(token_data.claims.session_id)
     }

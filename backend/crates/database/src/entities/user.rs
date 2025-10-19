@@ -113,3 +113,79 @@ impl ToString for UserRole {
         self.as_str().to_string()
     }
 }
+
+impl CreateUserRequest {
+    /// Validate the create request
+    pub fn validate(&self) -> Result<(), String> {
+        if self.email.trim().is_empty() {
+            return Err("Email cannot be empty".to_string());
+        }
+
+        if !self.email.contains('@') || !self.email.contains('.') {
+            return Err("Invalid email format".to_string());
+        }
+
+        if self.email.len() > 255 {
+            return Err("Email too long (max 255 characters)".to_string());
+        }
+
+        if self.username.trim().is_empty() {
+            return Err("Username cannot be empty".to_string());
+        }
+
+        if self.username.len() < 3 {
+            return Err("Username too short (min 3 characters)".to_string());
+        }
+
+        if self.username.len() > 50 {
+            return Err("Username too long (max 50 characters)".to_string());
+        }
+
+        if self.display_name.trim().is_empty() {
+            return Err("Display name cannot be empty".to_string());
+        }
+
+        if self.display_name.len() > 100 {
+            return Err("Display name too long (max 100 characters)".to_string());
+        }
+
+        if self.password.len() < 8 {
+            return Err("Password too short (min 8 characters)".to_string());
+        }
+
+        Ok(())
+    }
+}
+
+impl UpdateUserRequest {
+    /// Validate the update request
+    pub fn validate(&self) -> Result<(), String> {
+        if let Some(ref display_name) = self.display_name {
+            if display_name.trim().is_empty() {
+                return Err("Display name cannot be empty".to_string());
+            }
+
+            if display_name.len() > 100 {
+                return Err("Display name too long (max 100 characters)".to_string());
+            }
+        }
+
+        if let Some(ref avatar_url) = self.avatar_url {
+            if avatar_url.trim().is_empty() {
+                return Err("Avatar URL cannot be empty".to_string());
+            }
+
+            if !avatar_url.starts_with("http://") && !avatar_url.starts_with("https://") {
+                return Err("Avatar URL must be a valid HTTP/HTTPS URL".to_string());
+            }
+        }
+
+        if let Some(ref bio) = self.bio {
+            if bio.len() > 500 {
+                return Err("Bio too long (max 500 characters)".to_string());
+            }
+        }
+
+        Ok(())
+    }
+}

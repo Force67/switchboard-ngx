@@ -21,30 +21,32 @@
 //! let user = service.create_user(request).await?;
 //! ```
 
-pub mod entities;
 pub mod services;
-pub mod types;
+pub mod types {
+    pub mod requests;
+    pub mod responses;
+    pub mod events;
+}
 pub mod utils;
 
 // Re-export database types and repositories
 pub use switchboard_database::{
-    SqlitePool, UserRepository, SessionRepository, SettingsRepository, NotificationRepository,
+    UserRepository, SessionRepository, SettingsRepository, NotificationRepository,
     UserResult, UserError, AuthResult, NotificationResult,
     User, AuthSession, Notification, UserSettings, UserPreferences,
     CreateUserRequest, UpdateUserRequest, CreateSessionRequest,
+    UserRole, UserStatus,
 };
 
+// Re-export sqlx for pool access
+pub use sqlx::sqlite::SqlitePool;
+
 // Re-export main types for convenience
-pub use entities::{
-    User as UserEntity, // Re-export with different name to avoid conflicts
-    LoginRequest, RegisterRequest, NotificationPreferences,
-};
+// Note: LoginRequest, RegisterRequest, NotificationPreferences need to be moved elsewhere
 pub use services::{
     UserService, /* AuthService, NotificationService, SessionService, */
 };
-pub use types::{
-    UserEvent,
-};
+pub use types::events::UserEvent;
 
 #[cfg(test)]
 mod tests {

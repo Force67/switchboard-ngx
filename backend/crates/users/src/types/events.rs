@@ -2,8 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
-use crate::entities::user::{UserRole, UserStatus};
-use crate::entities::notification::NotificationType;
+use switchboard_database::{UserRole, UserStatus, NotificationType};
 
 /// User-related events
 #[derive(Debug, Clone, Serialize, Deserialize)]

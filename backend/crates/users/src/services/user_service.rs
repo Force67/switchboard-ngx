@@ -1,6 +1,7 @@
 //! User service for managing user operations.
 
-use crate::{User, CreateUserRequest, UpdateUserRequest, SqlitePool, UserRepository, UserError, UserResult};
+use switchboard_database::{User, CreateUserRequest, UpdateUserRequest, UserRepository, UserError, UserResult};
+use sqlx::sqlite::SqlitePool;
 use super::mock_repositories::MockUserRepository;
 
 /// Service for managing user operations
@@ -55,7 +56,7 @@ where
     pub async fn create_user(&self, request: CreateUserRequest) -> UserResult<User> {
         // Validate input
         if let Err(e) = request.validate() {
-            return Err(UserError::ValidationFailed(e));
+            return Err(UserError::DatabaseError(e));
         }
 
         // Check if email is already taken
@@ -78,7 +79,7 @@ where
 
         // Validate update request
         if let Err(e) = request.validate() {
-            return Err(UserError::ValidationFailed(e));
+            return Err(UserError::DatabaseError(e));
         }
 
         // Perform update
@@ -225,7 +226,7 @@ impl UserRepo for UserRepository {
         Ok(super::mock_repositories::MockUserStats {
             total_users: 0,
             active_users: 0,
-            new_users_today: 0,
+            inactive_users: 0,
         })
     }
 }
@@ -275,7 +276,7 @@ impl UserRepo for MockUserRepository {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::entities::user::UserRole;
+    use crate::{User, CreateUserRequest, UpdateUserRequest, UserRole};
 
     fn create_test_service() -> UserService<MockUserRepository> {
         UserService::new_for_testing()
@@ -284,9 +285,11 @@ mod tests {
     fn create_valid_user_request() -> CreateUserRequest {
         CreateUserRequest {
             email: "test@example.com".to_string(),
+            username: "testuser".to_string(),
             display_name: "Test User".to_string(),
+            password: "password123".to_string(),
             avatar_url: Some("https://example.com/avatar.jpg".to_string()),
-            role: Some(UserRole::User),
+            bio: None,
         }
     }
 
@@ -298,6 +301,7 @@ mod tests {
         let user = service.create_user(request).await.unwrap();
 
         assert_eq!(user.email, Some("test@example.com".to_string()));
+        assert_eq!(user.username, Some("testuser".to_string()));
         assert_eq!(user.display_name, Some("Test User".to_string()));
         assert_eq!(user.avatar_url, Some("https://example.com/avatar.jpg".to_string()));
         assert_eq!(user.role, UserRole::User);
@@ -385,16 +389,20 @@ mod tests {
 
         let user1_request = CreateUserRequest {
             email: "user1@example.com".to_string(),
+            username: "alice".to_string(),
             display_name: "Alice Smith".to_string(),
+            password: "password123".to_string(),
             avatar_url: None,
-            role: Some(UserRole::User),
+            bio: None,
         };
 
         let user2_request = CreateUserRequest {
             email: "user2@example.com".to_string(),
+            username: "bob".to_string(),
             display_name: "Bob Johnson".to_string(),
+            password: "password123".to_string(),
             avatar_url: None,
-            role: Some(UserRole::User),
+            bio: None,
         };
 
         service.create_user(user1_request).await.unwrap();
@@ -457,11 +465,12 @@ mod tests {
         let service = create_test_service();
         let mut request = create_valid_user_request();
         request.avatar_url = None;
-        request.role = None;
+        request.bio = None;
 
         let user = service.create_user(request).await.unwrap();
 
         assert!(user.avatar_url.is_none());
+        assert!(user.bio.is_none());
         assert_eq!(user.role, UserRole::User); // Default role
         assert!(user.is_active);
         assert!(!user.email_verified);
@@ -571,10 +580,9 @@ mod tests {
     impl Default for UpdateUserRequest {
         fn default() -> Self {
             Self {
-                email: None,
                 display_name: None,
                 avatar_url: None,
-                status: None,
+                bio: None,
                 role: None,
             }
         }

@@ -2,8 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
-use crate::entities::{User, AuthSession, Notification, UserSettings};
-use crate::entities::user::{UserRole, UserStatus};
+use switchboard_database::{User, AuthSession, Notification, UserSettings, UserRole, UserStatus};
 
 /// Response containing user information (without sensitive data)
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -198,11 +197,11 @@ impl From<User> for UserResponse {
         Self {
             id: user.id,
             public_id: user.public_id,
-            username: "".to_string(), // Not in User structure
+            username: user.username.unwrap_or_else(|| "".to_string()),
             display_name: user.display_name.unwrap_or_else(|| "Unknown User".to_string()),
             email: user.email.unwrap_or_else(|| "".to_string()),
             avatar_url: user.avatar_url,
-            bio: None, // Not in User structure
+            bio: user.bio,
             role: user.role,
             status: user.status,
             is_verified: user.email_verified, // Map from email_verified
@@ -220,16 +219,12 @@ impl From<Notification> for NotificationResponse {
             .map(|dt| dt.with_timezone(&Utc))
             .unwrap_or_else(|_| Utc::now());
 
-        let read_at = notification.read_at.as_ref()
-            .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
-            .map(|dt| dt.with_timezone(&Utc));
-
         let expires_at = notification.expires_at.as_ref()
             .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
             .map(|dt| dt.with_timezone(&Utc));
 
         Self {
-            id: notification.id,
+            id: notification.id.expect("Notification should have an ID"),
             user_id: notification.user_id,
             title: notification.title,
             message: notification.message,
@@ -240,7 +235,7 @@ impl From<Notification> for NotificationResponse {
             action_url: None, // Not in Notification structure
             expires_at,
             created_at,
-            read_at,
+            read_at: None, // Not available in Notification structure
         }
     }
 }
@@ -264,11 +259,11 @@ impl From<UserSettings> for SettingsResponse {
             avatar_url: None, // Not in UserSettings structure
             language: settings.preferences.language,
             timezone: settings.preferences.timezone,
-            theme: String::from(settings.preferences.theme),
-            email_notifications: true, // Default value - should be from notification preferences
-            push_notifications: true, // Default value - should be from notification preferences
-            privacy_show_email: settings.privacy.profile_visibility == crate::entities::settings::ProfileVisibility::Public,
-            privacy_show_status: settings.privacy.show_online_status,
+            theme: settings.preferences.theme.clone(),
+            email_notifications: settings.preferences.email_notifications,
+            push_notifications: settings.preferences.notifications_enabled, // Use notifications_enabled for push
+            privacy_show_email: false, // Default value - not in UserSettings structure
+            privacy_show_status: false, // Default value - not in UserSettings structure
             message_content_type: crate::types::requests::MessageContentType::Text.to_string(), // Default value
             created_at,
             updated_at,
@@ -279,25 +274,25 @@ impl From<UserSettings> for SettingsResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::entities::{NotificationType, NotificationPriority};
+    use switchboard_database::{NotificationType, NotificationPriority};
 
     #[test]
     fn test_convert_user_to_response() {
         let user = User {
             id: 1,
             public_id: "abc123".to_string(),
-            username: "testuser".to_string(),
-            display_name: "Test User".to_string(),
-            email: "test@example.com".to_string(),
-            password_hash: "hashed_password".to_string(),
+            username: Some("testuser".to_string()),
+            display_name: Some("Test User".to_string()),
+            email: Some("test@example.com".to_string()),
             avatar_url: Some("https://example.com/avatar.jpg".to_string()),
             bio: Some("Test bio".to_string()),
             role: UserRole::User,
             status: UserStatus::Active,
-            is_verified: true,
-            last_login_at: Some(Utc::now()),
-            created_at: Utc::now(),
-            updated_at: Utc::now(),
+            is_active: true,
+            email_verified: true,
+            last_login_at: Some(Utc::now().to_rfc3339()),
+            created_at: Utc::now().to_rfc3339(),
+            updated_at: Utc::now().to_rfc3339(),
         };
 
         let response: UserResponse = user.into();

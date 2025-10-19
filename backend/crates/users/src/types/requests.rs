@@ -2,9 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
-use crate::entities::{AuthProvider};
-use crate::entities::user::UserRole;
-use crate::entities::notification::{NotificationType, NotificationPriority};
+use switchboard_database::{AuthProvider, UserRole, NotificationType, NotificationPriority};
 
 /// Message content type enumeration
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -63,35 +61,18 @@ impl std::fmt::Display for MessageContentType {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateNotificationRequest {
     pub user_id: i64,
-    pub notification_type: crate::entities::notification::NotificationType,
+    pub notification_type: NotificationType,
     pub title: String,
     pub message: String,
-    pub priority: crate::entities::notification::NotificationPriority,
+    pub priority: NotificationPriority,
     pub related_entity_id: Option<String>,
     pub related_entity_type: Option<String>,
     pub metadata: Option<serde_json::Value>,
     pub expires_at: Option<chrono::DateTime<Utc>>,
 }
 
-/// Request to create a new user
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CreateUserRequest {
-    pub email: String,
-    pub username: String,
-    pub display_name: String,
-    pub password: String,
-    pub avatar_url: Option<String>,
-    pub bio: Option<String>,
-}
-
-/// Request to update a user
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct UpdateUserRequest {
-    pub display_name: Option<String>,
-    pub avatar_url: Option<String>,
-    pub bio: Option<String>,
-    pub role: Option<UserRole>,
-}
+// Re-export from database crate to avoid duplication
+pub use switchboard_database::{CreateUserRequest, UpdateUserRequest};
 
 /// Request to change password
 #[derive(Debug, Clone, Serialize, Deserialize)]

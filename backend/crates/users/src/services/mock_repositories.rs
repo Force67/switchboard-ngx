@@ -1,7 +1,7 @@
 //! Mock repository implementations for testing core service functionality
 
-use crate::entities::user::{User, CreateUserRequest, UpdateUserRequest};
-use crate::types::{UserError, UserResult};
+use switchboard_database::{User, CreateUserRequest, UpdateUserRequest, UserRole, UserStatus};
+use switchboard_database::{UserError, UserResult};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -51,15 +51,17 @@ impl MockUserRepository {
             id: user_id,
             public_id: format!("user_{}", user_id),
             email: Some(request.email.clone()),
+            username: Some(request.username.clone()),
             display_name: Some(request.display_name.clone()),
             avatar_url: request.avatar_url.clone(),
-            role: request.role.unwrap_or(crate::entities::user::UserRole::User),
-            status: crate::entities::user::UserStatus::Active,
-            is_active: true,
-            email_verified: false,
+            bio: request.bio.clone(),
+            role: UserRole::User, // Default role for created users
+            status: UserStatus::Active,
             created_at: chrono::Utc::now().to_rfc3339(),
             updated_at: chrono::Utc::now().to_rfc3339(),
             last_login_at: None,
+            email_verified: false,
+            is_active: true,
         };
 
         // Store user
@@ -76,29 +78,17 @@ impl MockUserRepository {
     pub async fn update(&self, user_id: i64, request: &UpdateUserRequest) -> UserResult<User> {
         let mut users = self.users.write().await;
         if let Some(user) = users.get_mut(&user_id) {
-            // Update email and index if changed
-            if let Some(ref email) = request.email {
-                if user.email.as_ref() != Some(email) {
-                    // Remove old email from index
-                    if let Some(old_email) = &user.email {
-                        let mut email_index = self.email_index.write().await;
-                        email_index.remove(old_email);
-                    }
-                    // Add new email to index
-                    let mut email_index = self.email_index.write().await;
-                    email_index.insert(email.clone(), user_id);
-                    user.email = Some(email.clone());
-                }
-            }
-
             if let Some(ref display_name) = request.display_name {
                 user.display_name = Some(display_name.clone());
             }
             if let Some(ref avatar_url) = request.avatar_url {
                 user.avatar_url = Some(avatar_url.clone());
             }
-            if let Some(role) = request.role {
-                user.role = role;
+            if let Some(ref bio) = request.bio {
+                user.bio = Some(bio.clone());
+            }
+            if let Some(ref role) = request.role {
+                user.role = role.clone();
             }
 
             user.updated_at = chrono::Utc::now().to_rfc3339();
@@ -178,8 +168,8 @@ pub struct MockUserStats {
 }
 
 // Mock session repository for testing
-use crate::entities::auth::{AuthSession, CreateSessionRequest};
-use crate::types::errors::{AuthError, AuthResult};
+use switchboard_database::{AuthSession, CreateSessionRequest, AuthProvider};
+use switchboard_database::{AuthError, AuthResult};
 
 pub struct MockSessionRepository {
     sessions: Arc<RwLock<HashMap<String, AuthSession>>>,
@@ -199,24 +189,20 @@ impl MockSessionRepository {
         let session_id = *next_id;
         *next_id += 1;
 
-        let token = format!("session_token_{}", session_id);
-        let expires_at = chrono::Utc::now()
-            + chrono::Duration::seconds(request.expires_in_seconds.unwrap_or(24 * 60 * 60) as i64);
-
         let session = AuthSession {
             id: session_id,
-            token: token.clone(),
+            public_id: format!("session_{}", session_id),
             user_id: request.user_id,
-            user_agent: request.user_agent.clone(),
-            ip_address: request.ip_address.clone(),
-            is_active: true,
-            expires_at: expires_at.to_rfc3339(),
+            token: request.token.clone(),
+            provider: request.provider.clone(),
+            expires_at: request.expires_at.clone(),
             created_at: chrono::Utc::now().to_rfc3339(),
-            last_activity_at: chrono::Utc::now().to_rfc3339(),
+            last_accessed_at: Some(chrono::Utc::now().to_rfc3339()),
+            is_active: true,
         };
 
         let mut sessions = self.sessions.write().await;
-        sessions.insert(token.clone(), session.clone());
+        sessions.insert(request.token.clone(), session.clone());
         Ok(session)
     }
 
@@ -239,7 +225,7 @@ impl MockSessionRepository {
         if sessions.remove(token).is_some() {
             Ok(())
         } else {
-            Err(AuthError::SessionNotFound)
+            Err(AuthError::AuthenticationFailed)
         }
     }
 
@@ -272,10 +258,10 @@ impl MockSessionRepository {
     pub async fn update_last_used(&self, token: &str) -> AuthResult<()> {
         let mut sessions = self.sessions.write().await;
         if let Some(session) = sessions.get_mut(token) {
-            session.last_activity_at = chrono::Utc::now().to_rfc3339();
+            session.last_accessed_at = Some(chrono::Utc::now().to_rfc3339());
             Ok(())
         } else {
-            Err(AuthError::SessionNotFound)
+            Err(AuthError::AuthenticationFailed)
         }
     }
 

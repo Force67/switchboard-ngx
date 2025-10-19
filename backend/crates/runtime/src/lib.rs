@@ -1,17 +1,13 @@
-use std::{path::Path, sync::Arc};
+use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use redis::aio::ConnectionManager;
-use sqlx::{sqlite::SqlitePoolOptions, SqlitePool};
 use switchboard_auth::Authenticator;
-use switchboard_config::{AppConfig, DatabaseConfig};
+use switchboard_config::AppConfig;
+use switchboard_database::{initialize_database, sqlx::SqlitePool};
 use switchboard_orchestrator::Orchestrator;
-use tokio::fs;
-use tracing::{error, info};
+use tracing::info;
 
-mod migrations {
-    pub static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("../../migrations");
-}
 
 pub mod telemetry {
     use anyhow::Result;
@@ -42,8 +38,7 @@ pub struct BackendServices {
 
 impl BackendServices {
     pub async fn initialise(config: &AppConfig) -> Result<Self> {
-        let db_pool = prepare_database(&config.database).await?;
-        run_migrations(&db_pool).await?;
+        let db_pool = initialize_database(&config.database).await?;
 
         let authenticator = Authenticator::new(db_pool.clone(), config.auth.clone());
         let orchestrator = Arc::new(
@@ -88,66 +83,9 @@ impl BackendServices {
     }
 }
 
-async fn prepare_database(config: &DatabaseConfig) -> Result<SqlitePool> {
-    ensure_sqlite_path(&config.url).await?;
-
-    let pool = SqlitePoolOptions::new()
-        .max_connections(config.max_connections as u32)
-        .connect(&config.url)
-        .await
-        .with_context(|| format!("failed to connect to database {}", config.url))?;
-
-    sqlx::query("PRAGMA foreign_keys = ON")
-        .execute(&pool)
-        .await
-        .context("failed to enable foreign keys for sqlite")?;
-
-    info!(url = %config.url, "database connection established");
-    Ok(pool)
-}
-
-async fn ensure_sqlite_path(url: &str) -> Result<()> {
-    let Some(sqlite_path) = url.strip_prefix("sqlite://") else {
-        return Ok(());
-    };
-
-    if sqlite_path == ":memory:" {
-        return Ok(());
-    }
-
-    let path = Path::new(sqlite_path);
-    if let Some(parent) = path.parent() {
-        if !parent.as_os_str().is_empty() {
-            fs::create_dir_all(parent).await.with_context(|| {
-                format!("failed to create sqlite directory {}", parent.display())
-            })?;
-        }
-    }
-
-    if fs::metadata(path).await.is_err() {
-        fs::OpenOptions::new()
-            .create(true)
-            .write(true)
-            .open(path)
-            .await
-            .with_context(|| format!("failed to create sqlite database file {}", path.display()))?;
-    }
-
-    Ok(())
-}
-
-async fn run_migrations(pool: &SqlitePool) -> Result<()> {
-    migrations::MIGRATOR
-        .run(pool)
-        .await
-        .context("database migrations failed")?;
-    info!("database migrations applied");
-    Ok(())
-}
-
 pub async fn shutdown_signal() {
     if let Err(error) = tokio::signal::ctrl_c().await {
-        error!(?error, "failed to listen for shutdown signal");
+        tracing::warn!(?error, "failed to listen for shutdown signal");
     }
     info!("shutdown signal received");
 }

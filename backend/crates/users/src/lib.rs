@@ -23,21 +23,26 @@
 
 pub mod entities;
 pub mod services;
-pub mod repositories;
 pub mod types;
 pub mod utils;
 
-// Re-export main types for convenience
-pub use entities::{
+// Re-export database types and repositories
+pub use switchboard_database::{
+    SqlitePool, UserRepository, SessionRepository, SettingsRepository, NotificationRepository,
+    UserResult, UserError, AuthResult, NotificationResult,
     User, AuthSession, Notification, UserSettings, UserPreferences,
     CreateUserRequest, UpdateUserRequest, CreateSessionRequest,
+};
+
+// Re-export main types for convenience
+pub use entities::{
+    User as UserEntity, // Re-export with different name to avoid conflicts
     LoginRequest, RegisterRequest, NotificationPreferences,
 };
 pub use services::{
-    UserService, AuthService, NotificationService, SessionService,
+    UserService, /* AuthService, NotificationService, SessionService, */
 };
 pub use types::{
-    UserResult, UserError, AuthResult, NotificationResult,
     UserEvent,
 };
 

@@ -4,7 +4,7 @@ use crate::entities::{Notification};
 use crate::entities::notification::{NotificationType, NotificationPriority};
 use crate::types::{NotificationResult, CreateNotificationRequest};
 use crate::types::errors::NotificationError;
-use sqlx::SqlitePool;
+use sqlx::{SqlitePool, Row};
 
 /// Repository for notification database operations
 pub struct NotificationRepository {
@@ -72,7 +72,7 @@ impl NotificationRepository {
         .bind(request.priority.to_string())
         .bind(&now)
         .bind(&now)
-        .bind(request.expires_at)
+        .bind(request.expires_at.as_ref())
         .bind(&request.related_entity_id)
         .bind(&request.related_entity_type)
         .bind(metadata_json)
@@ -301,7 +301,7 @@ impl NotificationRepository {
                 "chat_id": chat_id,
                 "chat_name": chat_name
             })),
-            expires_at: Some(chrono::Utc::now() + chrono::Duration::days(7)),
+            expires_at: Some((chrono::Utc::now() + chrono::Duration::days(7)).to_rfc3339()),
         };
 
         self.create(&request).await

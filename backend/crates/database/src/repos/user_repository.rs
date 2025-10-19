@@ -19,7 +19,7 @@ impl UserRepository {
     /// Find user by ID
     pub async fn find_by_id(&self, id: i64) -> UserResult<Option<User>> {
         let row = sqlx::query(
-            "SELECT id, public_id, email, display_name, avatar_url, status, role, created_at, updated_at, last_login_at, email_verified, is_active FROM users WHERE id = ? AND status != 'deleted'"
+            "SELECT id, public_id, email, username, display_name, avatar_url, bio, status, role, created_at, updated_at, last_login_at, email_verified, is_active FROM users WHERE id = ? AND status != 'deleted'"
         )
         .bind(id)
         .fetch_optional(&self.pool)
@@ -31,8 +31,10 @@ impl UserRepository {
                 id: row.get("id"),
                 public_id: row.get("public_id"),
                 email: row.get("email"),
+                username: row.get("username"),
                 display_name: row.get("display_name"),
                 avatar_url: row.get("avatar_url"),
+                bio: row.get("bio"),
                 status: crate::entities::user::UserStatus::from(row.get::<String, _>("status").as_str()),
                 role: crate::entities::user::UserRole::from(row.get::<String, _>("role").as_str()),
                 created_at: row.get("created_at"),
@@ -50,7 +52,7 @@ impl UserRepository {
     /// Find user by public ID
     pub async fn find_by_public_id(&self, public_id: &str) -> UserResult<Option<User>> {
         let row = sqlx::query(
-            "SELECT id, public_id, email, display_name, avatar_url, status, role, created_at, updated_at, last_login_at, email_verified, is_active FROM users WHERE public_id = ? AND status != 'deleted'"
+            "SELECT id, public_id, email, username, display_name, avatar_url, bio, status, role, created_at, updated_at, last_login_at, email_verified, is_active FROM users WHERE public_id = ? AND status != 'deleted'"
         )
         .bind(public_id)
         .fetch_optional(&self.pool)
@@ -62,8 +64,10 @@ impl UserRepository {
                 id: row.get("id"),
                 public_id: row.get("public_id"),
                 email: row.get("email"),
+                username: row.get("username"),
                 display_name: row.get("display_name"),
                 avatar_url: row.get("avatar_url"),
+                bio: row.get("bio"),
                 status: crate::entities::user::UserStatus::from(row.get::<String, _>("status").as_str()),
                 role: crate::entities::user::UserRole::from(row.get::<String, _>("role").as_str()),
                 created_at: row.get("created_at"),
@@ -81,7 +85,7 @@ impl UserRepository {
     /// Find user by email
     pub async fn find_by_email(&self, email: &str) -> UserResult<Option<User>> {
         let row = sqlx::query(
-            "SELECT id, public_id, email, display_name, avatar_url, status, role, created_at, updated_at, last_login_at, email_verified, is_active FROM users WHERE email = ? AND status != 'deleted'"
+            "SELECT id, public_id, email, username, display_name, avatar_url, bio, status, role, created_at, updated_at, last_login_at, email_verified, is_active FROM users WHERE email = ? AND status != 'deleted'"
         )
         .bind(email)
         .fetch_optional(&self.pool)
@@ -93,8 +97,10 @@ impl UserRepository {
                 id: row.get("id"),
                 public_id: row.get("public_id"),
                 email: row.get("email"),
+                username: row.get("username"),
                 display_name: row.get("display_name"),
                 avatar_url: row.get("avatar_url"),
+                bio: row.get("bio"),
                 status: crate::entities::user::UserStatus::from(row.get::<String, _>("status").as_str()),
                 role: crate::entities::user::UserRole::from(row.get::<String, _>("role").as_str()),
                 created_at: row.get("created_at"),
@@ -170,7 +176,7 @@ impl UserRepository {
             values.push(bio.clone());
         }
 
-        if let Some(role) = request.role {
+        if let Some(role) = &request.role {
             query_parts.push("role = ?");
             values.push(role.to_string());
         }
@@ -252,7 +258,7 @@ impl UserRepository {
 
         let rows = sqlx::query(
             r#"
-            SELECT id, public_id, email, display_name, avatar_url, status, role, created_at, updated_at, last_login_at, email_verified, is_active
+            SELECT id, public_id, email, username, display_name, avatar_url, bio, status, role, created_at, updated_at, last_login_at, email_verified, is_active
             FROM users
             WHERE display_name LIKE ? AND status = 'active' AND is_active = true
             ORDER BY display_name
@@ -271,8 +277,10 @@ impl UserRepository {
                 id: row.get("id"),
                 public_id: row.get("public_id"),
                 email: row.get("email"),
+                username: row.get("username"),
                 display_name: row.get("display_name"),
                 avatar_url: row.get("avatar_url"),
+                bio: row.get("bio"),
                 status: crate::entities::user::UserStatus::from(row.get::<String, _>("status").as_str()),
                 role: crate::entities::user::UserRole::from(row.get::<String, _>("role").as_str()),
                 created_at: row.get("created_at"),
@@ -288,7 +296,7 @@ impl UserRepository {
 
     /// Check if email exists
     pub async fn email_exists(&self, email: &str) -> UserResult<bool> {
-        let count = sqlx::query_scalar(
+        let count: Option<i64> = sqlx::query_scalar(
             "SELECT COUNT(*) FROM users WHERE email = ? AND status != 'deleted'"
         )
         .bind(email)
@@ -301,7 +309,7 @@ impl UserRepository {
 
     /// Get user count
     pub async fn count(&self) -> UserResult<i64> {
-        let count = sqlx::query_scalar(
+        let count: Option<i64> = sqlx::query_scalar(
             "SELECT COUNT(*) FROM users WHERE status != 'deleted'"
         )
         .fetch_one(&self.pool)
@@ -313,7 +321,7 @@ impl UserRepository {
 
     /// Get active users count
     pub async fn count_active(&self) -> UserResult<i64> {
-        let count = sqlx::query_scalar(
+        let count: Option<i64> = sqlx::query_scalar(
             "SELECT COUNT(*) FROM users WHERE status = 'active' AND is_active = true"
         )
         .fetch_one(&self.pool)
@@ -388,7 +396,7 @@ impl UserRepository {
     /// Find user by username
     pub async fn find_by_username(&self, username: &str) -> UserResult<Option<User>> {
         let row = sqlx::query(
-            "SELECT id, public_id, email, display_name, avatar_url, status, role, created_at, updated_at, last_login_at, email_verified, is_active FROM users WHERE username = ? AND status != 'deleted'"
+            "SELECT id, public_id, email, username, display_name, avatar_url, bio, status, role, created_at, updated_at, last_login_at, email_verified, is_active FROM users WHERE username = ? AND status != 'deleted'"
         )
         .bind(username)
         .fetch_optional(&self.pool)
@@ -400,8 +408,10 @@ impl UserRepository {
                 id: row.get("id"),
                 public_id: row.get("public_id"),
                 email: row.get("email"),
+                username: row.get("username"),
                 display_name: row.get("display_name"),
                 avatar_url: row.get("avatar_url"),
+                bio: row.get("bio"),
                 status: crate::entities::user::UserStatus::from(row.get::<String, _>("status").as_str()),
                 role: crate::entities::user::UserRole::from(row.get::<String, _>("role").as_str()),
                 created_at: row.get("created_at"),
@@ -420,7 +430,7 @@ impl UserRepository {
     pub async fn find_by_role(&self, role: crate::entities::user::UserRole, limit: u32) -> UserResult<Vec<User>> {
         let rows = sqlx::query(
             r#"
-            SELECT id, public_id, email, display_name, avatar_url, status, role, created_at, updated_at, last_login_at, email_verified, is_active
+            SELECT id, public_id, email, username, display_name, avatar_url, bio, status, role, created_at, updated_at, last_login_at, email_verified, is_active
             FROM users
             WHERE role = ? AND status = 'active' AND is_active = true
             ORDER BY created_at DESC
@@ -439,8 +449,10 @@ impl UserRepository {
                 id: row.get("id"),
                 public_id: row.get("public_id"),
                 email: row.get("email"),
+                username: row.get("username"),
                 display_name: row.get("display_name"),
                 avatar_url: row.get("avatar_url"),
+                bio: row.get("bio"),
                 status: crate::entities::user::UserStatus::from(row.get::<String, _>("status").as_str()),
                 role: crate::entities::user::UserRole::from(row.get::<String, _>("role").as_str()),
                 created_at: row.get("created_at"),
@@ -575,7 +587,7 @@ mod tests {
         };
 
         let created_user = repo.create(&request).await.unwrap();
-        assert_eq!(created_user.email, Some(request.email));
+        assert_eq!(created_user.email, Some(request.email.clone()));
         assert_eq!(created_user.display_name, Some(request.display_name));
 
         let found_user = repo.find_by_id(created_user.id).await.unwrap();

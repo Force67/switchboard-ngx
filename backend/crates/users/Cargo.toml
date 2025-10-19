@@ -6,7 +6,7 @@ description = "User management and authentication for Switchboard"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-sqlx = { workspace = true, default-features = false, features = ["runtime-tokio", "sqlite", "chrono"] }
+switchboard-database = { path = "../database" }
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

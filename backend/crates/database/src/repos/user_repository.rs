@@ -6,6 +6,7 @@ use sqlx::{SqlitePool, Row};
 use chrono::Utc;
 
 /// Repository for user database operations
+#[derive(Clone)]
 pub struct UserRepository {
     pool: SqlitePool,
 }

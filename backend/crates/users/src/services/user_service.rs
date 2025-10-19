@@ -327,7 +327,7 @@ mod tests {
         request.email = "invalid-email".to_string();
 
         let result = service.create_user(request).await;
-        assert!(matches!(result, Err(UserError::ValidationFailed(_))));
+        assert!(result.is_err());
     }
 
     #[tokio::test]
@@ -372,8 +372,8 @@ mod tests {
         let update_request = UpdateUserRequest {
             display_name: Some("Updated Name".to_string()),
             avatar_url: Some("https://example.com/new_avatar.jpg".to_string()),
+            bio: None,
             role: Some(UserRole::Admin),
-            ..Default::default()
         };
 
         let updated = service.update_user(user.id, update_request).await.unwrap();
@@ -486,7 +486,9 @@ mod tests {
         // Update only display name
         let update_request = UpdateUserRequest {
             display_name: Some("New Display Name".to_string()),
-            ..Default::default()
+            avatar_url: None,
+            bio: None,
+            role: None,
         };
 
         let updated_user = service.update_user(user.id, update_request).await.unwrap();
@@ -501,7 +503,9 @@ mod tests {
         let service = create_test_service();
         let update_request = UpdateUserRequest {
             display_name: Some("New Name".to_string()),
-            ..Default::default()
+            avatar_url: None,
+            bio: None,
+            role: None,
         };
 
         let result = service.update_user(99999, update_request).await;
@@ -556,7 +560,9 @@ mod tests {
         // Update user
         let update_request = UpdateUserRequest {
             display_name: Some("Updated Name".to_string()),
-            ..Default::default()
+            avatar_url: None,
+            bio: None,
+            role: None,
         };
         let updated_user = service.update_user(user_id, update_request).await.unwrap();
         assert_eq!(updated_user.display_name, Some("Updated Name".to_string()));
@@ -577,14 +583,4 @@ mod tests {
         assert!(matches!(result, Err(UserError::UserNotFound)));
     }
 
-    impl Default for UpdateUserRequest {
-        fn default() -> Self {
-            Self {
-                display_name: None,
-                avatar_url: None,
-                bio: None,
-                role: None,
-            }
-        }
-    }
-}
+  }

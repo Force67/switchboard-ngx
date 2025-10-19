@@ -105,13 +105,18 @@ impl JwtManager {
 
     /// Extract session ID from token without full validation (for performance)
     pub fn extract_session_id(&self, token: &str) -> Result<String, UserError> {
-        // Decode without verification to get session ID quickly
+        // Decode with the same issuer and audience validation as the token was created with
+        let mut validation = Validation::new(jsonwebtoken::Algorithm::HS256);
+        validation.validate_exp = false; // Don't validate expiration for performance
+        validation.set_audience(&[&self.audience]);
+        validation.set_issuer(&[&self.issuer]);
+
         let token_data = jsonwebtoken::decode::<Claims>(
             token,
             &self.decoding_key,
-            &Validation::new(jsonwebtoken::Algorithm::HS256),
+            &validation,
         )
-        .map_err(|_| UserError::DatabaseError("Failed to decode token".to_string()))?;
+        .map_err(|e| UserError::DatabaseError(format!("Failed to decode token: {}", e)))?;
 
         Ok(token_data.claims.session_id)
     }
@@ -180,6 +185,10 @@ mod tests {
         let user_role = "user";
 
         let original_token = jwt_manager.generate_token(user_id, session_id, user_role).unwrap();
+
+        // Add a small delay to ensure different timestamps
+        std::thread::sleep(std::time::Duration::from_secs(1));
+
         let refreshed_token = jwt_manager.refresh_token(&original_token).unwrap();
 
         assert_ne!(original_token, refreshed_token);

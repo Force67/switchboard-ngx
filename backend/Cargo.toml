@@ -8,8 +8,8 @@ members = [
   "crates/orchestrator",
   "crates/runtime",
   "crates/users",
-  "server",
-  "apps"
+  "apps/server",
+  "apps/test-app"
 ]
 resolver = "2"
 

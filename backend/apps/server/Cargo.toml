@@ -9,9 +9,9 @@ license = "MIT OR Apache-2.0"
 anyhow = { workspace = true }
 clap = { version = "4.0", features = ["derive"] }
 sqlx = { workspace = true, default-features = false, features = ["runtime-tokio", "sqlite", "macros", "chrono"] }
-switchboard-config = { path = "../crates/config" }
-switchboard-backend-runtime = { path = "../crates/runtime" }
-switchboard-gateway = { path = "../crates/gateway" }
+switchboard-config = { path = "../../crates/config" }
+switchboard-backend-runtime = { path = "../../crates/runtime" }
+switchboard-gateway = { path = "../../crates/gateway" }
 tokio = { workspace = true, features = ["io-std", "io-util"] }
 tracing = { workspace = true }
 axum = { workspace = true }

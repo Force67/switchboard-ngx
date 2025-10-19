@@ -1,7 +1,8 @@
 use anyhow::Context;
 use clap::{Parser, Subcommand};
 use sqlx::Row;
-use switchboard_gateway::{build_router, AppState};
+use switchboard_gateway::{build_router, GatewayState};
+use switchboard_gateway::state::JwtConfig;
 use switchboard_backend_runtime::{telemetry, BackendServices};
 use switchboard_config::load as load_config;
 use tokio::io::{AsyncBufReadExt, BufReader};
@@ -54,11 +55,10 @@ async fn run_server() -> anyhow::Result<()> {
         .await
         .context("failed to initialise backend services")?;
 
-    let state = AppState::new(
+    let jwt_config = JwtConfig::default();
+    let state = GatewayState::new(
         services.db_pool.clone(),
-        services.orchestrator.clone(),
-        services.authenticator.clone(),
-        services.redis_conn.clone(),
+        jwt_config,
     );
     let app = build_router(state);
 

@@ -158,6 +158,64 @@ fn load_picks_first_available_file_in_search_order() {
 
 #[test]
 #[serial]
+fn load_prefers_switchboard_config_environment_file() {
+    let temp_dir = TempDir::new().expect("failed to create temp dir");
+    let env_config_path = temp_dir.path().join("overrides/custom.toml");
+
+    write_config_file(
+        temp_dir.path(),
+        "switchboard.toml",
+        r#"
+        [http]
+        port = 5050
+        "#,
+    );
+    write_config_file(
+        temp_dir.path(),
+        "overrides/custom.toml",
+        r#"
+        [http]
+        port = 6262
+        "#,
+    );
+
+    let mut ctx = TestContext::new();
+    ctx.reset_environment();
+    ctx.set_current_dir(temp_dir.path());
+    ctx.set_var(
+        "SWITCHBOARD_CONFIG",
+        env_config_path.to_string_lossy().into_owned(),
+    );
+
+    let config = load().expect("configuration load should prefer SWITCHBOARD_CONFIG");
+    assert_eq!(config.http.port, 6262);
+}
+
+#[test]
+#[serial]
+fn load_errors_when_switchboard_config_targets_missing_file() {
+    let temp_dir = TempDir::new().expect("failed to create temp dir");
+    let missing_path = temp_dir.path().join("missing/switchboard.toml");
+
+    let mut ctx = TestContext::new();
+    ctx.reset_environment();
+    ctx.set_current_dir(temp_dir.path());
+    ctx.set_var(
+        "SWITCHBOARD_CONFIG",
+        missing_path.to_string_lossy().into_owned(),
+    );
+
+    let error =
+        load().expect_err("missing SWITCHBOARD_CONFIG file should cause configuration to fail");
+    let message = format!("{error:?}");
+    assert!(
+        message.contains("missing/switchboard.toml"),
+        "expected missing path in error message, got {message}"
+    );
+}
+
+#[test]
+#[serial]
 fn load_merges_partial_file_with_defaults() {
     let temp_dir = TempDir::new().expect("failed to create temp dir");
     let mut ctx = TestContext::new();

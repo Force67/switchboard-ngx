@@ -67,6 +67,16 @@ impl Default for OrchestratorConfig {
     }
 }
 
+/// Configuration options for the built-in OpenRouter provider integration.
+///
+/// ```
+/// use switchboard_config::OpenRouterProviderConfig;
+///
+/// let provider = OpenRouterProviderConfig::default();
+/// assert_eq!(provider.base_url, "https://openrouter.ai/api/v1");
+/// assert_eq!(provider.request_timeout_seconds, 30);
+/// assert!(provider.api_key.is_none());
+/// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OpenRouterProviderConfig {
     #[serde(default)]
@@ -151,6 +161,16 @@ pub struct GithubAuthConfig {
     pub client_secret: Option<String>,
 }
 
+/// Load the application configuration by combining defaults, files, and environment overrides.
+///
+/// ```
+/// use switchboard_config::load;
+///
+/// std::env::remove_var("SWITCHBOARD_CONFIG");
+///
+/// let config = load().expect("configuration should load with defaults");
+/// assert!(!config.http.address.is_empty());
+/// ```
 pub fn load() -> anyhow::Result<AppConfig> {
     let defaults = AppConfig::default();
 

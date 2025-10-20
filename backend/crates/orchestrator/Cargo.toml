@@ -14,3 +14,9 @@ tracing = { workspace = true }
 switchboard-config = { path = "../config" }
 denkwerk = { workspace = true }
 reqwest = { workspace = true }
+
+[dev-dependencies]
+async-trait = "0.1"
+httpmock = "0.7"
+tempfile = "3"
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }

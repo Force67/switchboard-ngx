@@ -15,3 +15,7 @@ tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 redis = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"
+libc = "0.2"

@@ -472,3 +472,122 @@ struct OpenRouterPricing {
     #[serde(default)]
     output: Option<String>,
 }
+
+#[doc(hidden)]
+pub mod test_support {
+    use super::*;
+    use std::sync::Arc;
+
+    #[derive(Debug, Clone)]
+    pub struct TestOpenRouterSettings {
+        pub api_key: String,
+        pub base_url: String,
+        pub request_timeout: Duration,
+        pub referer: Option<String>,
+        pub title: Option<String>,
+    }
+
+    impl TestOpenRouterSettings {
+        pub fn new(api_key: impl Into<String>, base_url: impl Into<String>) -> Self {
+            Self {
+                api_key: api_key.into(),
+                base_url: base_url.into(),
+                request_timeout: Duration::from_secs(30),
+                referer: None,
+                title: None,
+            }
+        }
+
+        pub fn with_timeout(mut self, timeout: Duration) -> Self {
+            self.request_timeout = timeout;
+            self
+        }
+
+        pub fn with_referer(mut self, referer: impl Into<String>) -> Self {
+            self.referer = Some(referer.into());
+            self
+        }
+
+        pub fn with_title(mut self, title: impl Into<String>) -> Self {
+            self.title = Some(title.into());
+            self
+        }
+    }
+
+    #[derive(Default)]
+    pub struct OrchestratorTestBuilder {
+        config: OrchestratorConfig,
+        metadata: Vec<ProviderMetadata>,
+        providers: Vec<(ProviderMetadata, Arc<dyn LLMProvider>)>,
+        openrouter: Option<TestOpenRouterSettings>,
+    }
+
+    impl OrchestratorTestBuilder {
+        pub fn new(config: OrchestratorConfig) -> Self {
+            Self {
+                config,
+                ..Default::default()
+            }
+        }
+
+        pub fn with_metadata(mut self, metadata: ProviderMetadata) -> Self {
+            self.metadata.push(metadata);
+            self
+        }
+
+        pub fn with_provider(
+            mut self,
+            metadata: ProviderMetadata,
+            provider: Arc<dyn LLMProvider>,
+        ) -> Self {
+            self.providers.push((metadata, provider));
+            self
+        }
+
+        pub fn with_openrouter(mut self, settings: TestOpenRouterSettings) -> Self {
+            self.openrouter = Some(settings);
+            self
+        }
+
+        pub fn build(self) -> Orchestrator {
+            let mut index = ProviderIndex::new(self.metadata);
+
+            for (metadata, provider) in self.providers {
+                index.register(metadata, provider);
+            }
+
+            if let Some(settings) = self.openrouter {
+                index.openrouter = Some(ResolvedOpenRouterConfig {
+                    api_key: settings.api_key,
+                    base_url: settings.base_url,
+                    request_timeout: settings.request_timeout,
+                    referer: settings.referer,
+                    title: settings.title,
+                });
+            }
+
+            Orchestrator {
+                config: self.config,
+                providers: Some(index),
+            }
+        }
+    }
+
+    pub fn provider_identifiers(orchestrator: &Orchestrator) -> Option<Vec<String>> {
+        orchestrator.providers.as_ref().map(|index| {
+            index
+                .metadata
+                .iter()
+                .map(|metadata| metadata.identifier.clone())
+                .collect()
+        })
+    }
+
+    pub fn describe_capabilities(capabilities: ProviderCapabilities) -> Vec<String> {
+        super::describe_capabilities(capabilities)
+    }
+
+    pub fn provider_identifier_from_model(model: &str) -> String {
+        super::provider_identifier_from_model(model)
+    }
+}

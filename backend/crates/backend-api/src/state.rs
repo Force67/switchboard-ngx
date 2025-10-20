@@ -290,9 +290,11 @@ impl AppState {
 
         match self.authenticator.authenticate_token(token).await {
             Ok(result) => Ok(result),
-            Err(auth_error @ (AuthError::SessionNotFound
-            | AuthError::SessionExpired
-            | AuthError::InvalidSession)) => {
+            Err(
+                auth_error @ (AuthError::SessionNotFound
+                | AuthError::SessionExpired
+                | AuthError::InvalidSession),
+            ) => {
                 if cfg!(debug_assertions) {
                     tracing::warn!(
                         "development session for token {} missing ({}), recreating",

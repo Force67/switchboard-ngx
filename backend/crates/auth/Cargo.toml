@@ -21,3 +21,7 @@ tracing = { workspace = true }
 cuid2 = { workspace = true }
 once_cell = { workspace = true }
 switchboard-config = { path = "../config" }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tempfile = "3"

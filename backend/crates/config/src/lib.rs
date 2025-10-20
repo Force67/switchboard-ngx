@@ -202,8 +202,10 @@ pub fn load() -> anyhow::Result<AppConfig> {
         .set_default("database.max_connections", db_max)
         .unwrap()
         .set_default("auth.session_ttl_seconds", session_ttl_i64)
-        .unwrap()
-        .add_source(config::Environment::with_prefix("SWITCHBOARD").separator("__"));
+        .unwrap();
+
+    let environment_overrides =
+        config::Environment::with_prefix("SWITCHBOARD").separator("__");
 
     let mut config_file_attached = false;
 
@@ -228,11 +230,17 @@ pub fn load() -> anyhow::Result<AppConfig> {
         debug!("no configuration file found, relying on defaults and environment overrides");
     }
 
+    builder = builder.add_source(environment_overrides);
+
     let cfg = builder.build().context("unable to build configuration")?;
 
-    let config = cfg
+    let mut config = cfg
         .try_deserialize::<AppConfig>()
         .context("invalid configuration")?;
+
+    if config.auth.session_ttl_seconds > i64::MAX as u64 {
+        config.auth.session_ttl_seconds = i64::MAX as u64;
+    }
 
     debug!(?config, "loaded backend configuration");
     Ok(config)

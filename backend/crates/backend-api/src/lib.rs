@@ -7,7 +7,8 @@ pub mod routes;
 
 pub use docs::ApiDoc;
 pub use error::ApiError;
-pub use state::{AppState, OAuthStateStore};
+pub use state::{AppState, ClientEvent, OAuthStateStore, ServerEvent};
+pub use util::require_bearer;
 
 use axum::{
     http::header::{AUTHORIZATION, CONTENT_TYPE},

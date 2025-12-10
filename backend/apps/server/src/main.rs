@@ -33,6 +33,11 @@ enum Commands {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    // Load .env file from repository root if it exists (don't fail if it doesn't)
+    if let Err(e) = dotenvy::from_filename("../.env") {
+        tracing::debug!("No .env file found or error loading .env: {}", e);
+    }
+
     let cli = Cli::parse();
 
     match cli.command.unwrap_or(Commands::Console) {

@@ -8,6 +8,7 @@ license = "MIT OR Apache-2.0"
 [dependencies]
 anyhow = { workspace = true }
 clap = { version = "4.0", features = ["derive"] }
+dotenvy = "0.15"
 sqlx = { workspace = true, default-features = false, features = ["runtime-tokio", "sqlite", "macros", "chrono"] }
 switchboard-config = { path = "../../crates/config" }
 switchboard-backend-runtime = { path = "../../crates/runtime" }

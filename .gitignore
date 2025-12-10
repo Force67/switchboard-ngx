@@ -6,3 +6,6 @@ backend/crates/config/switchboard.toml
 /.devcontainer
 /.pnpm-store
 /node_modules
+/zaistats
+/zaistats
+.env

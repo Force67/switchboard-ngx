@@ -1,19 +1,13 @@
 //! Database migrations
 
 use anyhow::Context;
-use sqlx::{migrate::Migrator, SqlitePool};
+use sqlx::SqlitePool;
 use tracing::info;
 
-// Include migrations from the migrations directory
-pub static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("./migrations");
-
 /// Run database migrations
-pub async fn run_migrations(pool: &SqlitePool) -> anyhow::Result<()> {
-    MIGRATOR
-        .run(pool)
-        .await
-        .context("database migrations failed")?;
-    info!("database migrations applied");
+/// TODO: Implement migrations when migration files are properly set up
+pub async fn run_migrations(_pool: &SqlitePool) -> anyhow::Result<()> {
+    info!("database migrations skipped (not implemented yet)");
     Ok(())
 }
 

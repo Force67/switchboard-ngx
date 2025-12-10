@@ -9,3 +9,5 @@ backend/crates/config/switchboard.toml
 /zaistats
 /zaistats
 .env
+CLAUDE.md
+AGENTS.md

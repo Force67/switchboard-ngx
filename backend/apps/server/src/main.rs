@@ -1,10 +1,11 @@
 use anyhow::Context;
 use clap::{Parser, Subcommand};
 use sqlx::Row;
-use switchboard_gateway::{build_router, GatewayState};
-use switchboard_gateway::state::JwtConfig;
+use std::sync::Arc;
 use switchboard_backend_runtime::{telemetry, BackendServices};
 use switchboard_config::load as load_config;
+use switchboard_gateway::state::JwtConfig;
+use switchboard_gateway::{build_router, GatewayState};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::net::TcpListener;
 use tracing::info;
@@ -63,6 +64,7 @@ async fn run_server() -> anyhow::Result<()> {
     let jwt_config = JwtConfig::default();
     let state = GatewayState::new(
         services.db_pool.clone(),
+        Arc::new(services.authenticator.clone()),
         jwt_config,
     );
     let app = build_router(state);

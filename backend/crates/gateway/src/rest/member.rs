@@ -1,18 +1,17 @@
 //! Member REST endpoints
 
 use axum::{
-    extract::{Path, Query, State, Request},
-    Json,
+    extract::{Path, Query, Request, State},
     response::IntoResponse,
-    Router,
+    Json, Router,
 };
 use serde::{Deserialize, Serialize};
-use utoipa::{IntoParams, ToSchema};
 use std::sync::Arc;
+use utoipa::{IntoParams, ToSchema};
 
-use crate::state::GatewayState;
 use crate::error::{GatewayError, GatewayResult};
 use crate::middleware::extract_user_id;
+use crate::state::GatewayState;
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct MemberResponse {
@@ -72,8 +71,14 @@ pub struct ErrorResponse {
 pub fn create_member_routes() -> Router<Arc<GatewayState>> {
     Router::new()
         .route("/chats/:chat_id/members", axum::routing::get(list_members))
-        .route("/chats/:chat_id/members/:member_id", axum::routing::get(get_member).delete(remove_member))
-        .route("/chats/:chat_id/members/:member_id/role", axum::routing::put(update_member_role))
+        .route(
+            "/chats/:chat_id/members/:member_id",
+            axum::routing::get(get_member).delete(remove_member),
+        )
+        .route(
+            "/chats/:chat_id/members/:member_id/role",
+            axum::routing::put(update_member_role),
+        )
         .route("/chats/:chat_id/leave", axum::routing::post(leave_chat))
 }
 
@@ -121,7 +126,8 @@ pub async fn list_members(
         .await
         .map_err(|e| GatewayError::ServiceError(format!("Failed to list members: {}", e)))?;
 
-    let member_responses: Vec<MemberResponse> = members.into_iter().map(|member| member.into()).collect();
+    let member_responses: Vec<MemberResponse> =
+        members.into_iter().map(|member| member.into()).collect();
     Ok(Json(member_responses))
 }
 
@@ -164,7 +170,9 @@ pub async fn get_member(
 
     // Verify member belongs to the specified chat
     if member.chat_public_id != chat_id {
-        return Err(GatewayError::NotFound("Member does not belong to specified chat".to_string()));
+        return Err(GatewayError::NotFound(
+            "Member does not belong to specified chat".to_string(),
+        ));
     }
 
     Ok(Json(MemberResponse::from(member)))
@@ -212,14 +220,20 @@ pub async fn update_member_role(
 
     // Verify member belongs to the specified chat
     if member.chat_public_id != chat_id {
-        return Err(GatewayError::NotFound("Member does not belong to specified chat".to_string()));
+        return Err(GatewayError::NotFound(
+            "Member does not belong to specified chat".to_string(),
+        ));
     }
 
     let new_role = match payload.role.as_str() {
         "owner" => switchboard_database::MemberRole::Owner,
         "admin" => switchboard_database::MemberRole::Admin,
         "member" => switchboard_database::MemberRole::Member,
-        _ => return Err(GatewayError::InvalidRequest("Role must be 'owner', 'admin', or 'member'".to_string())),
+        _ => {
+            return Err(GatewayError::InvalidRequest(
+                "Role must be 'owner', 'admin', or 'member'".to_string(),
+            ))
+        }
     };
 
     // Additional checks: Only owners can promote others to owner, and owners cannot demote themselves
@@ -231,13 +245,15 @@ pub async fn update_member_role(
             .map_err(|e| GatewayError::AuthorizationFailed(format!("Access denied: {}", e)))?;
     }
 
-    if member.user_public_id == user_id.to_string() && new_role != switchboard_database::MemberRole::Owner {
-        return Err(GatewayError::InvalidRequest("You cannot demote yourself from owner role".to_string()));
+    if member.user_public_id == user_id.to_string()
+        && new_role != switchboard_database::MemberRole::Owner
+    {
+        return Err(GatewayError::InvalidRequest(
+            "You cannot demote yourself from owner role".to_string(),
+        ));
     }
 
-    let update_req = switchboard_database::UpdateMemberRoleRequest {
-        role: new_role,
-    };
+    let update_req = switchboard_database::UpdateMemberRoleRequest { role: new_role };
 
     let updated_member = state
         .member_service
@@ -287,12 +303,16 @@ pub async fn remove_member(
 
     // Verify member belongs to the specified chat
     if member.chat_public_id != chat_id {
-        return Err(GatewayError::NotFound("Member does not belong to specified chat".to_string()));
+        return Err(GatewayError::NotFound(
+            "Member does not belong to specified chat".to_string(),
+        ));
     }
 
     // Cannot remove the last owner
     if member.role == switchboard_database::MemberRole::Owner {
-        return Err(GatewayError::InvalidRequest("Cannot remove the last owner from the chat".to_string()));
+        return Err(GatewayError::InvalidRequest(
+            "Cannot remove the last owner from the chat".to_string(),
+        ));
     }
 
     // Users can remove themselves, or admins/owners can remove others
@@ -345,14 +365,23 @@ pub async fn leave_chat(
     // Get user's membership
     let members = state
         .member_service
-        .list_by_chat(&chat_id, Some(switchboard_database::MemberRole::Owner), None, None)
+        .list_by_chat(
+            &chat_id,
+            Some(switchboard_database::MemberRole::Owner),
+            None,
+            None,
+        )
         .await
         .map_err(|e| GatewayError::ServiceError(format!("Failed to check membership: {}", e)))?;
 
     // Check if user is the last owner
-    let is_owner = members.iter().any(|m| m.user_public_id == user_id.to_string() && m.role == switchboard_database::MemberRole::Owner);
+    let is_owner = members.iter().any(|m| {
+        m.user_public_id == user_id.to_string() && m.role == switchboard_database::MemberRole::Owner
+    });
     if is_owner && members.len() == 1 {
-        return Err(GatewayError::InvalidRequest("Cannot leave chat as the last owner".to_string()));
+        return Err(GatewayError::InvalidRequest(
+            "Cannot leave chat as the last owner".to_string(),
+        ));
     }
 
     state

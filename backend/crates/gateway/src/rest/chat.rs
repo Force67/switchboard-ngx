@@ -1,18 +1,17 @@
 //! Chat REST endpoints
 
 use axum::{
-    extract::{Path, Query, State, Request},
-    Json,
+    extract::{Path, Query, Request, State},
     response::IntoResponse,
-    Router,
+    Json, Router,
 };
 use serde::{Deserialize, Serialize};
-use utoipa::{IntoParams, ToSchema};
 use std::sync::Arc;
+use utoipa::{IntoParams, ToSchema};
 
-use crate::state::GatewayState;
 use crate::error::{GatewayError, GatewayResult};
 use crate::middleware::extract_user_id;
+use crate::state::GatewayState;
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct ChatResponse {
@@ -107,7 +106,7 @@ impl From<switchboard_database::Chat> for ChatResponse {
             member_count: chat.member_count,
             message_count: chat.message_count,
             last_message_at: chat.last_message_at,
-            members: vec![], // Will be populated by the service
+            members: vec![],  // Will be populated by the service
             messages: vec![], // Will be populated by the service
         }
     }
@@ -123,7 +122,12 @@ pub struct ErrorResponse {
 pub fn create_chat_routes() -> Router<Arc<GatewayState>> {
     Router::new()
         .route("/chats", axum::routing::get(list_chats).post(create_chat))
-        .route("/chats/:chat_id", axum::routing::get(get_chat).put(update_chat).delete(delete_chat))
+        .route(
+            "/chats/:chat_id",
+            axum::routing::get(get_chat)
+                .put(update_chat)
+                .delete(delete_chat),
+        )
 }
 
 #[utoipa::path(

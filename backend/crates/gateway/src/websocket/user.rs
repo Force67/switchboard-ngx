@@ -3,20 +3,19 @@
 use axum::{
     extract::{
         ws::{Message, WebSocket, WebSocketUpgrade},
-        State,
-        Query,
+        Query, State,
     },
-    response::{Response, IntoResponse},
+    response::{IntoResponse, Response},
 };
+use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{broadcast, RwLock};
 use uuid::Uuid;
-use futures_util::{StreamExt, SinkExt};
 
-use crate::state::GatewayState;
 use crate::error::GatewayError;
+use crate::state::GatewayState;
 
 /// WebSocket state for managing user connections and broadcasts
 #[derive(Clone)]
@@ -45,7 +44,11 @@ impl UserWebSocketState {
     }
 
     /// Broadcast an event to a specific user
-    pub async fn broadcast_to_user(&self, user_id: i64, event: &UserServerEvent) -> Result<(), GatewayError> {
+    pub async fn broadcast_to_user(
+        &self,
+        user_id: i64,
+        event: &UserServerEvent,
+    ) -> Result<(), GatewayError> {
         let broadcaster = self.get_user_broadcaster(user_id).await;
         let _ = broadcaster.send(event.clone());
         Ok(())
@@ -73,9 +76,7 @@ pub enum UserClientEvent {
         status: String, // "online", "away", "busy", "offline"
     },
     /// Get user profile
-    GetUserProfile {
-        user_id: String,
-    },
+    GetUserProfile { user_id: String },
     /// Update user profile
     UpdateUserProfile {
         display_name: Option<String>,
@@ -98,15 +99,11 @@ pub enum UserClientEvent {
         unread_only: Option<bool>,
     },
     /// Mark notification as read
-    MarkNotificationRead {
-        notification_id: String,
-    },
+    MarkNotificationRead { notification_id: String },
     /// Mark all notifications as read
     MarkAllNotificationsRead,
     /// Delete notification
-    DeleteNotification {
-        notification_id: String,
-    },
+    DeleteNotification { notification_id: String },
 }
 
 /// Server events sent to WebSocket clients
@@ -114,18 +111,11 @@ pub enum UserClientEvent {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum UserServerEvent {
     /// Welcome message after successful connection
-    Hello {
-        user_id: String,
-        message: String,
-    },
+    Hello { user_id: String, message: String },
     /// Subscription confirmation
-    Subscribed {
-        user_id: String,
-    },
+    Subscribed { user_id: String },
     /// Unsubscription confirmation
-    Unsubscribed {
-        user_id: String,
-    },
+    Unsubscribed { user_id: String },
     /// Heartbeat response
     Pong,
     /// Error response
@@ -135,13 +125,9 @@ pub enum UserServerEvent {
         request_id: Option<String>,
     },
     /// User profile data
-    UserProfile {
-        user: UserProfileResponse,
-    },
+    UserProfile { user: UserProfileResponse },
     /// User settings data
-    UserSettings {
-        settings: UserSettingsResponse,
-    },
+    UserSettings { settings: UserSettingsResponse },
     /// User notifications
     Notifications {
         notifications: Vec<NotificationResponse>,
@@ -149,9 +135,7 @@ pub enum UserServerEvent {
         unread_count: i64,
     },
     /// New notification
-    NewNotification {
-        notification: NotificationResponse,
-    },
+    NewNotification { notification: NotificationResponse },
     /// User presence update
     PresenceUpdate {
         user_id: String,
@@ -159,17 +143,11 @@ pub enum UserServerEvent {
         last_seen: String,
     },
     /// User updated their profile
-    UserUpdated {
-        user: UserProfileResponse,
-    },
+    UserUpdated { user: UserProfileResponse },
     /// User online status change
-    UserOnline {
-        user_id: String,
-    },
+    UserOnline { user_id: String },
     /// User offline status change
-    UserOffline {
-        user_id: String,
-    },
+    UserOffline { user_id: String },
 }
 
 /// User profile response
@@ -249,7 +227,9 @@ async fn authenticate_user(
     state: &Arc<GatewayState>,
     token: Option<String>,
 ) -> Result<(i64, switchboard_database::User), GatewayError> {
-    let token = token.ok_or(GatewayError::AuthenticationFailed("Missing token".to_string()))?;
+    let token = token.ok_or(GatewayError::AuthenticationFailed(
+        "Missing token".to_string(),
+    ))?;
 
     let session = state
         .session_service
@@ -299,7 +279,8 @@ async fn handle_user_websocket(
                 match msg {
                     Message::Text(text) => {
                         if let Ok(client_event) = serde_json::from_str::<UserClientEvent>(&text) {
-                            handle_user_client_event(client_event, &state_clone, user_id, &user).await;
+                            handle_user_client_event(client_event, &state_clone, user_id, &user)
+                                .await;
                         }
                     }
                     Message::Close(_) => {
@@ -363,7 +344,9 @@ async fn handle_user_client_event(
             };
             let _ = state.broadcast_to_user(user_id, &presence_event).await;
         }
-        UserClientEvent::GetUserProfile { user_id: target_user_id } => {
+        UserClientEvent::GetUserProfile {
+            user_id: target_user_id,
+        } => {
             // In a real implementation, fetch user profile
             if target_user_id == user.public_id {
                 let profile_response = UserProfileResponse {
@@ -388,7 +371,11 @@ async fn handle_user_client_event(
                 let _ = state.broadcast_to_user(user_id, &profile_event).await;
             }
         }
-        UserClientEvent::UpdateUserProfile { display_name, avatar_url, bio } => {
+        UserClientEvent::UpdateUserProfile {
+            display_name,
+            avatar_url,
+            bio,
+        } => {
             // In a real implementation, update user profile in database
             let updated_user = UserProfileResponse {
                 id: user.public_id.clone(),
@@ -406,9 +393,7 @@ async fn handle_user_client_event(
                 is_active: user.is_active,
             };
 
-            let update_event = UserServerEvent::UserUpdated {
-                user: updated_user,
-            };
+            let update_event = UserServerEvent::UserUpdated { user: updated_user };
             let _ = state.broadcast_to_user(user_id, &update_event).await;
         }
         UserClientEvent::GetUserSettings => {
@@ -427,7 +412,12 @@ async fn handle_user_client_event(
             };
             let _ = state.broadcast_to_user(user_id, &settings_event).await;
         }
-        UserClientEvent::UpdateUserSettings { theme, language, email_notifications, push_notifications } => {
+        UserClientEvent::UpdateUserSettings {
+            theme,
+            language,
+            email_notifications,
+            push_notifications,
+        } => {
             // In a real implementation, update user settings in database
             let settings_response = UserSettingsResponse {
                 theme: theme.unwrap_or("dark".to_string()),
@@ -443,7 +433,11 @@ async fn handle_user_client_event(
             };
             let _ = state.broadcast_to_user(user_id, &settings_event).await;
         }
-        UserClientEvent::GetNotifications { limit: _, offset: _, unread_only: _ } => {
+        UserClientEvent::GetNotifications {
+            limit: _,
+            offset: _,
+            unread_only: _,
+        } => {
             // In a real implementation, fetch notifications from database
             let notifications = vec![]; // Placeholder
             let notifications_event = UserServerEvent::Notifications {

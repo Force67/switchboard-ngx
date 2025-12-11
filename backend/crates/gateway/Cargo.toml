@@ -8,6 +8,8 @@ edition = "2021"
 switchboard-database = { path = "../database" }
 switchboard-users = { path = "../users" }
 switchboard-chats = { path = "../chats" }
+switchboard-auth = { path = "../auth" }
+switchboard-config = { path = "../config" }
 
 # Web framework
 axum = { workspace = true }

@@ -6,12 +6,12 @@ use axum::{
     middleware::Next,
     response::{IntoResponse, Response},
 };
-use tower_http::trace::{TraceLayer, DefaultMakeSpan, DefaultOnRequest, DefaultOnResponse};
-use tracing::Level;
 use std::sync::Arc;
+use tower_http::trace::{DefaultMakeSpan, DefaultOnRequest, DefaultOnResponse, TraceLayer};
+use tracing::Level;
 
-use crate::state::GatewayState;
 use crate::error::{GatewayError, GatewayResult};
+use crate::state::GatewayState;
 
 /// Authentication middleware that validates JWT tokens
 pub async fn auth_middleware(
@@ -33,33 +33,30 @@ pub async fn auth_middleware(
         });
 
     // Check for token in query parameters (for WebSocket connections)
-    let query_token = request
-        .uri()
-        .query()
-        .and_then(|query| {
-            urlencoding::decode(query).ok()
-                .and_then(|decoded| {
-                    decoded.split('&')
-                        .find_map(|pair| {
-                            let mut parts = pair.splitn(2, '=');
-                            match (parts.next(), parts.next()) {
-                                (Some("token"), Some(value)) => Some(value.to_string()),
-                                _ => None,
-                            }
-                        })
-                })
-        });
+    let query_token = request.uri().query().and_then(|query| {
+        urlencoding::decode(query).ok().and_then(|decoded| {
+            decoded.split('&').find_map(|pair| {
+                let mut parts = pair.splitn(2, '=');
+                match (parts.next(), parts.next()) {
+                    (Some("token"), Some(value)) => Some(value.to_string()),
+                    _ => None,
+                }
+            })
+        })
+    });
 
     let token = auth_header.or(query_token.as_deref());
 
     // For development endpoints, allow access without token
     if is_dev_endpoint(request.uri().path()) {
-        let Ok(user_id) = get_dev_user_id(&state).await else {
-            return Err(GatewayError::AuthenticationFailed("Failed to create dev user".to_string()));
+        let Ok((user_id, token)) = get_dev_user(&state).await else {
+            return Err(GatewayError::AuthenticationFailed(
+                "Failed to create dev user".to_string(),
+            ));
         };
 
-        // Add user ID to request extensions
         request.extensions_mut().insert(user_id);
+        request.extensions_mut().insert(token);
         return Ok(next.run(request).await);
     }
 
@@ -67,15 +64,14 @@ pub async fn auth_middleware(
         GatewayError::AuthenticationFailed("Missing authentication token".to_string())
     })?;
 
-    // Validate token
-    let session = state
-        .session_service()
-        .validate_session(token)
+    let (user, session) = state
+        .authenticator()
+        .authenticate_token(token)
         .await
         .map_err(|e| GatewayError::AuthenticationFailed(format!("Invalid token: {}", e)))?;
 
-    // Add user ID to request extensions
-    request.extensions_mut().insert(session.user_id);
+    request.extensions_mut().insert(user.id);
+    request.extensions_mut().insert(session.token.clone());
 
     Ok(next.run(request).await)
 }
@@ -86,15 +82,14 @@ fn is_dev_endpoint(path: &str) -> bool {
 }
 
 /// Get or create a development user for development endpoints
-async fn get_dev_user_id(state: &GatewayState) -> GatewayResult<i64> {
-    // Try to create a dev token, which will also create a dev user if needed
-    let (session, _user) = state
-        .session_service()
-        .create_dev_token()
+async fn get_dev_user(state: &GatewayState) -> GatewayResult<(i64, String)> {
+    let (session, user) = state
+        .authenticator()
+        .create_dev_session()
         .await
         .map_err(|e| GatewayError::InternalError(format!("Failed to create dev token: {}", e)))?;
 
-    Ok(session.user_id)
+    Ok((user.id, session.token))
 }
 
 /// Optional authentication middleware that allows unauthenticated access
@@ -118,8 +113,9 @@ pub async fn optional_auth_middleware(
         });
 
     if let Some(token) = auth_header {
-        if let Ok(session) = state.session_service().validate_session(token).await {
-            request.extensions_mut().insert(session.user_id);
+        if let Ok((user, session)) = state.authenticator().authenticate_token(token).await {
+            request.extensions_mut().insert(user.id);
+            request.extensions_mut().insert(session.token);
         }
     }
 
@@ -136,7 +132,9 @@ pub fn extract_user_id(request: &Request) -> GatewayResult<i64> {
 }
 
 /// Create tracing middleware
-pub fn create_trace_middleware() -> TraceLayer<tower_http::classify::SharedClassifier<tower_http::classify::ServerErrorsAsFailures>> {
+pub fn create_trace_middleware(
+) -> TraceLayer<tower_http::classify::SharedClassifier<tower_http::classify::ServerErrorsAsFailures>>
+{
     TraceLayer::new_for_http()
         .make_span_with(DefaultMakeSpan::new().level(Level::INFO))
         .on_request(DefaultOnRequest::new().level(Level::INFO))
@@ -167,10 +165,7 @@ pub async fn logging_middleware(
 }
 
 /// Rate limiting middleware (placeholder implementation)
-pub async fn rate_limit_middleware(
-    request: Request,
-    next: Next,
-) -> Result<Response, GatewayError> {
+pub async fn rate_limit_middleware(request: Request, next: Next) -> Result<Response, GatewayError> {
     // TODO: Implement proper rate limiting using something like redis or in-memory storage
     // For now, just pass through
     Ok(next.run(request).await)

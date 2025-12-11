@@ -1,11 +1,17 @@
 //! Shared application state for the gateway
 
-use std::sync::Arc;
-use sqlx::SqlitePool;
-use switchboard_users::{UserService, AuthService, SessionService};
-use switchboard_chats::{ChatService, MessageService, MemberService, InviteService, AttachmentService};
-use switchboard_database::{ChatRepository, MessageRepository, MemberRepository, InviteRepository, AttachmentRepository};
 use crate::error::{GatewayError, GatewayResult};
+use sqlx::SqlitePool;
+use std::sync::Arc;
+use switchboard_auth::Authenticator;
+use switchboard_chats::{
+    AttachmentService, ChatService, InviteService, MemberService, MessageService,
+};
+use switchboard_config::AuthConfig;
+use switchboard_database::{
+    AttachmentRepository, ChatRepository, InviteRepository, MemberRepository, MessageRepository,
+};
+use switchboard_users::{AuthService, SessionService, UserService};
 
 /// JWT configuration
 #[derive(Debug, Clone)]
@@ -32,6 +38,8 @@ pub struct GatewayState {
     pub pool: SqlitePool,
     /// JWT configuration
     pub jwt_config: JwtConfig,
+    /// Authenticator for session/token handling
+    pub authenticator: Arc<Authenticator>,
     /// User service
     pub user_service: Arc<UserService<switchboard_database::UserRepository>>,
     /// Authentication service
@@ -52,7 +60,7 @@ pub struct GatewayState {
 
 impl GatewayState {
     /// Create a new gateway state with all services initialized
-    pub fn new(pool: SqlitePool, jwt_config: JwtConfig) -> Self {
+    pub fn new(pool: SqlitePool, authenticator: Arc<Authenticator>, jwt_config: JwtConfig) -> Self {
         // Initialize user services
         let user_service = Arc::new(UserService::new(pool.clone()));
         let auth_service = Arc::new(AuthService::new(pool.clone()));
@@ -68,6 +76,7 @@ impl GatewayState {
         Self {
             pool,
             jwt_config,
+            authenticator,
             user_service,
             auth_service,
             session_service,
@@ -80,17 +89,27 @@ impl GatewayState {
     }
 
     /// Create gateway state from database URL
-    pub async fn from_database_url(database_url: &str, jwt_config: JwtConfig) -> GatewayResult<Self> {
-        let pool = SqlitePool::connect(database_url)
-            .await
-            .map_err(|e| GatewayError::DatabaseError(format!("Failed to connect to database: {}", e)))?;
+    pub async fn from_database_url(
+        database_url: &str,
+        jwt_config: JwtConfig,
+    ) -> GatewayResult<Self> {
+        let pool = SqlitePool::connect(database_url).await.map_err(|e| {
+            GatewayError::DatabaseError(format!("Failed to connect to database: {}", e))
+        })?;
 
-        Ok(Self::new(pool, jwt_config))
+        let authenticator = Arc::new(Authenticator::new(pool.clone(), AuthConfig::default()));
+
+        Ok(Self::new(pool, authenticator, jwt_config))
     }
 
     /// Get a user service reference
     pub fn user_service(&self) -> &UserService<switchboard_database::UserRepository> {
         &self.user_service
+    }
+
+    /// Get authenticator reference
+    pub fn authenticator(&self) -> &Authenticator {
+        &self.authenticator
     }
 
     /// Get an auth service reference

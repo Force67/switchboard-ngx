@@ -80,7 +80,10 @@ impl From<switchboard_auth::User> for UserResponse {
 pub fn create_auth_routes() -> Router<Arc<GatewayState>> {
     Router::new()
         .route("/auth/github/login", axum::routing::get(github_login))
-        .route("/auth/github/callback", axum::routing::post(github_callback))
+        .route(
+            "/auth/github/callback",
+            axum::routing::post(github_callback),
+        )
         .route("/auth/logout", axum::routing::post(logout))
         .route("/auth/me", axum::routing::get(me))
         // Development endpoint (no auth required)

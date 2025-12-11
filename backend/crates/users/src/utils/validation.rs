@@ -169,6 +169,8 @@ pub fn is_safe_content(content: &str) -> bool {
 mod tests {
     use super::*;
 
+    const LOCALHOST_TEST_URL: &str = "http://localhost:3000";
+
     #[test]
     fn test_email_validation() {
         assert!(validate_email("test@example.com").is_ok());
@@ -218,7 +220,7 @@ mod tests {
     #[test]
     fn test_url_validation() {
         assert!(validate_url("https://example.com").is_ok());
-        assert!(validate_url("http://localhost:3000").is_ok());
+        assert!(validate_url(LOCALHOST_TEST_URL).is_ok());
         assert!(validate_url("").is_ok()); // Empty allowed
 
         assert!(validate_url("not-a-url").is_err());

@@ -60,7 +60,8 @@ pub struct OrchestratorConfig {
 impl Default for OrchestratorConfig {
     fn default() -> Self {
         Self {
-            default_model: "gpt-4.1".to_string(),
+            // Use a widely available OpenRouter model by default to reduce boot-time errors.
+            default_model: "gpt-4o-mini".to_string(),
             provider_search_path: vec!["providers".to_string()],
             openrouter: OpenRouterProviderConfig::default(),
         }

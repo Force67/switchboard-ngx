@@ -226,6 +226,8 @@ impl Validator {
 mod tests {
     use super::*;
 
+    const LOCALHOST_TEST_URL: &str = "http://localhost:3000";
+
     #[test]
     fn test_validator_email() {
         assert!(Validator::email("test@example.com").is_ok());
@@ -311,7 +313,7 @@ mod tests {
     #[test]
     fn test_validator_url() {
         assert!(Validator::url("https://example.com").is_ok());
-        assert!(Validator::url("http://localhost:3000").is_ok());
+        assert!(Validator::url(LOCALHOST_TEST_URL).is_ok());
         assert!(Validator::url("ftp://example.com").is_err());
         assert!(Validator::url("example.com").is_err());
         assert!(Validator::url("").is_err());

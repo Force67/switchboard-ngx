@@ -1,15 +1,23 @@
-use axum::{extract::State, Json};
+use axum::{extract::State, routing::get, Json, Router};
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
-use switchboard_orchestrator::OpenRouterModelSummary;
+use std::sync::Arc;
+use switchboard_orchestrator::{ModelPricing as OrchestratorModelPricing, OpenRouterModelSummary};
 use utoipa::ToSchema;
 
-use crate::{ApiError, AppState};
+use crate::error::GatewayResult;
+use crate::state::GatewayState;
+use tracing::warn;
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct ModelsResponse {
     #[schema(value_type = Vec<ModelSummary>)]
     pub models: Vec<OpenRouterModelSummary>,
+}
+
+/// Routes for model metadata
+pub fn create_models_routes() -> Router<Arc<GatewayState>> {
+    Router::new().route("/models", get(list_models))
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -356,7 +364,86 @@ pub struct MessagesResponse {
         (status = 500, description = "Failed to list models", body = crate::error::ErrorResponse)
     )
 )]
-pub async fn list_models(State(state): State<AppState>) -> Result<Json<ModelsResponse>, ApiError> {
-    let models = state.orchestrator().list_openrouter_models().await?;
+pub async fn list_models(
+    State(state): State<Arc<GatewayState>>,
+) -> GatewayResult<Json<ModelsResponse>> {
+    let models = if let Some(orchestrator) = state.orchestrator() {
+        match orchestrator.list_openrouter_models().await {
+            Ok(models) if !models.is_empty() => models,
+            Ok(_) => {
+                warn!("orchestrator returned no models, using fallback catalogue");
+                fallback_models()
+            }
+            Err(error) => {
+                warn!(
+                    ?error,
+                    "failed to load models from orchestrator, using fallback catalogue"
+                );
+                fallback_models()
+            }
+        }
+    } else {
+        warn!("orchestrator unavailable, using fallback catalogue");
+        fallback_models()
+    };
+
     Ok(Json(ModelsResponse { models }))
+}
+
+fn fallback_models() -> Vec<OpenRouterModelSummary> {
+    vec![
+        OpenRouterModelSummary {
+            id: "debug/echo".to_string(),
+            label: "Debug Echo (offline)".to_string(),
+            description: Some("Returns a deterministic fallback response without calling a provider.".to_string()),
+            pricing: None,
+            supports_reasoning: false,
+            supports_images: false,
+            supports_tools: false,
+            supports_agents: false,
+            supports_function_calling: false,
+            supports_vision: false,
+            supports_tool_use: false,
+            supports_structured_outputs: false,
+            supports_streaming: false,
+        },
+        OpenRouterModelSummary {
+            id: "gpt-4o-mini".to_string(),
+            label: "GPT-4o Mini".to_string(),
+            description: Some(
+                "Fast, low-cost model suitable for development and smoke tests".to_string(),
+            ),
+            pricing: Some(OrchestratorModelPricing {
+                input: Some(0.15),
+                output: Some(0.6),
+            }),
+            supports_reasoning: false,
+            supports_images: true,
+            supports_tools: true,
+            supports_agents: false,
+            supports_function_calling: true,
+            supports_vision: true,
+            supports_tool_use: true,
+            supports_structured_outputs: false,
+            supports_streaming: true,
+        },
+        OpenRouterModelSummary {
+            id: "gpt-3.5-turbo".to_string(),
+            label: "GPT-3.5 Turbo".to_string(),
+            description: Some("Legacy baseline model".to_string()),
+            pricing: Some(OrchestratorModelPricing {
+                input: Some(0.5),
+                output: Some(1.5),
+            }),
+            supports_reasoning: false,
+            supports_images: false,
+            supports_tools: true,
+            supports_agents: false,
+            supports_function_calling: true,
+            supports_vision: false,
+            supports_tool_use: true,
+            supports_structured_outputs: false,
+            supports_streaming: true,
+        },
+    ]
 }

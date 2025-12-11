@@ -1,7 +1,7 @@
 //! Chat REST endpoints
 
 use axum::{
-    extract::{Path, Query, Request, State},
+    extract::{Extension, Path, Query, State},
     response::IntoResponse,
     Json, Router,
 };
@@ -10,24 +10,29 @@ use std::sync::Arc;
 use utoipa::{IntoParams, ToSchema};
 
 use crate::error::{GatewayError, GatewayResult};
-use crate::middleware::extract_user_id;
 use crate::state::GatewayState;
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct ChatResponse {
-    pub id: String,
+    pub id: i64,
+    pub public_id: String,
+    pub user_id: i64,
     pub title: String,
     pub description: Option<String>,
     pub avatar_url: Option<String>,
     pub folder_id: Option<String>,
+    #[serde(default)]
+    pub is_group: bool,
+    #[serde(default)]
+    pub messages: Option<String>,
     pub created_by: String,
     pub created_at: String,
     pub updated_at: String,
     pub member_count: i64,
     pub message_count: i64,
     pub last_message_at: Option<String>,
+    #[serde(default)]
     pub members: Vec<ChatMemberResponse>,
-    pub messages: Vec<MessageResponse>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -74,6 +79,8 @@ pub struct CreateChatRequest {
     pub description: Option<String>,
     pub avatar_url: Option<String>,
     pub folder_id: Option<String>,
+    #[serde(default)]
+    pub is_group: bool,
     pub initial_message: Option<String>,
 }
 
@@ -95,19 +102,22 @@ pub struct ListChatsQuery {
 impl From<switchboard_database::Chat> for ChatResponse {
     fn from(chat: switchboard_database::Chat) -> Self {
         Self {
-            id: chat.public_id,
+            id: chat.id,
+            public_id: chat.public_id.clone(),
+            user_id: chat.created_by.parse().unwrap_or(0),
             title: chat.title,
             description: chat.description,
             avatar_url: chat.avatar_url,
             folder_id: chat.folder_id,
+            is_group: matches!(chat.chat_type, switchboard_database::ChatType::Group),
+            messages: Some("[]".to_string()),
             created_by: chat.created_by,
             created_at: chat.created_at,
             updated_at: chat.updated_at,
             member_count: chat.member_count,
             message_count: chat.message_count,
             last_message_at: chat.last_message_at,
-            members: vec![],  // Will be populated by the service
-            messages: vec![], // Will be populated by the service
+            members: vec![],
         }
     }
 }
@@ -144,10 +154,8 @@ pub fn create_chat_routes() -> Router<Arc<GatewayState>> {
 pub async fn list_chats(
     Query(params): Query<ListChatsQuery>,
     State(state): State<Arc<GatewayState>>,
-    request: Request,
+    Extension(user_id): Extension<i64>,
 ) -> GatewayResult<Json<Vec<ChatResponse>>> {
-    let user_id = extract_user_id(&request)?;
-
     let chats = state
         .chat_service
         .list_user_chats(user_id, params.folder_id)
@@ -173,17 +181,21 @@ pub async fn list_chats(
 #[axum::debug_handler]
 pub async fn create_chat(
     State(state): State<Arc<GatewayState>>,
+    Extension(user_id): Extension<i64>,
     Json(payload): Json<CreateChatRequest>,
 ) -> GatewayResult<impl IntoResponse> {
-    // For now, use a placeholder user_id since we can't extract it without Request
-    let user_id = 1; // TODO: Fix authentication
+    let chat_type = if payload.is_group {
+        switchboard_database::ChatType::Group
+    } else {
+        switchboard_database::ChatType::Direct
+    };
 
     let create_req = switchboard_database::CreateChatRequest {
         title: payload.title,
         description: payload.description,
         avatar_url: payload.avatar_url,
         folder_id: payload.folder_id,
-        chat_type: switchboard_database::ChatType::Group, // Default to group chat
+        chat_type,
         created_by: user_id.to_string(),
     };
 
@@ -215,10 +227,8 @@ pub async fn create_chat(
 pub async fn get_chat(
     Path(chat_id): Path<String>,
     State(state): State<Arc<GatewayState>>,
-    request: Request,
+    Extension(user_id): Extension<i64>,
 ) -> GatewayResult<Json<ChatResponse>> {
-    let user_id = extract_user_id(&request)?;
-
     let chat = state
         .chat_service
         .get_by_public_id(&chat_id)
@@ -256,25 +266,9 @@ pub async fn get_chat(
 pub async fn update_chat(
     Path(chat_id): Path<String>,
     State(state): State<Arc<GatewayState>>,
+    Extension(user_id): Extension<i64>,
     Json(payload): Json<UpdateChatRequest>,
 ) -> GatewayResult<Json<ChatResponse>> {
-    // For now, use a placeholder user_id since we can't extract it without Request
-    let user_id = 1; // TODO: Fix authentication
-
-    let chat = state
-        .chat_service
-        .get_by_public_id(&chat_id)
-        .await
-        .map_err(|e| GatewayError::ServiceError(format!("Failed to get chat: {}", e)))?
-        .ok_or(GatewayError::NotFound("Chat not found".to_string()))?;
-
-    // Check if user is owner or admin
-    state
-        .chat_service
-        .check_role(chat.id, user_id, switchboard_database::MemberRole::Admin)
-        .await
-        .map_err(|e| GatewayError::AuthorizationFailed(format!("Access denied: {}", e)))?;
-
     let update_req = switchboard_database::UpdateChatRequest {
         title: payload.title,
         description: payload.description,
@@ -285,9 +279,10 @@ pub async fn update_chat(
 
     let updated_chat = state
         .chat_service
-        .update(chat.id, &update_req)
+        .update_chat(&chat_id, user_id, update_req)
         .await
-        .map_err(|e| GatewayError::ServiceError(format!("Failed to update chat: {}", e)))?;
+        .map_err(|e| GatewayError::ServiceError(format!("Failed to update chat: {}", e)))?
+        .0;
 
     Ok(Json(ChatResponse::from(updated_chat)))
 }
@@ -310,16 +305,20 @@ pub async fn update_chat(
 pub async fn delete_chat(
     Path(chat_id): Path<String>,
     State(state): State<Arc<GatewayState>>,
-    request: Request,
+    Extension(user_id): Extension<i64>,
 ) -> GatewayResult<impl IntoResponse> {
-    let user_id = extract_user_id(&request)?;
-
     let chat = state
         .chat_service
         .get_by_public_id(&chat_id)
         .await
         .map_err(|e| GatewayError::ServiceError(format!("Failed to get chat: {}", e)))?
         .ok_or(GatewayError::NotFound("Chat not found".to_string()))?;
+
+    if chat.created_by != user_id.to_string() {
+        return Err(GatewayError::AuthorizationFailed(
+            "Access denied: only chat creators can delete chats".to_string(),
+        ));
+    }
 
     // Check if user is owner
     state

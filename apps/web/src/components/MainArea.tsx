@@ -56,6 +56,7 @@ interface Props {
 
 export default function MainArea(props: Props) {
   const [showGroupManager, setShowGroupManager] = createSignal(false);
+  const sessionUserId = createMemo(() => props.session()?.user.id);
 
   const convertedModels = createMemo((): ModelMeta[] => {
     return props.models().map(model => ({
@@ -190,11 +191,15 @@ export default function MainArea(props: Props) {
         </Show>
                   <For each={props.currentMessages()}>
           {(message, i) => {
-            const isCurrentUser = message.user_id === 1; // Assuming user_id 1 is current user
+            const isCurrentUser = () => {
+              const sessionId = sessionUserId();
+              if (!sessionId || message.user_id == null) return false;
+              return String(message.user_id) === String(sessionId);
+            };
             const modelInfo = () => props.models().find(m => m.id === message.model);
             const modelLabel = modelInfo()?.label || message.model || "Assistant";
             const displayName = message.role === 'user'
-              ? (isCurrentUser ? 'You' : `User ${message.user_id}`)
+              ? (isCurrentUser() ? 'You' : `User ${message.user_id ?? "?"}`)
               : `Assistant (${modelLabel})`;
             const isPendingMessage = message.pending === true;
 

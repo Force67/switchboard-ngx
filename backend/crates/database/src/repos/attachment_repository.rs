@@ -339,16 +339,72 @@ mod tests {
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 public_id TEXT NOT NULL UNIQUE,
                 message_id INTEGER NOT NULL,
-                filename TEXT NOT NULL,
-                content_type TEXT NOT NULL,
+                file_name TEXT NOT NULL,
+                file_type TEXT NOT NULL,
                 file_size INTEGER NOT NULL,
-                file_path TEXT NOT NULL,
-                created_at TEXT NOT NULL
+                file_url TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                uploader_id INTEGER NOT NULL
             )",
         )
         .execute(&pool)
         .await
         .unwrap();
+
+        sqlx::query(
+            "CREATE TABLE messages (
+                id INTEGER PRIMARY KEY,
+                public_id TEXT NOT NULL,
+                chat_id INTEGER NOT NULL
+            )",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        sqlx::query(
+            "CREATE TABLE chats (
+                id INTEGER PRIMARY KEY,
+                public_id TEXT NOT NULL
+            )",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        sqlx::query(
+            "CREATE TABLE users (
+                id INTEGER PRIMARY KEY,
+                public_id TEXT NOT NULL,
+                display_name TEXT,
+                avatar_url TEXT
+            )",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        sqlx::query("INSERT INTO chats (id, public_id) VALUES (?, ?)")
+            .bind(1)
+            .bind("chat-1")
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        sqlx::query("INSERT INTO messages (id, public_id, chat_id) VALUES (?, ?, ?)")
+            .bind(1)
+            .bind("message-1")
+            .bind(1)
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        sqlx::query("INSERT INTO users (id, public_id) VALUES (?, ?)")
+            .bind(1)
+            .bind("user-1")
+            .execute(&pool)
+            .await
+            .unwrap();
 
         (pool, temp_dir)
     }
@@ -360,17 +416,20 @@ mod tests {
 
         let request = CreateAttachmentRequest {
             message_id: 1,
-            filename: "test.txt".to_string(),
-            content_type: "text/plain".to_string(),
+            message_public_id: "message-1".to_string(),
+            uploader_id: 1,
+            uploader_public_id: "user-1".to_string(),
+            file_name: "test.txt".to_string(),
+            file_type: AttachmentType::Document,
             file_size: 1024,
-            file_path: "/uploads/test.txt".to_string(),
+            file_url: "/uploads/test.txt".to_string(),
         };
 
         let attachment = repo.create(&request).await.unwrap();
         assert!(attachment.id > 0);
         assert_eq!(attachment.message_id, 1);
-        assert_eq!(attachment.filename, "test.txt");
-        assert_eq!(attachment.content_type, "text/plain");
+        assert_eq!(attachment.file_name, "test.txt");
+        assert_eq!(attachment.file_type, AttachmentType::Document);
         assert_eq!(attachment.file_size, 1024);
     }
 
@@ -381,17 +440,20 @@ mod tests {
 
         let request = CreateAttachmentRequest {
             message_id: 1,
-            filename: "test.txt".to_string(),
-            content_type: "text/plain".to_string(),
+            message_public_id: "message-1".to_string(),
+            uploader_id: 1,
+            uploader_public_id: "user-1".to_string(),
+            file_name: "test.txt".to_string(),
+            file_type: AttachmentType::Document,
             file_size: 1024,
-            file_path: "/uploads/test.txt".to_string(),
+            file_url: "/uploads/test.txt".to_string(),
         };
 
         repo.create(&request).await.unwrap();
 
         let attachments = repo.find_by_message_id(1).await.unwrap();
         assert_eq!(attachments.len(), 1);
-        assert_eq!(attachments[0].filename, "test.txt");
+        assert_eq!(attachments[0].file_name, "test.txt");
     }
 
     #[tokio::test]
@@ -401,10 +463,13 @@ mod tests {
 
         let request = CreateAttachmentRequest {
             message_id: 1,
-            filename: "test.txt".to_string(),
-            content_type: "text/plain".to_string(),
+            message_public_id: "message-1".to_string(),
+            uploader_id: 1,
+            uploader_public_id: "user-1".to_string(),
+            file_name: "test.txt".to_string(),
+            file_type: AttachmentType::Document,
             file_size: 1024,
-            file_path: "/uploads/test.txt".to_string(),
+            file_url: "/uploads/test.txt".to_string(),
         };
 
         let created = repo.create(&request).await.unwrap();
@@ -423,10 +488,13 @@ mod tests {
 
         let request = CreateAttachmentRequest {
             message_id: 1,
-            filename: "test.txt".to_string(),
-            content_type: "text/plain".to_string(),
+            message_public_id: "message-1".to_string(),
+            uploader_id: 1,
+            uploader_public_id: "user-1".to_string(),
+            file_name: "test.txt".to_string(),
+            file_type: AttachmentType::Document,
             file_size: 1024,
-            file_path: "/uploads/test.txt".to_string(),
+            file_url: "/uploads/test.txt".to_string(),
         };
 
         let created = repo.create(&request).await.unwrap();
@@ -443,18 +511,24 @@ mod tests {
 
         let request1 = CreateAttachmentRequest {
             message_id: 1,
-            filename: "test1.txt".to_string(),
-            content_type: "text/plain".to_string(),
+            message_public_id: "message-1".to_string(),
+            uploader_id: 1,
+            uploader_public_id: "user-1".to_string(),
+            file_name: "test1.txt".to_string(),
+            file_type: AttachmentType::Document,
             file_size: 1024,
-            file_path: "/uploads/test1.txt".to_string(),
+            file_url: "/uploads/test1.txt".to_string(),
         };
 
         let request2 = CreateAttachmentRequest {
             message_id: 1,
-            filename: "test2.txt".to_string(),
-            content_type: "text/plain".to_string(),
+            message_public_id: "message-1".to_string(),
+            uploader_id: 1,
+            uploader_public_id: "user-1".to_string(),
+            file_name: "test2.txt".to_string(),
+            file_type: AttachmentType::Document,
             file_size: 2048,
-            file_path: "/uploads/test2.txt".to_string(),
+            file_url: "/uploads/test2.txt".to_string(),
         };
 
         repo.create(&request1).await.unwrap();

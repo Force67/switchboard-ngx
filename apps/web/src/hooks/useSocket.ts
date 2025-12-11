@@ -1,6 +1,5 @@
 import { createSignal, createEffect, onCleanup } from "solid-js";
-
-const WS_BASE = import.meta.env.VITE_WS_BASE ?? (typeof window !== 'undefined' ? `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}` : "ws://localhost:7070");
+import { WS_BASE, WS_PATH } from "../config";
 
 type ConnectionStatus = "connecting" | "connected" | "disconnected" | "error";
 
@@ -73,7 +72,8 @@ export function useSocket(token?: () => string | null) {
     setState(prev => ({ ...prev, status: "connecting", error: null }));
 
     try {
-      const wsUrl = `${WS_BASE}/ws?token=${encodeURIComponent(resolvedToken)}`;
+      const base = WS_BASE.endsWith("/") ? WS_BASE.slice(0, -1) : WS_BASE;
+      const wsUrl = `${base}${WS_PATH}?token=${encodeURIComponent(resolvedToken)}`;
 
       console.log('WebSocket connecting to:', wsUrl);
       console.log('Token present:', !!resolvedToken);

@@ -2,120 +2,75 @@
 
 #[cfg(test)]
 mod tests {
-    #[tokio::test]
-    async fn test_crate_basic_functionality() {
-        // Basic test to ensure the crate compiles and loads correctly
-        // This will be expanded as we implement the actual functionality
+    use switchboard_chats::{
+        utils::{MemberAction, PermissionChecker, Validator},
+        ChatError, ChatMember, InviteStatus, MemberRole, MessageStatus,
+    };
+    use switchboard_database::MessageType;
 
-        // Test entity creation
-        let chat = switchboard_chats::Chat::new(
-            "Test Chat".to_string(),
-            switchboard_chats::ChatType::Direct,
-            Some(1),
-            None,
-        );
-
-        assert_eq!(chat.title, "Test Chat");
-        assert_eq!(chat.chat_type, switchboard_chats::ChatType::Direct);
-
-        // Test validation
-        assert!(chat.validate().is_ok());
-
-        // Test message creation
-        let message = switchboard_chats::ChatMessage::new(
-            1,
-            1,
-            "Hello, world!".to_string(),
-            switchboard_chats::entities::MessageRole::User,
-            None,
-        );
-
-        assert_eq!(message.content, "Hello, world!");
-        assert_eq!(message.role, switchboard_chats::entities::MessageRole::User);
-
-        // Test attachment creation
-        let attachment = switchboard_chats::MessageAttachment::new(
-            1,
-            "test.jpg".to_string(),
-            "image/jpeg".to_string(),
-            1024,
-            "https://example.com/test.jpg".to_string(),
-        );
-
-        assert_eq!(attachment.file_name, "test.jpg");
-        assert!(attachment.is_image());
-
-        // Test member creation
-        let member = switchboard_chats::ChatMember::new(
-            1,
-            1,
-            switchboard_chats::entities::MemberRole::Owner,
-        );
-
-        assert!(member.is_owner());
-        assert!(member.can_delete_chat());
-
-        // Test invite creation
-        let invite = switchboard_chats::ChatInvite::new(
-            1,
-            1,
-            Some(2),
-            Some("user@example.com".to_string()),
-            "member".to_string(),
-            Some("Join our chat!".to_string()),
-            24,
-        );
-
-        assert!(invite.is_valid());
-        assert!(invite.is_user_specific());
+    fn member(chat_id: i64, user_id: i64, role: MemberRole) -> ChatMember {
+        ChatMember {
+            id: user_id,
+            public_id: format!("member-{user_id}"),
+            chat_id,
+            chat_public_id: format!("chat-{chat_id}"),
+            user_id,
+            user_public_id: format!("user-{user_id}"),
+            role,
+            joined_at: "2024-01-01T00:00:00Z".to_string(),
+            user_display_name: None,
+            user_avatar_url: None,
+            user_email: None,
+        }
     }
 
-    #[tokio::test]
-    async fn test_error_handling() {
-        use switchboard_chats::{utils::Validator, ChatError};
+    #[test]
+    fn test_validation_and_types() {
+        assert!(Validator::email("user@example.com").is_ok());
+        assert!(Validator::chat_title("Test Chat").is_ok());
+        assert!(Validator::uuid("550e8400-e29b-41d4-a716-446655440000").is_ok());
 
-        // Test validation errors
-        assert!(Validator::email("invalid-email").is_err());
-        assert!(Validator::chat_title("").is_err());
-        assert!(Validator::uuid("invalid-uuid").is_err());
-
-        // Test error creation
-        let error = ChatError::chat_not_found("test-id");
-        assert!(matches!(error, ChatError::ChatNotFound { .. }));
-
-        let validation_error = ChatError::validation("Test validation error");
-        assert!(matches!(validation_error, ChatError::Validation { .. }));
+        // Enum conversions should stay stable
+        assert_eq!(MessageType::from("image"), MessageType::Image);
+        assert_eq!(MessageStatus::from("read"), MessageStatus::Read);
+        assert_eq!(InviteStatus::from("expired"), InviteStatus::Expired);
     }
 
-    #[tokio::test]
-    async fn test_permission_system() {
-        use switchboard_chats::utils::{MemberAction, PermissionChecker};
+    #[test]
+    fn test_error_variants() {
+        let error = ChatError::ChatNotFound;
+        assert!(matches!(error, ChatError::ChatNotFound));
 
-        let owner = switchboard_chats::ChatMember::new(
-            1,
-            1,
-            switchboard_chats::entities::MemberRole::Owner,
-        );
+        let db_error = ChatError::DatabaseError("boom".into());
+        assert!(matches!(db_error, ChatError::DatabaseError(_)));
+    }
 
-        let member = switchboard_chats::ChatMember::new(
-            1,
-            2,
-            switchboard_chats::entities::MemberRole::Member,
-        );
+    #[test]
+    fn test_permission_system() {
+        let owner = member(1, 1, MemberRole::Owner);
+        let admin = member(1, 2, MemberRole::Admin);
+        let regular = member(1, 3, MemberRole::Member);
 
-        // Test permission checks
+        // Delete
         assert!(PermissionChecker::can_delete_chat(&owner).is_ok());
-        assert!(PermissionChecker::can_delete_chat(&member).is_err());
+        assert!(PermissionChecker::can_delete_chat(&admin).is_err());
+        assert!(PermissionChecker::can_delete_chat(&regular).is_err());
 
+        // Manage members
         assert!(PermissionChecker::can_manage_members(&owner).is_ok());
-        assert!(PermissionChecker::can_manage_members(&member).is_err());
+        assert!(PermissionChecker::can_manage_members(&admin).is_ok());
+        assert!(PermissionChecker::can_manage_members(&regular).is_err());
 
-        // Test member management permissions
+        // Manage a specific member
         assert!(
-            PermissionChecker::can_manage_member(&owner, &member, MemberAction::Remove).is_ok()
+            PermissionChecker::can_manage_member(&owner, &regular, MemberAction::Remove).is_ok()
         );
         assert!(
-            PermissionChecker::can_manage_member(&member, &owner, MemberAction::Remove).is_err()
+            PermissionChecker::can_manage_member(&admin, &regular, MemberAction::UpdateRole)
+                .is_ok()
+        );
+        assert!(
+            PermissionChecker::can_manage_member(&admin, &owner, MemberAction::Remove).is_err()
         );
     }
 }

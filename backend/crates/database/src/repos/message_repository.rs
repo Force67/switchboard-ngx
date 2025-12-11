@@ -541,16 +541,57 @@ mod tests {
                 public_id TEXT NOT NULL UNIQUE,
                 chat_id INTEGER NOT NULL,
                 sender_id INTEGER NOT NULL,
-                content TEXT NOT NULL,
+                content TEXT,
                 message_type TEXT NOT NULL,
                 status TEXT NOT NULL,
                 created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL
+                updated_at TEXT,
+                deleted_at TEXT,
+                reply_to_id INTEGER,
+                reply_to_public_id TEXT,
+                thread_id INTEGER,
+                thread_public_id TEXT
             )",
         )
         .execute(&pool)
         .await
         .unwrap();
+
+        sqlx::query(
+            "CREATE TABLE users (
+                id INTEGER PRIMARY KEY,
+                public_id TEXT NOT NULL,
+                display_name TEXT,
+                avatar_url TEXT
+            )",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        sqlx::query(
+            "CREATE TABLE chats (
+                id INTEGER PRIMARY KEY,
+                public_id TEXT NOT NULL
+            )",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        sqlx::query("INSERT INTO users (id, public_id) VALUES (?, ?)")
+            .bind(1)
+            .bind("user-1")
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        sqlx::query("INSERT INTO chats (id, public_id) VALUES (?, ?)")
+            .bind(1)
+            .bind("chat-1")
+            .execute(&pool)
+            .await
+            .unwrap();
 
         (pool, temp_dir)
     }
@@ -562,15 +603,20 @@ mod tests {
 
         let request = CreateMessageRequest {
             chat_id: 1,
-            content: "Hello, world!".to_string(),
-            message_type: None,
+            chat_public_id: "chat-1".to_string(),
+            sender_id: 1,
+            sender_public_id: "user-1".to_string(),
+            content: Some("Hello, world!".to_string()),
+            message_type: MessageType::Text,
+            reply_to_public_id: None,
+            thread_public_id: None,
         };
 
         let message = repo.create(1, &request).await.unwrap();
         assert!(message.id > 0);
         assert_eq!(message.chat_id, 1);
         assert_eq!(message.sender_id, 1);
-        assert_eq!(message.content, "Hello, world!");
+        assert_eq!(message.content.as_deref(), Some("Hello, world!"));
         assert_eq!(message.status, MessageStatus::Sent);
     }
 
@@ -581,15 +627,20 @@ mod tests {
 
         let request = CreateMessageRequest {
             chat_id: 1,
-            content: "Test message".to_string(),
-            message_type: None,
+            chat_public_id: "chat-1".to_string(),
+            sender_id: 1,
+            sender_public_id: "user-1".to_string(),
+            content: Some("Test message".to_string()),
+            message_type: MessageType::Text,
+            reply_to_public_id: None,
+            thread_public_id: None,
         };
 
         repo.create(1, &request).await.unwrap();
 
         let messages = repo.find_by_chat_id(1, None, None).await.unwrap();
         assert_eq!(messages.len(), 1);
-        assert_eq!(messages[0].content, "Test message");
+        assert_eq!(messages[0].content.as_deref(), Some("Test message"));
     }
 
     #[tokio::test]
@@ -599,8 +650,13 @@ mod tests {
 
         let request = CreateMessageRequest {
             chat_id: 1,
-            content: "Test message".to_string(),
-            message_type: None,
+            chat_public_id: "chat-1".to_string(),
+            sender_id: 1,
+            sender_public_id: "user-1".to_string(),
+            content: Some("Test message".to_string()),
+            message_type: MessageType::Text,
+            reply_to_public_id: None,
+            thread_public_id: None,
         };
 
         let created = repo.create(1, &request).await.unwrap();
@@ -619,8 +675,13 @@ mod tests {
 
         let create_request = CreateMessageRequest {
             chat_id: 1,
-            content: "Original content".to_string(),
-            message_type: None,
+            chat_public_id: "chat-1".to_string(),
+            sender_id: 1,
+            sender_public_id: "user-1".to_string(),
+            content: Some("Original content".to_string()),
+            message_type: MessageType::Text,
+            reply_to_public_id: None,
+            thread_public_id: None,
         };
 
         let created = repo.create(1, &create_request).await.unwrap();
@@ -634,7 +695,7 @@ mod tests {
             .update(&created.public_id, 1, &update_request)
             .await
             .unwrap();
-        assert_eq!(updated.content, "Updated content");
+        assert_eq!(updated.content.as_deref(), Some("Updated content"));
         assert_eq!(updated.status, MessageStatus::Delivered);
     }
 
@@ -645,8 +706,13 @@ mod tests {
 
         let request = CreateMessageRequest {
             chat_id: 1,
-            content: "Test message".to_string(),
-            message_type: None,
+            chat_public_id: "chat-1".to_string(),
+            sender_id: 1,
+            sender_public_id: "user-1".to_string(),
+            content: Some("Test message".to_string()),
+            message_type: MessageType::Text,
+            reply_to_public_id: None,
+            thread_public_id: None,
         };
 
         let created = repo.create(1, &request).await.unwrap();
@@ -664,14 +730,24 @@ mod tests {
 
         let request1 = CreateMessageRequest {
             chat_id: 1,
-            content: "Hello world".to_string(),
-            message_type: None,
+            chat_public_id: "chat-1".to_string(),
+            sender_id: 1,
+            sender_public_id: "user-1".to_string(),
+            content: Some("Hello world".to_string()),
+            message_type: MessageType::Text,
+            reply_to_public_id: None,
+            thread_public_id: None,
         };
 
         let request2 = CreateMessageRequest {
             chat_id: 1,
-            content: "Another message".to_string(),
-            message_type: None,
+            chat_public_id: "chat-1".to_string(),
+            sender_id: 1,
+            sender_public_id: "user-1".to_string(),
+            content: Some("Another message".to_string()),
+            message_type: MessageType::Text,
+            reply_to_public_id: None,
+            thread_public_id: None,
         };
 
         repo.create(1, &request1).await.unwrap();
@@ -679,6 +755,6 @@ mod tests {
 
         let results = repo.search_messages(1, "hello", None).await.unwrap();
         assert_eq!(results.len(), 1);
-        assert_eq!(results[0].content, "Hello world");
+        assert_eq!(results[0].content.as_deref(), Some("Hello world"));
     }
 }

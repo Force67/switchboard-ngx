@@ -75,7 +75,7 @@ async fn test_user_crud_operations_integration() {
 
     assert!(created_user.id > 0);
     assert_eq!(created_user.email, Some(email.clone()));
-    assert_eq!(created_user.username, Some("testuser".to_string()));
+    assert_eq!(created_user.username, "testuser".to_string());
     assert_eq!(created_user.display_name, Some("Test User".to_string()));
     assert_eq!(created_user.role, UserRole::User);
     assert_eq!(created_user.status, UserStatus::Active);

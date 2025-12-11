@@ -1,18 +1,29 @@
 use axum::{
-    extract::{Path, State},
-    http::HeaderMap,
-    Json,
+    extract::{Extension, Path, State},
+    routing::{delete, get, post, put},
+    Json, Router,
 };
-use serde::Serialize;
-
-use crate::{
-    routes::models::{CreateFolderRequest, Folder, UpdateFolderRequest},
-    services::folder as folder_service,
-    state::ServerEvent,
-    util::require_bearer,
-    ApiError, AppState,
-};
+use chrono::Utc;
+use serde::{Deserialize, Serialize};
+use sqlx::FromRow;
+use std::sync::Arc;
 use utoipa::ToSchema;
+
+use crate::error::{GatewayError, GatewayResult};
+use crate::state::GatewayState;
+
+#[derive(Debug, Serialize, FromRow, ToSchema, Clone)]
+pub struct Folder {
+    pub id: i64,
+    pub public_id: String,
+    pub user_id: i64,
+    pub name: String,
+    pub color: Option<String>,
+    pub parent_id: Option<i64>,
+    pub collapsed: bool,
+    pub created_at: String,
+    pub updated_at: String,
+}
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct FoldersResponse {
@@ -24,11 +35,34 @@ pub struct FolderResponse {
     pub folder: Folder,
 }
 
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct CreateFolderRequest {
+    pub name: String,
+    pub color: Option<String>,
+    pub parent_id: Option<String>, // parent public_id
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct UpdateFolderRequest {
+    pub name: Option<String>,
+    pub color: Option<String>,
+    pub collapsed: Option<bool>,
+    pub parent_id: Option<String>, // parent public_id
+}
+
+pub fn create_folder_routes() -> Router<Arc<GatewayState>> {
+    Router::new()
+        .route("/folders", get(list_folders).post(create_folder))
+        .route(
+            "/folders/:folder_id",
+            get(get_folder).put(update_folder).delete(delete_folder),
+        )
+}
+
 #[utoipa::path(
     get,
     path = "/api/folders",
     tag = "Folders",
-    security(("bearerAuth" = [])),
     responses(
         (status = 200, description = "List folders for the current user", body = FoldersResponse),
         (status = 401, description = "Authentication required", body = crate::error::ErrorResponse),
@@ -36,18 +70,19 @@ pub struct FolderResponse {
     )
 )]
 pub async fn list_folders(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-) -> Result<Json<FoldersResponse>, ApiError> {
-    let token = require_bearer(&headers)?;
-    let (user, _) = state.authenticate(&token).await?;
-
-    let folders = folder_service::list_folders(state.db_pool(), user.id)
-        .await
-        .map_err(|e| {
-            tracing::error!("Failed to fetch folders: {}", e);
-            ApiError::from(e)
-        })?;
+    State(state): State<Arc<GatewayState>>,
+    Extension(user_id): Extension<i64>,
+) -> GatewayResult<Json<FoldersResponse>> {
+    let folders = sqlx::query_as::<_, Folder>(
+        "SELECT id, public_id, user_id, name, color, parent_id, collapsed, created_at, updated_at
+         FROM folders
+         WHERE user_id = ?
+         ORDER BY created_at ASC",
+    )
+    .bind(user_id)
+    .fetch_all(&state.pool)
+    .await
+    .map_err(map_db_error)?;
 
     Ok(Json(FoldersResponse { folders }))
 }
@@ -56,35 +91,45 @@ pub async fn list_folders(
     post,
     path = "/api/folders",
     tag = "Folders",
-    security(("bearerAuth" = [])),
     request_body = CreateFolderRequest,
     responses(
-        (status = 200, description = "Folder created", body = FolderResponse),
+        (status = 201, description = "Folder created", body = FolderResponse),
         (status = 400, description = "Invalid folder payload", body = crate::error::ErrorResponse),
         (status = 401, description = "Authentication required", body = crate::error::ErrorResponse),
+        (status = 404, description = "Parent folder not found", body = crate::error::ErrorResponse),
         (status = 500, description = "Failed to create folder", body = crate::error::ErrorResponse)
     )
 )]
 pub async fn create_folder(
-    State(state): State<AppState>,
-    headers: HeaderMap,
+    State(state): State<Arc<GatewayState>>,
+    Extension(user_id): Extension<i64>,
     Json(req): Json<CreateFolderRequest>,
-) -> Result<Json<FolderResponse>, ApiError> {
-    let token = require_bearer(&headers)?;
-    let (user, _) = state.authenticate(&token).await?;
+) -> GatewayResult<Json<FolderResponse>> {
+    let public_id = cuid2::cuid();
+    let now = Utc::now().to_rfc3339();
 
-    let folder = folder_service::create_folder(state.db_pool(), user.id, req)
-        .await
-        .map_err(|e| {
-            tracing::error!("Failed to create folder: {}", e);
-            ApiError::from(e)
-        })?;
-
-    let event = ServerEvent::FolderCreated {
-        folder: folder.clone(),
+    let parent_id = if let Some(parent_public_id) = req.parent_id.as_deref() {
+        Some(resolve_parent_id(&state, user_id, parent_public_id).await?)
+    } else {
+        None
     };
-    state.broadcast_to_user(user.id, &event).await;
 
+    sqlx::query(
+        "INSERT INTO folders (public_id, user_id, name, color, parent_id, collapsed, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, 0, ?, ?)",
+    )
+    .bind(&public_id)
+    .bind(user_id)
+    .bind(&req.name)
+    .bind(&req.color)
+    .bind(parent_id)
+    .bind(&now)
+    .bind(&now)
+    .execute(&state.pool)
+    .await
+    .map_err(map_db_error)?;
+
+    let folder = fetch_folder(&state, user_id, &public_id).await?;
     Ok(Json(FolderResponse { folder }))
 }
 
@@ -92,7 +137,6 @@ pub async fn create_folder(
     get,
     path = "/api/folders/{folder_id}",
     tag = "Folders",
-    security(("bearerAuth" = [])),
     params(
         ("folder_id" = String, Path, description = "Folder public identifier")
     ),
@@ -104,20 +148,11 @@ pub async fn create_folder(
     )
 )]
 pub async fn get_folder(
-    State(state): State<AppState>,
+    State(state): State<Arc<GatewayState>>,
     Path(folder_id): Path<String>,
-    headers: HeaderMap,
-) -> Result<Json<FolderResponse>, ApiError> {
-    let token = require_bearer(&headers)?;
-    let (user, _) = state.authenticate(&token).await?;
-
-    let folder = folder_service::get_folder(state.db_pool(), user.id, &folder_id)
-        .await
-        .map_err(|e| {
-            tracing::error!("Failed to fetch folder: {}", e);
-            ApiError::from(e)
-        })?;
-
+    Extension(user_id): Extension<i64>,
+) -> GatewayResult<Json<FolderResponse>> {
+    let folder = fetch_folder(&state, user_id, &folder_id).await?;
     Ok(Json(FolderResponse { folder }))
 }
 
@@ -125,7 +160,6 @@ pub async fn get_folder(
     put,
     path = "/api/folders/{folder_id}",
     tag = "Folders",
-    security(("bearerAuth" = [])),
     params(
         ("folder_id" = String, Path, description = "Folder public identifier")
     ),
@@ -139,26 +173,47 @@ pub async fn get_folder(
     )
 )]
 pub async fn update_folder(
-    State(state): State<AppState>,
+    State(state): State<Arc<GatewayState>>,
     Path(folder_id): Path<String>,
-    headers: HeaderMap,
+    Extension(user_id): Extension<i64>,
     Json(req): Json<UpdateFolderRequest>,
-) -> Result<Json<FolderResponse>, ApiError> {
-    let token = require_bearer(&headers)?;
-    let (user, _) = state.authenticate(&token).await?;
-
-    let folder = folder_service::update_folder(state.db_pool(), user.id, &folder_id, req)
-        .await
-        .map_err(|e| {
-            tracing::error!("Failed to update folder: {}", e);
-            ApiError::from(e)
-        })?;
-
-    let event = ServerEvent::FolderUpdated {
-        folder: folder.clone(),
+) -> GatewayResult<Json<FolderResponse>> {
+    let current = fetch_folder(&state, user_id, &folder_id).await?;
+    let parent_id = if let Some(parent_public_id) = req.parent_id.as_deref() {
+        let resolved = resolve_parent_id(&state, user_id, parent_public_id).await?;
+        if resolved == current.id {
+            return Err(GatewayError::InvalidRequest(
+                "Folder cannot be its own parent".to_string(),
+            ));
+        }
+        Some(resolved)
+    } else {
+        None
     };
-    state.broadcast_to_user(user.id, &event).await;
 
+    let now = Utc::now().to_rfc3339();
+
+    sqlx::query(
+        "UPDATE folders
+         SET name = COALESCE(?, name),
+             color = COALESCE(?, color),
+             collapsed = COALESCE(?, collapsed),
+             parent_id = COALESCE(?, parent_id),
+             updated_at = ?
+         WHERE public_id = ? AND user_id = ?",
+    )
+    .bind(req.name.as_ref())
+    .bind(req.color.as_ref())
+    .bind(req.collapsed)
+    .bind(parent_id)
+    .bind(&now)
+    .bind(&folder_id)
+    .bind(user_id)
+    .execute(&state.pool)
+    .await
+    .map_err(map_db_error)?;
+
+    let folder = fetch_folder(&state, user_id, &folder_id).await?;
     Ok(Json(FolderResponse { folder }))
 }
 
@@ -166,7 +221,6 @@ pub async fn update_folder(
     delete,
     path = "/api/folders/{folder_id}",
     tag = "Folders",
-    security(("bearerAuth" = [])),
     params(
         ("folder_id" = String, Path, description = "Folder public identifier")
     ),
@@ -178,24 +232,60 @@ pub async fn update_folder(
     )
 )]
 pub async fn delete_folder(
-    State(state): State<AppState>,
+    State(state): State<Arc<GatewayState>>,
     Path(folder_id): Path<String>,
-    headers: HeaderMap,
-) -> Result<(), ApiError> {
-    let token = require_bearer(&headers)?;
-    let (user, _) = state.authenticate(&token).await?;
+    Extension(user_id): Extension<i64>,
+) -> GatewayResult<()> {
+    let folder = fetch_folder(&state, user_id, &folder_id).await?;
 
-    folder_service::delete_folder(state.db_pool(), user.id, &folder_id)
+    sqlx::query("UPDATE chats SET folder_id = NULL WHERE folder_id = ? AND created_by = ?")
+        .bind(&folder.public_id)
+        .bind(user_id.to_string())
+        .execute(&state.pool)
         .await
-        .map_err(|e| {
-            tracing::error!("Failed to delete folder: {}", e);
-            ApiError::from(e)
-        })?;
+        .map_err(map_db_error)?;
 
-    let event = ServerEvent::FolderDeleted {
-        folder_id: folder_id.clone(),
-    };
-    state.broadcast_to_user(user.id, &event).await;
+    let result = sqlx::query("DELETE FROM folders WHERE public_id = ? AND user_id = ?")
+        .bind(&folder_id)
+        .bind(user_id)
+        .execute(&state.pool)
+        .await
+        .map_err(map_db_error)?;
+
+    if result.rows_affected() == 0 {
+        return Err(GatewayError::NotFound("Folder not found".to_string()));
+    }
 
     Ok(())
+}
+
+async fn resolve_parent_id(
+    state: &GatewayState,
+    user_id: i64,
+    parent_public_id: &str,
+) -> GatewayResult<i64> {
+    let parent = fetch_folder(state, user_id, parent_public_id).await?;
+    Ok(parent.id)
+}
+
+async fn fetch_folder(
+    state: &GatewayState,
+    user_id: i64,
+    folder_public_id: &str,
+) -> GatewayResult<Folder> {
+    sqlx::query_as::<_, Folder>(
+        "SELECT id, public_id, user_id, name, color, parent_id, collapsed, created_at, updated_at
+         FROM folders
+         WHERE public_id = ? AND user_id = ?",
+    )
+    .bind(folder_public_id)
+    .bind(user_id)
+    .fetch_optional(&state.pool)
+    .await
+    .map_err(map_db_error)?
+    .ok_or_else(|| GatewayError::NotFound("Folder not found".to_string()))
+}
+
+fn map_db_error(error: sqlx::Error) -> GatewayError {
+    GatewayError::DatabaseError(error.to_string())
 }

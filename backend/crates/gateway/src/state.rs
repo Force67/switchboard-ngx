@@ -11,6 +11,7 @@ use switchboard_config::AuthConfig;
 use switchboard_database::{
     AttachmentRepository, ChatRepository, InviteRepository, MemberRepository, MessageRepository,
 };
+use switchboard_orchestrator::Orchestrator;
 use switchboard_users::{AuthService, SessionService, UserService};
 
 /// JWT configuration
@@ -56,11 +57,18 @@ pub struct GatewayState {
     pub invite_service: Arc<InviteService>,
     /// Attachment service
     pub attachment_service: Arc<AttachmentService>,
+    /// Optional orchestrator for model listings and provider lookups
+    pub orchestrator: Option<Arc<Orchestrator>>,
 }
 
 impl GatewayState {
     /// Create a new gateway state with all services initialized
-    pub fn new(pool: SqlitePool, authenticator: Arc<Authenticator>, jwt_config: JwtConfig) -> Self {
+    pub fn new(
+        pool: SqlitePool,
+        authenticator: Arc<Authenticator>,
+        jwt_config: JwtConfig,
+        orchestrator: Option<Arc<Orchestrator>>,
+    ) -> Self {
         // Initialize user services
         let user_service = Arc::new(UserService::new(pool.clone()));
         let auth_service = Arc::new(AuthService::new(pool.clone()));
@@ -85,6 +93,7 @@ impl GatewayState {
             member_service,
             invite_service,
             attachment_service,
+            orchestrator,
         }
     }
 
@@ -99,7 +108,7 @@ impl GatewayState {
 
         let authenticator = Arc::new(Authenticator::new(pool.clone(), AuthConfig::default()));
 
-        Ok(Self::new(pool, authenticator, jwt_config))
+        Ok(Self::new(pool, authenticator, jwt_config, None))
     }
 
     /// Get a user service reference
@@ -145,6 +154,11 @@ impl GatewayState {
     /// Get an attachment service reference
     pub fn attachment_service(&self) -> &AttachmentService {
         &self.attachment_service
+    }
+
+    /// Get orchestrator reference if available
+    pub fn orchestrator(&self) -> Option<&Orchestrator> {
+        self.orchestrator.as_deref()
     }
 }
 

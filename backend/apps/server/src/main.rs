@@ -66,6 +66,7 @@ async fn run_server() -> anyhow::Result<()> {
         services.db_pool.clone(),
         Arc::new(services.authenticator.clone()),
         jwt_config,
+        Some(services.orchestrator.clone()),
     );
     let app = build_router(state);
 

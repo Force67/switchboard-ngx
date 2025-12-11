@@ -7,6 +7,8 @@ use switchboard_config::DatabaseConfig;
 use tokio::fs;
 use tracing::info;
 
+const SQLITE_BUSY_TIMEOUT_MS: i64 = 5_000;
+
 /// Prepare and establish a database connection
 pub async fn prepare_database(config: &DatabaseConfig) -> Result<SqlitePool> {
     ensure_sqlite_path(&config.url).await?;
@@ -30,7 +32,7 @@ pub async fn prepare_database(config: &DatabaseConfig) -> Result<SqlitePool> {
         .context("failed to enable WAL mode for sqlite")?;
 
     // Set busy timeout to prevent database locked errors
-    sqlx::query("PRAGMA busy_timeout = 5000")
+    sqlx::query(&format!("PRAGMA busy_timeout = {}", SQLITE_BUSY_TIMEOUT_MS))
         .execute(&pool)
         .await
         .context("failed to set busy timeout for sqlite")?;

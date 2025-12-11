@@ -303,7 +303,7 @@ mod tests {
         let user = service.create_user(request).await.unwrap();
 
         assert_eq!(user.email, Some("test@example.com".to_string()));
-        assert_eq!(user.username, Some("testuser".to_string()));
+        assert_eq!(user.username, "testuser".to_string());
         assert_eq!(user.display_name, Some("Test User".to_string()));
         assert_eq!(
             user.avatar_url,

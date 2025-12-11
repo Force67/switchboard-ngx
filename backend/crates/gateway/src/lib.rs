@@ -15,7 +15,7 @@
 //! ```rust
 //! use switchboard_gateway::{GatewayState, create_router};
 //!
-//! let state = GatewayState::new(pool, authenticator, jwt_config);
+//! let state = GatewayState::new(pool, authenticator, jwt_config, None);
 //! let app = create_router(state);
 //!
 //! axum::Server::bind(&"0.0.0.0:3000".parse().unwrap())
@@ -51,9 +51,15 @@ use utoipa_swagger_ui::SwaggerUi;
 /// Create the main application router with all routes
 pub fn create_router(state: GatewayState) -> Router {
     let arc_state = Arc::new(state);
+    let api_routes = rest::create_rest_routes()
+        .route_layer(axum_middleware::from_fn_with_state(
+            arc_state.clone(),
+            middleware::auth_middleware,
+        ))
+        .with_state(arc_state.clone());
     let mut router = Router::new()
         // REST API routes
-        .nest("/api", rest::create_rest_routes().with_state(arc_state.clone()))
+        .nest("/api", api_routes)
         // WebSocket routes
         .merge(websocket::create_websocket_routes().with_state(arc_state))
         // CORS middleware

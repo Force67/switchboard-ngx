@@ -128,11 +128,27 @@ pub enum MemberAction {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use switchboard_database::ChatType;
+    use switchboard_database::MemberRole;
+
+    fn member(chat_id: i64, user_id: i64, role: MemberRole) -> ChatMember {
+        ChatMember {
+            id: user_id,
+            public_id: format!("member-{user_id}"),
+            chat_id,
+            chat_public_id: format!("chat-{chat_id}"),
+            user_id,
+            user_public_id: format!("user-{user_id}"),
+            role,
+            joined_at: "2024-01-01T00:00:00Z".to_string(),
+            user_display_name: None,
+            user_avatar_url: None,
+            user_email: None,
+        }
+    }
 
     #[test]
     fn test_permission_checker_can_access_chat() {
-        let member = ChatMember::new(1, 1, MemberRole::Member);
+        let member = member(1, 1, MemberRole::Member);
 
         assert!(PermissionChecker::can_access_chat(&member, 1).is_ok());
         assert!(PermissionChecker::can_access_chat(&member, 2).is_err());
@@ -140,9 +156,9 @@ mod tests {
 
     #[test]
     fn test_permission_checker_can_manage_members() {
-        let owner = ChatMember::new(1, 1, MemberRole::Owner);
-        let admin = ChatMember::new(1, 2, MemberRole::Admin);
-        let member = ChatMember::new(1, 3, MemberRole::Member);
+        let owner = member(1, 1, MemberRole::Owner);
+        let admin = member(1, 2, MemberRole::Admin);
+        let member = member(1, 3, MemberRole::Member);
 
         assert!(PermissionChecker::can_manage_members(&owner).is_ok());
         assert!(PermissionChecker::can_manage_members(&admin).is_ok());
@@ -151,9 +167,9 @@ mod tests {
 
     #[test]
     fn test_permission_checker_can_delete_chat() {
-        let owner = ChatMember::new(1, 1, MemberRole::Owner);
-        let admin = ChatMember::new(1, 2, MemberRole::Admin);
-        let member = ChatMember::new(1, 3, MemberRole::Member);
+        let owner = member(1, 1, MemberRole::Owner);
+        let admin = member(1, 2, MemberRole::Admin);
+        let member = member(1, 3, MemberRole::Member);
 
         assert!(PermissionChecker::can_delete_chat(&owner).is_ok());
         assert!(PermissionChecker::can_delete_chat(&admin).is_err());
@@ -162,9 +178,9 @@ mod tests {
 
     #[test]
     fn test_permission_checker_can_manage_member() {
-        let owner = ChatMember::new(1, 1, MemberRole::Owner);
-        let admin = ChatMember::new(1, 2, MemberRole::Admin);
-        let member = ChatMember::new(1, 3, MemberRole::Member);
+        let owner = member(1, 1, MemberRole::Owner);
+        let admin = member(1, 2, MemberRole::Admin);
+        let member = member(1, 3, MemberRole::Member);
 
         // Owner can manage everyone
         assert!(

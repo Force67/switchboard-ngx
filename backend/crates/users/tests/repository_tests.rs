@@ -73,7 +73,7 @@ async fn test_repository_crud_operations() {
     let display_name = request.display_name.clone();
 
     assert_eq!(created_user.email, Some(email.clone()));
-    assert_eq!(created_user.username, Some(username.clone()));
+    assert_eq!(created_user.username, username.clone());
     assert_eq!(created_user.display_name, Some(display_name));
     assert_eq!(created_user.role, UserRole::User);
     assert_eq!(created_user.status, UserStatus::Active);
@@ -102,7 +102,7 @@ async fn test_repository_crud_operations() {
     // Test READ by username
     let found_by_username = repo.find_by_username(&username).await.unwrap();
     assert!(found_by_username.is_some());
-    assert_eq!(found_by_username.unwrap().username, Some(request.username));
+    assert_eq!(found_by_username.unwrap().username, request.username);
 
     // Test UPDATE
     let update_request = UpdateUserRequest {

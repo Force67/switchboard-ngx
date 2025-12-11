@@ -4,12 +4,14 @@ use reqwest::{Client, StatusCode};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+const DEFAULT_API_URL: &str = "http://localhost:3030";
+
 #[derive(Parser)]
 #[command(name = "api-test-app")]
 #[command(about = "A comprehensive test app for the Switchboard API")]
 #[command(version = "1.0")]
 struct Cli {
-    #[arg(long, default_value = "http://localhost:3030")]
+    #[arg(long, default_value = DEFAULT_API_URL)]
     api_url: String,
 
     #[command(subcommand)]

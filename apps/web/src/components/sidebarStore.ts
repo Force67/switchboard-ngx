@@ -41,7 +41,9 @@ const apiChatToChat = (apiChat: ApiChat, apiFolders: ApiFolder[]): Chat => {
   }
 
   let folderId: string | undefined;
-  if (typeof apiChat.folder_id === "number") {
+  if (typeof apiChat.folder_id === "string") {
+    folderId = apiChat.folder_id;
+  } else if (typeof apiChat.folder_id === "number") {
     const folder = apiFolders.find(f => f.id === apiChat.folder_id);
     folderId = folder?.public_id;
   }

@@ -1,5 +1,7 @@
 
 *.db
+*.db-shm
+*.db-wal
 switchboard.toml
 backend/crates/config/switchboard.toml
 /backend/.sqlx
@@ -7,5 +9,9 @@ backend/crates/config/switchboard.toml
 /.pnpm-store
 /node_modules
 /zaistats
-/zaistats
 .env
+.tmp-authware/
+*.log
+apps/web-dev.log
+apps/apps-web-dev.log
+switchboard-backend.log

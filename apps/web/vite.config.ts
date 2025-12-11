@@ -14,18 +14,18 @@ export default defineConfig({
       interval: 500,
     },
     proxy: {
-      '/api': {
-        target: 'http://localhost:7070',
+      "/api": {
+        target: "http://localhost:7080",
         changeOrigin: true,
         secure: false,
       },
-      '/health': {
-        target: 'http://localhost:7070',
+      "/health": {
+        target: "http://localhost:7080",
         changeOrigin: true,
         secure: false,
       },
-      '/ws': {
-        target: 'ws://localhost:7070',
+      "/ws": {
+        target: "ws://localhost:7080",
         ws: true,
         changeOrigin: true,
       },

@@ -1,8 +1,5 @@
+import { API_BASE } from "./config";
 import type { TokenUsage } from "./types/chat";
-
-const DEFAULT_API_BASE =
-  typeof window !== "undefined" ? window.location.origin : "http://localhost:7070";
-const API_BASE = import.meta.env.VITE_API_BASE ?? DEFAULT_API_BASE;
 
 export interface ApiFolder {
   id: number;

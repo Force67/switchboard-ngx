@@ -44,6 +44,7 @@ interface Props {
   modelsError: Accessor<string | null>;
   loading: Accessor<boolean>;
   error: Accessor<string | null>;
+  authError?: Accessor<string | null>;
   modelPickerOpen: Accessor<boolean>;
   setModelPickerOpen: Setter<boolean>;
   currentMessages: Accessor<Message[]>;
@@ -151,6 +152,11 @@ export default function MainArea(props: Props) {
         {props.modelsError() && (
           <div style="padding: 20px; color: #ff6b6b; background: rgba(255,107,107,0.1); border-radius: 8px; margin: 20px;">
             Models error: {props.modelsError()}
+          </div>
+        )}
+        {props.authError?.() && (
+          <div style="padding: 20px; color: #ff6b6b; background: rgba(255,107,107,0.1); border-radius: 8px; margin: 20px;">
+            Authentication error: {props.authError!()}
           </div>
         )}
         {props.connectionStatus && (() => {

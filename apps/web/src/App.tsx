@@ -6,6 +6,7 @@ import Sidebar from "./components/Sidebar";
 import MainArea from "./components/MainArea";
 import { apiService } from "./api";
 import type { ApiChat } from "./api";
+import { API_BASE } from "./config";
 import {
   actions,
   addChatToSidebar,
@@ -18,9 +19,6 @@ import type { SidebarBootstrapData } from "./components/sidebarStore";
 import { useSocket } from "./hooks/useSocket";
 import type { Chat, Message, TokenUsage } from "./types/chat";
 
-const DEFAULT_API_BASE =
-  typeof window !== "undefined" ? window.location.origin : "http://localhost:7070";
-const API_BASE = import.meta.env.VITE_API_BASE ?? DEFAULT_API_BASE;
 const DEFAULT_MODEL = import.meta.env.VITE_DEFAULT_MODEL ?? "";
 const GITHUB_REDIRECT_PATH =
   import.meta.env.VITE_GITHUB_REDIRECT_PATH ?? "/auth/callback";
@@ -309,6 +307,8 @@ export default function App() {
 
   const logout = () => {
     persistSession(null, { suppressAutoBootstrap: true });
+    setAuthError(null);
+    setAuthenticating(false);
     setModels([]);
     setSelectedModels([]);
     setModelStatuses({});
@@ -1027,6 +1027,7 @@ export default function App() {
             modelsError={modelsError}
             loading={loading}
             error={error}
+            authError={authError}
             modelPickerOpen={modelPickerOpen}
             setModelPickerOpen={setModelPickerOpen}
             session={session}

@@ -3,9 +3,9 @@
 use anyhow::{Context, Result};
 use sqlx::{sqlite::SqlitePoolOptions, SqlitePool};
 use std::path::Path;
+use switchboard_config::DatabaseConfig;
 use tokio::fs;
 use tracing::info;
-use switchboard_config::DatabaseConfig;
 
 /// Prepare and establish a database connection
 pub async fn prepare_database(config: &DatabaseConfig) -> Result<SqlitePool> {

@@ -1,10 +1,10 @@
 //! Notification repository for database operations.
 
-use crate::entities::{Notification};
-use crate::entities::notification::{NotificationType, NotificationPriority};
-use crate::types::{NotificationResult, CreateNotificationRequest};
+use crate::entities::notification::{NotificationPriority, NotificationType};
+use crate::entities::Notification;
 use crate::types::errors::NotificationError;
-use sqlx::{SqlitePool, Row};
+use crate::types::{CreateNotificationRequest, NotificationResult};
+use sqlx::{Row, SqlitePool};
 
 /// Repository for notification database operations
 pub struct NotificationRepository {
@@ -29,26 +29,54 @@ impl NotificationRepository {
         .map_err(|e| NotificationError::DatabaseError(e.to_string()))?;
 
         if let Some(row) = row {
-            let notification_type_str: String = row.try_get("type")
+            let notification_type_str: String = row
+                .try_get("type")
                 .map_err(|e| NotificationError::DatabaseError(e.to_string()))?;
-            let priority_str: String = row.try_get("priority")
+            let priority_str: String = row
+                .try_get("priority")
                 .map_err(|e| NotificationError::DatabaseError(e.to_string()))?;
-            let metadata_str: Option<String> = row.try_get("metadata")
+            let metadata_str: Option<String> = row
+                .try_get("metadata")
                 .map_err(|e| NotificationError::DatabaseError(e.to_string()))?;
 
             Ok(Some(Notification {
-                id: Some(row.try_get("id").map_err(|e| NotificationError::DatabaseError(e.to_string()))?),
-                user_id: row.try_get("user_id").map_err(|e| NotificationError::DatabaseError(e.to_string()))?,
-                notification_type: notification_type_str.parse().map_err(|_| NotificationError::InvalidNotificationType)?,
-                title: row.try_get("title").map_err(|e| NotificationError::DatabaseError(e.to_string()))?,
-                message: row.try_get("message").map_err(|e| NotificationError::DatabaseError(e.to_string()))?,
-                priority: priority_str.parse().map_err(|_| NotificationError::InvalidPriority)?,
-                is_read: row.try_get("is_read").map_err(|e| NotificationError::DatabaseError(e.to_string()))?,
-                created_at: row.try_get("created_at").map_err(|e| NotificationError::DatabaseError(e.to_string()))?,
-                updated_at: row.try_get("updated_at").map_err(|e| NotificationError::DatabaseError(e.to_string()))?,
-                expires_at: row.try_get("expires_at").map_err(|e| NotificationError::DatabaseError(e.to_string()))?,
-                related_entity_id: row.try_get("related_entity_id").map_err(|e| NotificationError::DatabaseError(e.to_string()))?,
-                related_entity_type: row.try_get("related_entity_type").map_err(|e| NotificationError::DatabaseError(e.to_string()))?,
+                id: Some(
+                    row.try_get("id")
+                        .map_err(|e| NotificationError::DatabaseError(e.to_string()))?,
+                ),
+                user_id: row
+                    .try_get("user_id")
+                    .map_err(|e| NotificationError::DatabaseError(e.to_string()))?,
+                notification_type: notification_type_str
+                    .parse()
+                    .map_err(|_| NotificationError::InvalidNotificationType)?,
+                title: row
+                    .try_get("title")
+                    .map_err(|e| NotificationError::DatabaseError(e.to_string()))?,
+                message: row
+                    .try_get("message")
+                    .map_err(|e| NotificationError::DatabaseError(e.to_string()))?,
+                priority: priority_str
+                    .parse()
+                    .map_err(|_| NotificationError::InvalidPriority)?,
+                is_read: row
+                    .try_get("is_read")
+                    .map_err(|e| NotificationError::DatabaseError(e.to_string()))?,
+                created_at: row
+                    .try_get("created_at")
+                    .map_err(|e| NotificationError::DatabaseError(e.to_string()))?,
+                updated_at: row
+                    .try_get("updated_at")
+                    .map_err(|e| NotificationError::DatabaseError(e.to_string()))?,
+                expires_at: row
+                    .try_get("expires_at")
+                    .map_err(|e| NotificationError::DatabaseError(e.to_string()))?,
+                related_entity_id: row
+                    .try_get("related_entity_id")
+                    .map_err(|e| NotificationError::DatabaseError(e.to_string()))?,
+                related_entity_type: row
+                    .try_get("related_entity_type")
+                    .map_err(|e| NotificationError::DatabaseError(e.to_string()))?,
                 metadata: metadata_str.and_then(|s| serde_json::from_str(&s).ok()),
             }))
         } else {
@@ -57,9 +85,15 @@ impl NotificationRepository {
     }
 
     /// Create a new notification
-    pub async fn create(&self, request: &CreateNotificationRequest) -> NotificationResult<Notification> {
+    pub async fn create(
+        &self,
+        request: &CreateNotificationRequest,
+    ) -> NotificationResult<Notification> {
         let now = chrono::Utc::now().to_rfc3339();
-        let metadata_json = request.metadata.as_ref().map(|m| serde_json::to_string(m).unwrap_or_default());
+        let metadata_json = request
+            .metadata
+            .as_ref()
+            .map(|m| serde_json::to_string(m).unwrap_or_default());
 
         let result = sqlx::query(
             "INSERT INTO notifications (user_id, type, title, message, priority, is_read, created_at, updated_at, expires_at, related_entity_id, related_entity_type, metadata)
@@ -81,9 +115,13 @@ impl NotificationRepository {
         .map_err(|e| NotificationError::DatabaseError(e.to_string()))?;
 
         let notification_id = result.last_insert_rowid();
-        self.find_by_id_internal(notification_id).await?.ok_or_else(|| {
-            NotificationError::DatabaseError("Failed to retrieve created notification".to_string())
-        })
+        self.find_by_id_internal(notification_id)
+            .await?
+            .ok_or_else(|| {
+                NotificationError::DatabaseError(
+                    "Failed to retrieve created notification".to_string(),
+                )
+            })
     }
 
     /// Find notification by ID (public method)
@@ -111,26 +149,54 @@ impl NotificationRepository {
 
         let mut notifications = Vec::new();
         for row in rows {
-            let notification_type_str: String = row.try_get("type")
+            let notification_type_str: String = row
+                .try_get("type")
                 .map_err(|e| NotificationError::DatabaseError(e.to_string()))?;
-            let priority_str: String = row.try_get("priority")
+            let priority_str: String = row
+                .try_get("priority")
                 .map_err(|e| NotificationError::DatabaseError(e.to_string()))?;
-            let metadata_str: Option<String> = row.try_get("metadata")
+            let metadata_str: Option<String> = row
+                .try_get("metadata")
                 .map_err(|e| NotificationError::DatabaseError(e.to_string()))?;
 
             notifications.push(Notification {
-                id: Some(row.try_get("id").map_err(|e| NotificationError::DatabaseError(e.to_string()))?),
-                user_id: row.try_get("user_id").map_err(|e| NotificationError::DatabaseError(e.to_string()))?,
-                notification_type: notification_type_str.parse().map_err(|_| NotificationError::InvalidNotificationType)?,
-                title: row.try_get("title").map_err(|e| NotificationError::DatabaseError(e.to_string()))?,
-                message: row.try_get("message").map_err(|e| NotificationError::DatabaseError(e.to_string()))?,
-                priority: priority_str.parse().map_err(|_| NotificationError::InvalidPriority)?,
-                is_read: row.try_get("is_read").map_err(|e| NotificationError::DatabaseError(e.to_string()))?,
-                created_at: row.try_get("created_at").map_err(|e| NotificationError::DatabaseError(e.to_string()))?,
-                updated_at: row.try_get("updated_at").map_err(|e| NotificationError::DatabaseError(e.to_string()))?,
-                expires_at: row.try_get("expires_at").map_err(|e| NotificationError::DatabaseError(e.to_string()))?,
-                related_entity_id: row.try_get("related_entity_id").map_err(|e| NotificationError::DatabaseError(e.to_string()))?,
-                related_entity_type: row.try_get("related_entity_type").map_err(|e| NotificationError::DatabaseError(e.to_string()))?,
+                id: Some(
+                    row.try_get("id")
+                        .map_err(|e| NotificationError::DatabaseError(e.to_string()))?,
+                ),
+                user_id: row
+                    .try_get("user_id")
+                    .map_err(|e| NotificationError::DatabaseError(e.to_string()))?,
+                notification_type: notification_type_str
+                    .parse()
+                    .map_err(|_| NotificationError::InvalidNotificationType)?,
+                title: row
+                    .try_get("title")
+                    .map_err(|e| NotificationError::DatabaseError(e.to_string()))?,
+                message: row
+                    .try_get("message")
+                    .map_err(|e| NotificationError::DatabaseError(e.to_string()))?,
+                priority: priority_str
+                    .parse()
+                    .map_err(|_| NotificationError::InvalidPriority)?,
+                is_read: row
+                    .try_get("is_read")
+                    .map_err(|e| NotificationError::DatabaseError(e.to_string()))?,
+                created_at: row
+                    .try_get("created_at")
+                    .map_err(|e| NotificationError::DatabaseError(e.to_string()))?,
+                updated_at: row
+                    .try_get("updated_at")
+                    .map_err(|e| NotificationError::DatabaseError(e.to_string()))?,
+                expires_at: row
+                    .try_get("expires_at")
+                    .map_err(|e| NotificationError::DatabaseError(e.to_string()))?,
+                related_entity_id: row
+                    .try_get("related_entity_id")
+                    .map_err(|e| NotificationError::DatabaseError(e.to_string()))?,
+                related_entity_type: row
+                    .try_get("related_entity_type")
+                    .map_err(|e| NotificationError::DatabaseError(e.to_string()))?,
                 metadata: metadata_str.and_then(|s| serde_json::from_str(&s).ok()),
             });
         }
@@ -156,26 +222,54 @@ impl NotificationRepository {
 
         let mut notifications = Vec::new();
         for row in rows {
-            let notification_type_str: String = row.try_get("type")
+            let notification_type_str: String = row
+                .try_get("type")
                 .map_err(|e| NotificationError::DatabaseError(e.to_string()))?;
-            let priority_str: String = row.try_get("priority")
+            let priority_str: String = row
+                .try_get("priority")
                 .map_err(|e| NotificationError::DatabaseError(e.to_string()))?;
-            let metadata_str: Option<String> = row.try_get("metadata")
+            let metadata_str: Option<String> = row
+                .try_get("metadata")
                 .map_err(|e| NotificationError::DatabaseError(e.to_string()))?;
 
             notifications.push(Notification {
-                id: Some(row.try_get("id").map_err(|e| NotificationError::DatabaseError(e.to_string()))?),
-                user_id: row.try_get("user_id").map_err(|e| NotificationError::DatabaseError(e.to_string()))?,
-                notification_type: notification_type_str.parse().map_err(|_| NotificationError::InvalidNotificationType)?,
-                title: row.try_get("title").map_err(|e| NotificationError::DatabaseError(e.to_string()))?,
-                message: row.try_get("message").map_err(|e| NotificationError::DatabaseError(e.to_string()))?,
-                priority: priority_str.parse().map_err(|_| NotificationError::InvalidPriority)?,
-                is_read: row.try_get("is_read").map_err(|e| NotificationError::DatabaseError(e.to_string()))?,
-                created_at: row.try_get("created_at").map_err(|e| NotificationError::DatabaseError(e.to_string()))?,
-                updated_at: row.try_get("updated_at").map_err(|e| NotificationError::DatabaseError(e.to_string()))?,
-                expires_at: row.try_get("expires_at").map_err(|e| NotificationError::DatabaseError(e.to_string()))?,
-                related_entity_id: row.try_get("related_entity_id").map_err(|e| NotificationError::DatabaseError(e.to_string()))?,
-                related_entity_type: row.try_get("related_entity_type").map_err(|e| NotificationError::DatabaseError(e.to_string()))?,
+                id: Some(
+                    row.try_get("id")
+                        .map_err(|e| NotificationError::DatabaseError(e.to_string()))?,
+                ),
+                user_id: row
+                    .try_get("user_id")
+                    .map_err(|e| NotificationError::DatabaseError(e.to_string()))?,
+                notification_type: notification_type_str
+                    .parse()
+                    .map_err(|_| NotificationError::InvalidNotificationType)?,
+                title: row
+                    .try_get("title")
+                    .map_err(|e| NotificationError::DatabaseError(e.to_string()))?,
+                message: row
+                    .try_get("message")
+                    .map_err(|e| NotificationError::DatabaseError(e.to_string()))?,
+                priority: priority_str
+                    .parse()
+                    .map_err(|_| NotificationError::InvalidPriority)?,
+                is_read: row
+                    .try_get("is_read")
+                    .map_err(|e| NotificationError::DatabaseError(e.to_string()))?,
+                created_at: row
+                    .try_get("created_at")
+                    .map_err(|e| NotificationError::DatabaseError(e.to_string()))?,
+                updated_at: row
+                    .try_get("updated_at")
+                    .map_err(|e| NotificationError::DatabaseError(e.to_string()))?,
+                expires_at: row
+                    .try_get("expires_at")
+                    .map_err(|e| NotificationError::DatabaseError(e.to_string()))?,
+                related_entity_id: row
+                    .try_get("related_entity_id")
+                    .map_err(|e| NotificationError::DatabaseError(e.to_string()))?,
+                related_entity_type: row
+                    .try_get("related_entity_type")
+                    .map_err(|e| NotificationError::DatabaseError(e.to_string()))?,
                 metadata: metadata_str.and_then(|s| serde_json::from_str(&s).ok()),
             });
         }
@@ -188,7 +282,7 @@ impl NotificationRepository {
         let now = chrono::Utc::now().to_rfc3339();
 
         sqlx::query(
-            "UPDATE notifications SET is_read = true, updated_at = ? WHERE id = ? AND user_id = ?"
+            "UPDATE notifications SET is_read = true, updated_at = ? WHERE id = ? AND user_id = ?",
         )
         .bind(&now)
         .bind(id)
@@ -218,14 +312,12 @@ impl NotificationRepository {
 
     /// Delete notification
     pub async fn delete(&self, id: i64, user_id: i64) -> NotificationResult<()> {
-        sqlx::query(
-            "DELETE FROM notifications WHERE id = ? AND user_id = ?"
-        )
-        .bind(id)
-        .bind(user_id)
-        .execute(&self.pool)
-        .await
-        .map_err(|e| NotificationError::DatabaseError(e.to_string()))?;
+        sqlx::query("DELETE FROM notifications WHERE id = ? AND user_id = ?")
+            .bind(id)
+            .bind(user_id)
+            .execute(&self.pool)
+            .await
+            .map_err(|e| NotificationError::DatabaseError(e.to_string()))?;
 
         Ok(())
     }
@@ -233,14 +325,16 @@ impl NotificationRepository {
     /// Get unread count for user
     pub async fn get_unread_count(&self, user_id: i64) -> NotificationResult<i64> {
         let count = sqlx::query(
-            "SELECT COUNT(*) as count FROM notifications WHERE user_id = ? AND is_read = false"
+            "SELECT COUNT(*) as count FROM notifications WHERE user_id = ? AND is_read = false",
         )
         .bind(user_id)
         .fetch_one(&self.pool)
         .await
         .map_err(|e| NotificationError::DatabaseError(e.to_string()))?;
 
-        let count: i64 = count.try_get("count").map_err(|e| NotificationError::DatabaseError(e.to_string()))?;
+        let count: i64 = count
+            .try_get("count")
+            .map_err(|e| NotificationError::DatabaseError(e.to_string()))?;
         Ok(count)
     }
 
@@ -312,8 +406,8 @@ impl NotificationRepository {
 mod tests {
     use super::*;
     use sqlx::SqlitePool;
-    use tempfile::TempDir;
     use std::path::Path;
+    use tempfile::TempDir;
 
     async fn create_test_pool() -> (SqlitePool, TempDir) {
         let temp_dir = TempDir::new().unwrap();
@@ -338,7 +432,7 @@ mod tests {
                 related_entity_id TEXT,
                 related_entity_type TEXT,
                 metadata TEXT
-            )"
+            )",
         )
         .execute(&pool)
         .await
@@ -411,7 +505,9 @@ mod tests {
 
         assert_eq!(notifications.len(), 2);
         assert!(notifications.iter().any(|n| n.title == "Test Notification"));
-        assert!(notifications.iter().any(|n| n.title == "Second Notification"));
+        assert!(notifications
+            .iter()
+            .any(|n| n.title == "Second Notification"));
     }
 
     #[tokio::test]
@@ -427,7 +523,9 @@ mod tests {
         assert_eq!(unread[0].id, notification.id);
 
         // Mark as read and check again
-        repo.mark_as_read(notification.id.unwrap(), 1).await.unwrap();
+        repo.mark_as_read(notification.id.unwrap(), 1)
+            .await
+            .unwrap();
         let unread_after = repo.find_unread_by_user_id(1, 10).await.unwrap();
 
         assert_eq!(unread_after.len(), 0);
@@ -442,9 +540,15 @@ mod tests {
         let notification = repo.create(&request).await.unwrap();
         assert!(!notification.is_read);
 
-        repo.mark_as_read(notification.id.unwrap(), 1).await.unwrap();
+        repo.mark_as_read(notification.id.unwrap(), 1)
+            .await
+            .unwrap();
 
-        let updated = repo.find_by_id(notification.id.unwrap()).await.unwrap().unwrap();
+        let updated = repo
+            .find_by_id(notification.id.unwrap())
+            .await
+            .unwrap()
+            .unwrap();
         assert!(updated.is_read);
     }
 
@@ -499,7 +603,9 @@ mod tests {
         assert_eq!(count, 2);
 
         let notification = repo.find_by_user_id(1, 1, 0).await.unwrap().pop().unwrap();
-        repo.mark_as_read(notification.id.unwrap(), 1).await.unwrap();
+        repo.mark_as_read(notification.id.unwrap(), 1)
+            .await
+            .unwrap();
 
         let count_after = repo.get_unread_count(1).await.unwrap();
         assert_eq!(count_after, 1);
@@ -510,12 +616,15 @@ mod tests {
         let (pool, _temp_dir) = create_test_pool().await;
         let repo = NotificationRepository::new(pool);
 
-        let notification = repo.create_message_notification(
-            1,
-            "chat_123",
-            "Hello, this is a test message",
-            "Test Sender"
-        ).await.unwrap();
+        let notification = repo
+            .create_message_notification(
+                1,
+                "chat_123",
+                "Hello, this is a test message",
+                "Test Sender",
+            )
+            .await
+            .unwrap();
 
         assert_eq!(notification.user_id, 1);
         assert_eq!(notification.notification_type, NotificationType::Message);
@@ -530,19 +639,23 @@ mod tests {
         let (pool, _temp_dir) = create_test_pool().await;
         let repo = NotificationRepository::new(pool);
 
-        let notification = repo.create_chat_invite_notification(
-            1,
-            "chat_456",
-            "Test Inviter",
-            Some("Test Chat")
-        ).await.unwrap();
+        let notification = repo
+            .create_chat_invite_notification(1, "chat_456", "Test Inviter", Some("Test Chat"))
+            .await
+            .unwrap();
 
         assert_eq!(notification.user_id, 1);
         assert_eq!(notification.notification_type, NotificationType::ChatInvite);
-        assert_eq!(notification.title, "Chat invite: Test Chat from Test Inviter");
+        assert_eq!(
+            notification.title,
+            "Chat invite: Test Chat from Test Inviter"
+        );
         assert_eq!(notification.message, "You have been invited to join a chat");
         assert_eq!(notification.related_entity_id, Some("chat_456".to_string()));
-        assert_eq!(notification.related_entity_type, Some("chat_invite".to_string()));
+        assert_eq!(
+            notification.related_entity_type,
+            Some("chat_invite".to_string())
+        );
     }
 
     #[tokio::test]
@@ -551,12 +664,10 @@ mod tests {
         let repo = NotificationRepository::new(pool);
 
         let long_message = "a".repeat(200);
-        let notification = repo.create_message_notification(
-            1,
-            "chat_123",
-            &long_message,
-            "Test Sender"
-        ).await.unwrap();
+        let notification = repo
+            .create_message_notification(1, "chat_123", &long_message, "Test Sender")
+            .await
+            .unwrap();
 
         assert!(notification.message.len() <= 103); // "..." + 100 chars
         assert!(notification.message.ends_with("..."));

@@ -1,8 +1,10 @@
 //! Repository-level tests for the users crate
 
-use switchboard_database::{UserRepository, CreateUserRequest, UpdateUserRequest, UserRole, UserStatus};
-use tempfile::TempDir;
 use sqlx::SqlitePool;
+use switchboard_database::{
+    CreateUserRequest, UpdateUserRequest, UserRepository, UserRole, UserStatus,
+};
+use tempfile::TempDir;
 
 /// Helper function to create a test database
 async fn create_test_database() -> (SqlitePool, TempDir) {
@@ -11,7 +13,9 @@ async fn create_test_database() -> (SqlitePool, TempDir) {
     let db_url = format!("sqlite:{}", db_path.display());
 
     // Create a simple SQLite pool for testing
-    let pool = SqlitePool::connect(&db_url).await.expect("Failed to create test database");
+    let pool = SqlitePool::connect(&db_url)
+        .await
+        .expect("Failed to create test database");
 
     // Create basic users table schema
     sqlx::query(
@@ -33,7 +37,7 @@ async fn create_test_database() -> (SqlitePool, TempDir) {
             is_active BOOLEAN NOT NULL DEFAULT true,
             password_hash TEXT
         )
-        "#
+        "#,
     )
     .execute(&pool)
     .await
@@ -80,9 +84,15 @@ async fn test_repository_crud_operations() {
     assert_eq!(found_user.unwrap().id, created_user.id);
 
     // Test READ by public ID
-    let found_by_public_id = repo.find_by_public_id(&created_user.public_id).await.unwrap();
+    let found_by_public_id = repo
+        .find_by_public_id(&created_user.public_id)
+        .await
+        .unwrap();
     assert!(found_by_public_id.is_some());
-    assert_eq!(found_by_public_id.unwrap().public_id, created_user.public_id);
+    assert_eq!(
+        found_by_public_id.unwrap().public_id,
+        created_user.public_id
+    );
 
     // Test READ by email
     let found_by_email = repo.find_by_email(&email).await.unwrap();
@@ -104,7 +114,10 @@ async fn test_repository_crud_operations() {
     let updated_user = repo.update(created_user.id, &update_request).await.unwrap();
 
     assert_eq!(updated_user.id, created_user.id);
-    assert_eq!(updated_user.display_name, Some("Updated Display Name".to_string()));
+    assert_eq!(
+        updated_user.display_name,
+        Some("Updated Display Name".to_string())
+    );
     assert_eq!(updated_user.role, UserRole::Admin);
 
     // Test DELETE (soft delete)
@@ -144,7 +157,9 @@ async fn test_repository_user_management_operations() {
     assert!(verified_user.email_verified);
 
     // Test update password
-    repo.update_password(user.id, "new_password_hash").await.unwrap();
+    repo.update_password(user.id, "new_password_hash")
+        .await
+        .unwrap();
     // Password hash update is verified at repository level
 
     // Clean up
@@ -170,18 +185,33 @@ async fn test_repository_search_and_filtering() {
     repo.update(admin_user.id, &role_update).await.unwrap();
 
     // Create regular users
-    let user1 = repo.create(&create_test_user_request("user1@example.com")).await.unwrap();
-    let user2 = repo.create(&create_test_user_request("user2@example.com")).await.unwrap();
+    let user1 = repo
+        .create(&create_test_user_request("user1@example.com"))
+        .await
+        .unwrap();
+    let user2 = repo
+        .create(&create_test_user_request("user2@example.com"))
+        .await
+        .unwrap();
 
     // Test search by display name
-    let search_results = repo.search_by_display_name("Test User user1", 10).await.unwrap();
+    let search_results = repo
+        .search_by_display_name("Test User user1", 10)
+        .await
+        .unwrap();
     assert_eq!(search_results.len(), 1);
-    assert_eq!(search_results[0].email, Some("user1@example.com".to_string()));
+    assert_eq!(
+        search_results[0].email,
+        Some("user1@example.com".to_string())
+    );
 
     // Test find by role
     let admin_results = repo.find_by_role(UserRole::Admin, 10).await.unwrap();
     assert_eq!(admin_results.len(), 1);
-    assert_eq!(admin_results[0].email, Some("admin@example.com".to_string()));
+    assert_eq!(
+        admin_results[0].email,
+        Some("admin@example.com".to_string())
+    );
 
     let user_results = repo.find_by_role(UserRole::User, 10).await.unwrap();
     assert_eq!(user_results.len(), 2);
@@ -211,7 +241,10 @@ async fn test_repository_batch_operations() {
     }
 
     // Test batch update status
-    let updated_count = repo.batch_update_status(&user_ids[..3], UserStatus::Inactive).await.unwrap();
+    let updated_count = repo
+        .batch_update_status(&user_ids[..3], UserStatus::Inactive)
+        .await
+        .unwrap();
     assert_eq!(updated_count, 3);
 
     // Verify the batch update
@@ -240,9 +273,18 @@ async fn test_repository_statistics() {
     let repo = UserRepository::new(pool);
 
     // Create users with different roles
-    let admin_user = repo.create(&create_test_user_request("admin_stats@example.com")).await.unwrap();
-    let user1 = repo.create(&create_test_user_request("user1_stats@example.com")).await.unwrap();
-    let user2 = repo.create(&create_test_user_request("user2_stats@example.com")).await.unwrap();
+    let admin_user = repo
+        .create(&create_test_user_request("admin_stats@example.com"))
+        .await
+        .unwrap();
+    let user1 = repo
+        .create(&create_test_user_request("user1_stats@example.com"))
+        .await
+        .unwrap();
+    let user2 = repo
+        .create(&create_test_user_request("user2_stats@example.com"))
+        .await
+        .unwrap();
 
     // Update one user to admin
     let role_update = UpdateUserRequest {
@@ -323,11 +365,17 @@ async fn test_repository_edge_cases() {
     assert!(result.is_err());
 
     // Test batch update with empty list
-    let result = repo.batch_update_status(&[], UserStatus::Inactive).await.unwrap();
+    let result = repo
+        .batch_update_status(&[], UserStatus::Inactive)
+        .await
+        .unwrap();
     assert_eq!(result, 0);
 
     // Test search with no results
-    let results = repo.search_by_display_name("nonexistent", 10).await.unwrap();
+    let results = repo
+        .search_by_display_name("nonexistent", 10)
+        .await
+        .unwrap();
     assert_eq!(results.len(), 0);
 
     // Test find by role with no results
@@ -362,7 +410,11 @@ async fn test_repository_concurrent_operations() {
     // Verify all users were created with unique IDs
     let mut user_ids = std::collections::HashSet::new();
     for user in &created_users {
-        assert!(!user_ids.contains(&user.id), "Duplicate user ID found: {}", user.id);
+        assert!(
+            !user_ids.contains(&user.id),
+            "Duplicate user ID found: {}",
+            user.id
+        );
         user_ids.insert(user.id);
     }
 
@@ -373,9 +425,7 @@ async fn test_repository_concurrent_operations() {
     for user in &created_users {
         let repo_clone = repo.clone();
         let email = user.email.clone().unwrap();
-        let handle = tokio::spawn(async move {
-            repo_clone.find_by_email(&email).await
-        });
+        let handle = tokio::spawn(async move { repo_clone.find_by_email(&email).await });
         search_handles.push(handle);
     }
 
@@ -437,4 +487,3 @@ async fn test_repository_data_integrity() {
     repo.delete(long_user.id).await.unwrap();
     repo.delete(unicode_user.id).await.unwrap();
 }
-

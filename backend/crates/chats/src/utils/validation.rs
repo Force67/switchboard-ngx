@@ -9,7 +9,9 @@ impl Validator {
     /// Validate email format
     pub fn email(email: &str) -> Result<(), ChatError> {
         if email.trim().is_empty() {
-            return Err(ChatError::DatabaseError("Email cannot be empty".to_string()));
+            return Err(ChatError::DatabaseError(
+                "Email cannot be empty".to_string(),
+            ));
         }
 
         if !email.contains('@') || !email.contains('.') {
@@ -17,13 +19,16 @@ impl Validator {
         }
 
         if email.len() > 255 {
-            return Err(ChatError::DatabaseError("Email too long (max 255 characters)".to_string()));
+            return Err(ChatError::DatabaseError(
+                "Email too long (max 255 characters)".to_string(),
+            ));
         }
 
         // Basic email validation regex
-        let email_regex = regex::Regex::new(
-            r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
-        ).map_err(|e| ChatError::DatabaseError(format!("Failed to compile email regex: {}", e)))?;
+        let email_regex = regex::Regex::new(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
+            .map_err(|e| {
+                ChatError::DatabaseError(format!("Failed to compile email regex: {}", e))
+            })?;
 
         if !email_regex.is_match(email) {
             return Err(ChatError::DatabaseError("Invalid email format".to_string()));
@@ -47,11 +52,15 @@ impl Validator {
     /// Validate chat title
     pub fn chat_title(title: &str) -> Result<(), ChatError> {
         if title.trim().is_empty() {
-            return Err(ChatError::DatabaseError("Chat title cannot be empty".to_string()));
+            return Err(ChatError::DatabaseError(
+                "Chat title cannot be empty".to_string(),
+            ));
         }
 
         if title.len() > 255 {
-            return Err(ChatError::DatabaseError("Chat title too long (max 255 characters)".to_string()));
+            return Err(ChatError::DatabaseError(
+                "Chat title too long (max 255 characters)".to_string(),
+            ));
         }
 
         Ok(())
@@ -60,11 +69,15 @@ impl Validator {
     /// Validate message content
     pub fn message_content(content: &str) -> Result<(), ChatError> {
         if content.trim().is_empty() {
-            return Err(ChatError::DatabaseError("Message content cannot be empty".to_string()));
+            return Err(ChatError::DatabaseError(
+                "Message content cannot be empty".to_string(),
+            ));
         }
 
         if content.len() > 100_000 {
-            return Err(ChatError::DatabaseError("Message content too long (max 100,000 characters)".to_string()));
+            return Err(ChatError::DatabaseError(
+                "Message content too long (max 100,000 characters)".to_string(),
+            ));
         }
 
         Ok(())
@@ -73,18 +86,25 @@ impl Validator {
     /// Validate file name
     pub fn file_name(file_name: &str) -> Result<(), ChatError> {
         if file_name.trim().is_empty() {
-            return Err(ChatError::DatabaseError("File name cannot be empty".to_string()));
+            return Err(ChatError::DatabaseError(
+                "File name cannot be empty".to_string(),
+            ));
         }
 
         if file_name.len() > 255 {
-            return Err(ChatError::DatabaseError("File name too long (max 255 characters)".to_string()));
+            return Err(ChatError::DatabaseError(
+                "File name too long (max 255 characters)".to_string(),
+            ));
         }
 
         // Check for invalid characters in file names
         let invalid_chars = ['/', '\\', ':', '*', '?', '"', '<', '>', '|'];
         for char in invalid_chars {
             if file_name.contains(char) {
-                return Err(ChatError::DatabaseError(format!("File name contains invalid character: {}", char)));
+                return Err(ChatError::DatabaseError(format!(
+                    "File name contains invalid character: {}",
+                    char
+                )));
             }
         }
 
@@ -94,7 +114,9 @@ impl Validator {
     /// Validate file size
     pub fn file_size(size_bytes: i64, max_size_bytes: i64) -> Result<(), ChatError> {
         if size_bytes <= 0 {
-            return Err(ChatError::DatabaseError("File size must be positive".to_string()));
+            return Err(ChatError::DatabaseError(
+                "File size must be positive".to_string(),
+            ));
         }
 
         if size_bytes > max_size_bytes {
@@ -110,11 +132,15 @@ impl Validator {
     /// Validate MIME type
     pub fn mime_type(mime_type: &str, allowed_types: &[&str]) -> Result<(), ChatError> {
         if mime_type.trim().is_empty() {
-            return Err(ChatError::DatabaseError("MIME type cannot be empty".to_string()));
+            return Err(ChatError::DatabaseError(
+                "MIME type cannot be empty".to_string(),
+            ));
         }
 
         if !allowed_types.contains(&mime_type) {
-            return Err(ChatError::DatabaseError("File type not allowed".to_string()));
+            return Err(ChatError::DatabaseError(
+                "File type not allowed".to_string(),
+            ));
         }
 
         Ok(())
@@ -126,15 +152,21 @@ impl Validator {
         let limit = limit.unwrap_or(20);
 
         if page == 0 {
-            return Err(ChatError::DatabaseError("Page number must be greater than 0".to_string()));
+            return Err(ChatError::DatabaseError(
+                "Page number must be greater than 0".to_string(),
+            ));
         }
 
         if limit == 0 {
-            return Err(ChatError::DatabaseError("Page limit must be greater than 0".to_string()));
+            return Err(ChatError::DatabaseError(
+                "Page limit must be greater than 0".to_string(),
+            ));
         }
 
         if limit > 100 {
-            return Err(ChatError::DatabaseError("Page limit cannot exceed 100".to_string()));
+            return Err(ChatError::DatabaseError(
+                "Page limit cannot exceed 100".to_string(),
+            ));
         }
 
         Ok((page, limit))
@@ -159,7 +191,9 @@ impl Validator {
 
         // Basic URL validation
         if !url.starts_with("http://") && !url.starts_with("https://") {
-            return Err(ChatError::DatabaseError("URL must start with http:// or https://".to_string()));
+            return Err(ChatError::DatabaseError(
+                "URL must start with http:// or https://".to_string(),
+            ));
         }
 
         // More comprehensive URL validation would require additional dependencies
@@ -172,7 +206,9 @@ impl Validator {
         let sanitized = input.trim();
 
         if sanitized.is_empty() {
-            return Err(ChatError::DatabaseError("Input cannot be empty".to_string()));
+            return Err(ChatError::DatabaseError(
+                "Input cannot be empty".to_string(),
+            ));
         }
 
         if sanitized.len() > max_length {
@@ -283,7 +319,10 @@ mod tests {
 
     #[test]
     fn test_validator_sanitize_string() {
-        assert_eq!(Validator::sanitize_string("  hello  ", 10).unwrap(), "hello");
+        assert_eq!(
+            Validator::sanitize_string("  hello  ", 10).unwrap(),
+            "hello"
+        );
         assert!(Validator::sanitize_string("", 10).is_err());
         assert!(Validator::sanitize_string("  ", 10).is_err());
         assert!(Validator::sanitize_string("hello", 3).is_err());

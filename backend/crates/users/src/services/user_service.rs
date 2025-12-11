@@ -1,8 +1,10 @@
 //! User service for managing user operations.
 
-use switchboard_database::{User, CreateUserRequest, UpdateUserRequest, UserRepository, UserError, UserResult};
-use sqlx::sqlite::SqlitePool;
 use super::mock_repositories::MockUserRepository;
+use sqlx::sqlite::SqlitePool;
+use switchboard_database::{
+    CreateUserRequest, UpdateUserRequest, User, UserError, UserRepository, UserResult,
+};
 
 /// Service for managing user operations
 pub struct UserService<R> {
@@ -276,7 +278,7 @@ impl UserRepo for MockUserRepository {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{User, CreateUserRequest, UpdateUserRequest, UserRole};
+    use crate::{CreateUserRequest, UpdateUserRequest, User, UserRole};
 
     fn create_test_service() -> UserService<MockUserRepository> {
         UserService::new_for_testing()
@@ -303,7 +305,10 @@ mod tests {
         assert_eq!(user.email, Some("test@example.com".to_string()));
         assert_eq!(user.username, Some("testuser".to_string()));
         assert_eq!(user.display_name, Some("Test User".to_string()));
-        assert_eq!(user.avatar_url, Some("https://example.com/avatar.jpg".to_string()));
+        assert_eq!(
+            user.avatar_url,
+            Some("https://example.com/avatar.jpg".to_string())
+        );
         assert_eq!(user.role, UserRole::User);
         assert!(user.is_active);
         assert!(user.id > 0);
@@ -356,7 +361,10 @@ mod tests {
         let request = create_valid_user_request();
 
         let created = service.create_user(request).await.unwrap();
-        let found = service.get_user_by_email(&created.email.clone().unwrap()).await.unwrap();
+        let found = service
+            .get_user_by_email(&created.email.clone().unwrap())
+            .await
+            .unwrap();
 
         assert!(found.is_some());
         let found_user = found.unwrap();
@@ -379,7 +387,10 @@ mod tests {
         let updated = service.update_user(user.id, update_request).await.unwrap();
 
         assert_eq!(updated.display_name, Some("Updated Name".to_string()));
-        assert_eq!(updated.avatar_url, Some("https://example.com/new_avatar.jpg".to_string()));
+        assert_eq!(
+            updated.avatar_url,
+            Some("https://example.com/new_avatar.jpg".to_string())
+        );
         assert_eq!(updated.role, UserRole::Admin);
     }
 
@@ -448,7 +459,10 @@ mod tests {
         assert!(matches!(result, Err(UserError::UserNotFound)));
 
         // Verify user cannot be found by email either
-        let email_result = service.get_user_by_email(&found_user.email.clone().unwrap()).await.unwrap();
+        let email_result = service
+            .get_user_by_email(&found_user.email.clone().unwrap())
+            .await
+            .unwrap();
         assert!(email_result.is_none());
     }
 
@@ -493,7 +507,10 @@ mod tests {
 
         let updated_user = service.update_user(user.id, update_request).await.unwrap();
 
-        assert_eq!(updated_user.display_name, Some("New Display Name".to_string()));
+        assert_eq!(
+            updated_user.display_name,
+            Some("New Display Name".to_string())
+        );
         assert_eq!(updated_user.avatar_url, user.avatar_url); // Should remain unchanged
         assert_ne!(updated_user.display_name, original_display_name);
     }
@@ -582,5 +599,4 @@ mod tests {
         let result = service.get_user(user_id).await;
         assert!(matches!(result, Err(UserError::UserNotFound)));
     }
-
-  }
+}

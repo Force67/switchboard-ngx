@@ -1,8 +1,8 @@
 //! Integration tests for the users crate with real database
 
-use switchboard_users::{UserService, CreateUserRequest, UpdateUserRequest, UserRole, UserStatus};
-use tempfile::TempDir;
 use sqlx::SqlitePool;
+use switchboard_users::{CreateUserRequest, UpdateUserRequest, UserRole, UserService, UserStatus};
+use tempfile::TempDir;
 
 /// Database configuration for testing
 #[derive(Clone)]
@@ -18,7 +18,9 @@ async fn create_test_database() -> (SqlitePool, TempDir) {
     let db_url = format!("sqlite:{}", db_path.display());
 
     // Create a simple SQLite pool for testing
-    let pool = SqlitePool::connect(&db_url).await.expect("Failed to create test database");
+    let pool = SqlitePool::connect(&db_url)
+        .await
+        .expect("Failed to create test database");
 
     // Create basic users table schema
     sqlx::query(
@@ -40,7 +42,7 @@ async fn create_test_database() -> (SqlitePool, TempDir) {
             is_active BOOLEAN NOT NULL DEFAULT true,
             password_hash TEXT
         )
-        "#
+        "#,
     )
     .execute(&pool)
     .await
@@ -86,12 +88,18 @@ async fn test_user_crud_operations_integration() {
     assert_eq!(found_user.email, created_user.email);
 
     // Test READ by public ID
-    let found_by_public_id = service.get_user_by_public_id(&created_user.public_id).await.unwrap();
+    let found_by_public_id = service
+        .get_user_by_public_id(&created_user.public_id)
+        .await
+        .unwrap();
     assert_eq!(found_by_public_id.id, created_user.id);
     assert_eq!(found_by_public_id.public_id, created_user.public_id);
 
     // Test READ by email
-    let found_by_email = service.get_user_by_email(&created_user.email.clone().unwrap()).await.unwrap();
+    let found_by_email = service
+        .get_user_by_email(&created_user.email.clone().unwrap())
+        .await
+        .unwrap();
     assert!(found_by_email.is_some());
     assert_eq!(found_by_email.unwrap().id, created_user.id);
 
@@ -102,11 +110,20 @@ async fn test_user_crud_operations_integration() {
         bio: Some("Updated bio".to_string()),
         role: Some(UserRole::Admin),
     };
-    let updated_user = service.update_user(created_user.id, update_request).await.unwrap();
+    let updated_user = service
+        .update_user(created_user.id, update_request)
+        .await
+        .unwrap();
 
     assert_eq!(updated_user.id, created_user.id);
-    assert_eq!(updated_user.display_name, Some("Updated Test User".to_string()));
-    assert_eq!(updated_user.avatar_url, Some("https://example.com/new_avatar.jpg".to_string()));
+    assert_eq!(
+        updated_user.display_name,
+        Some("Updated Test User".to_string())
+    );
+    assert_eq!(
+        updated_user.avatar_url,
+        Some("https://example.com/new_avatar.jpg".to_string())
+    );
     assert_eq!(updated_user.bio, Some("Updated bio".to_string()));
     assert_eq!(updated_user.role, UserRole::Admin);
 
@@ -122,7 +139,10 @@ async fn test_user_crud_operations_integration() {
 
     // Test EMAIL AVAILABILITY
     assert!(!service.is_email_available(&email).await.unwrap());
-    assert!(service.is_email_available("newemail@example.com").await.unwrap());
+    assert!(service
+        .is_email_available("newemail@example.com")
+        .await
+        .unwrap());
 
     // Test DELETE
     service.delete_user(created_user.id).await.unwrap();
@@ -169,7 +189,10 @@ async fn test_multiple_user_operations_integration() {
     // Test search with partial match
     let search_results = service.search_users("Alice", 10).await.unwrap();
     assert_eq!(search_results.len(), 1);
-    assert_eq!(search_results[0].display_name, Some("Alice Smith".to_string()));
+    assert_eq!(
+        search_results[0].display_name,
+        Some("Alice Smith".to_string())
+    );
 
     // Test search with multiple results
     let search_results = service.search_users("a", 10).await.unwrap();
@@ -302,7 +325,11 @@ async fn test_user_concurrent_operations_integration() {
     // Verify all users were created with unique IDs
     let mut user_ids = std::collections::HashSet::new();
     for user in &created_users {
-        assert!(!user_ids.contains(&user.id), "Duplicate user ID found: {}", user.id);
+        assert!(
+            !user_ids.contains(&user.id),
+            "Duplicate user ID found: {}",
+            user.id
+        );
         user_ids.insert(user.id);
     }
 
@@ -345,5 +372,3 @@ async fn test_user_search_pagination_integration() {
     let results = service.search_users("Test", 100).await.unwrap();
     assert_eq!(results.len(), 20);
 }
-
-

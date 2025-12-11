@@ -72,7 +72,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_error_handling() {
-        use switchboard_chats::{ChatError, utils::Validator};
+        use switchboard_chats::{utils::Validator, ChatError};
 
         // Test validation errors
         assert!(Validator::email("invalid-email").is_err());
@@ -89,7 +89,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_permission_system() {
-        use switchboard_chats::utils::{PermissionChecker, MemberAction};
+        use switchboard_chats::utils::{MemberAction, PermissionChecker};
 
         let owner = switchboard_chats::ChatMember::new(
             1,
@@ -111,7 +111,11 @@ mod tests {
         assert!(PermissionChecker::can_manage_members(&member).is_err());
 
         // Test member management permissions
-        assert!(PermissionChecker::can_manage_member(&owner, &member, MemberAction::Remove).is_ok());
-        assert!(PermissionChecker::can_manage_member(&member, &owner, MemberAction::Remove).is_err());
+        assert!(
+            PermissionChecker::can_manage_member(&owner, &member, MemberAction::Remove).is_ok()
+        );
+        assert!(
+            PermissionChecker::can_manage_member(&member, &owner, MemberAction::Remove).is_err()
+        );
     }
 }

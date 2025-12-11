@@ -29,20 +29,17 @@ pub mod utils;
 
 // Re-export database types and repositories
 pub use switchboard_database::{
-    UserRepository, SessionRepository, SettingsRepository, NotificationRepository,
-    UserResult, UserError, AuthResult, NotificationResult,
-    User, AuthSession, Notification, UserSettings, UserPreferences,
-    CreateUserRequest, UpdateUserRequest, CreateSessionRequest,
-    UserRole, UserStatus,
+    AuthResult, AuthSession, CreateSessionRequest, CreateUserRequest, Notification,
+    NotificationRepository, NotificationResult, SessionRepository, SettingsRepository,
+    UpdateUserRequest, User, UserError, UserPreferences, UserRepository, UserResult, UserRole,
+    UserSettings, UserStatus,
 };
 
 // Re-export sqlx for pool access
 pub use sqlx::sqlite::SqlitePool;
 
 // Re-export main types for convenience
-pub use services::{
-    UserService, AuthService, SessionService,
-};
+pub use services::{AuthService, SessionService, UserService};
 pub use types::events::UserEvent;
 
 #[cfg(test)]

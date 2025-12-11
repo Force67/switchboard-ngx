@@ -2,23 +2,27 @@
 //!
 //! Simplified entity definitions for use by the repository layer
 
-pub mod user;
-pub mod chat;
-pub mod message;
 pub mod attachment;
-pub mod member;
+pub mod chat;
 pub mod invite;
+pub mod member;
+pub mod message;
 pub mod notification;
 pub mod session;
 pub mod settings;
+pub mod user;
 
 // Re-export all entity types
-pub use user::{User, CreateUserRequest, UpdateUserRequest, UserStatus, UserRole};
-pub use chat::{Chat, CreateChatRequest, UpdateChatRequest, ChatType, ChatStatus};
-pub use message::{ChatMessage, CreateMessageRequest, UpdateMessageRequest, MessageStatus, MessageType};
-pub use attachment::{MessageAttachment, CreateAttachmentRequest, AttachmentType};
-pub use member::{ChatMember, CreateMemberRequest, MemberRole};
+pub use attachment::{AttachmentType, CreateAttachmentRequest, MessageAttachment};
+pub use chat::{Chat, ChatStatus, ChatType, CreateChatRequest, UpdateChatRequest};
 pub use invite::{ChatInvite, CreateInviteRequest, InviteStatus};
-pub use notification::{Notification, CreateNotificationRequest, NotificationType, NotificationPriority};
-pub use session::{AuthSession, CreateSessionRequest, LoginRequest, RegisterRequest, AuthProvider};
-pub use settings::{UserSettings, UserPreferences};
+pub use member::{ChatMember, CreateMemberRequest, MemberRole};
+pub use message::{
+    ChatMessage, CreateMessageRequest, MessageStatus, MessageType, UpdateMessageRequest,
+};
+pub use notification::{
+    CreateNotificationRequest, Notification, NotificationPriority, NotificationType,
+};
+pub use session::{AuthProvider, AuthSession, CreateSessionRequest, LoginRequest, RegisterRequest};
+pub use settings::{UserPreferences, UserSettings};
+pub use user::{CreateUserRequest, UpdateUserRequest, User, UserRole, UserStatus};

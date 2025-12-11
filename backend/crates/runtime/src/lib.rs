@@ -2,13 +2,12 @@ use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use redis::aio::ConnectionManager;
+use sqlx::SqlitePool;
 use switchboard_auth::Authenticator;
 use switchboard_config::AppConfig;
-use switchboard_database::{initialize_database};
-use sqlx::SqlitePool;
+use switchboard_database::initialize_database;
 use switchboard_orchestrator::Orchestrator;
 use tracing::info;
-
 
 pub mod telemetry {
     use anyhow::Result;

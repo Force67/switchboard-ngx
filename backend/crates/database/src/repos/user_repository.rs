@@ -1,9 +1,9 @@
 //! User repository for database operations.
 
-use crate::entities::{User, CreateUserRequest, UpdateUserRequest};
-use crate::types::{UserResult, UserError};
-use sqlx::{SqlitePool, Row};
+use crate::entities::{CreateUserRequest, UpdateUserRequest, User};
+use crate::types::{UserError, UserResult};
 use chrono::Utc;
+use sqlx::{Row, SqlitePool};
 
 /// Repository for user database operations
 #[derive(Clone)]
@@ -36,7 +36,9 @@ impl UserRepository {
                 display_name: row.get("display_name"),
                 avatar_url: row.get("avatar_url"),
                 bio: row.get("bio"),
-                status: crate::entities::user::UserStatus::from(row.get::<String, _>("status").as_str()),
+                status: crate::entities::user::UserStatus::from(
+                    row.get::<String, _>("status").as_str(),
+                ),
                 role: crate::entities::user::UserRole::from(row.get::<String, _>("role").as_str()),
                 created_at: row.get("created_at"),
                 updated_at: row.get("updated_at"),
@@ -69,7 +71,9 @@ impl UserRepository {
                 display_name: row.get("display_name"),
                 avatar_url: row.get("avatar_url"),
                 bio: row.get("bio"),
-                status: crate::entities::user::UserStatus::from(row.get::<String, _>("status").as_str()),
+                status: crate::entities::user::UserStatus::from(
+                    row.get::<String, _>("status").as_str(),
+                ),
                 role: crate::entities::user::UserRole::from(row.get::<String, _>("role").as_str()),
                 created_at: row.get("created_at"),
                 updated_at: row.get("updated_at"),
@@ -102,7 +106,9 @@ impl UserRepository {
                 display_name: row.get("display_name"),
                 avatar_url: row.get("avatar_url"),
                 bio: row.get("bio"),
-                status: crate::entities::user::UserStatus::from(row.get::<String, _>("status").as_str()),
+                status: crate::entities::user::UserStatus::from(
+                    row.get::<String, _>("status").as_str(),
+                ),
                 role: crate::entities::user::UserRole::from(row.get::<String, _>("role").as_str()),
                 created_at: row.get("created_at"),
                 updated_at: row.get("updated_at"),
@@ -149,9 +155,9 @@ impl UserRepository {
         let user_id = result.last_insert_rowid();
 
         // Fetch the created user
-        self.find_by_id(user_id).await?.ok_or_else(|| {
-            UserError::DatabaseError("Failed to retrieve created user".to_string())
-        })
+        self.find_by_id(user_id)
+            .await?
+            .ok_or_else(|| UserError::DatabaseError("Failed to retrieve created user".to_string()))
     }
 
     /// Update user
@@ -183,14 +189,20 @@ impl UserRepository {
         }
 
         if query_parts.is_empty() {
-            return self.find_by_id(user_id).await?.ok_or(UserError::UserNotFound);
+            return self
+                .find_by_id(user_id)
+                .await?
+                .ok_or(UserError::UserNotFound);
         }
 
         query_parts.push("updated_at = ?");
         values.push(now);
 
         let set_clause = query_parts.join(", ");
-        let query_str = format!("UPDATE users SET {} WHERE id = ? AND status != 'deleted'", set_clause);
+        let query_str = format!(
+            "UPDATE users SET {} WHERE id = ? AND status != 'deleted'",
+            set_clause
+        );
 
         let mut query = sqlx::query(&query_str);
         for value in values {
@@ -198,18 +210,18 @@ impl UserRepository {
         }
         query = query.bind(user_id);
 
-        query
-            .execute(&self.pool)
-            .await
-            .map_err(|e| {
-                if e.to_string().contains("UNIQUE constraint failed") && e.to_string().contains("email") {
-                    UserError::EmailAlreadyExists
-                } else {
-                    UserError::DatabaseError(e.to_string())
-                }
-            })?;
+        query.execute(&self.pool).await.map_err(|e| {
+            if e.to_string().contains("UNIQUE constraint failed") && e.to_string().contains("email")
+            {
+                UserError::EmailAlreadyExists
+            } else {
+                UserError::DatabaseError(e.to_string())
+            }
+        })?;
 
-        self.find_by_id(user_id).await?.ok_or(UserError::UserNotFound)
+        self.find_by_id(user_id)
+            .await?
+            .ok_or(UserError::UserNotFound)
     }
 
     /// Delete user (soft delete)
@@ -282,7 +294,9 @@ impl UserRepository {
                 display_name: row.get("display_name"),
                 avatar_url: row.get("avatar_url"),
                 bio: row.get("bio"),
-                status: crate::entities::user::UserStatus::from(row.get::<String, _>("status").as_str()),
+                status: crate::entities::user::UserStatus::from(
+                    row.get::<String, _>("status").as_str(),
+                ),
                 role: crate::entities::user::UserRole::from(row.get::<String, _>("role").as_str()),
                 created_at: row.get("created_at"),
                 updated_at: row.get("updated_at"),
@@ -298,7 +312,7 @@ impl UserRepository {
     /// Check if email exists
     pub async fn email_exists(&self, email: &str) -> UserResult<bool> {
         let count: Option<i64> = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM users WHERE email = ? AND status != 'deleted'"
+            "SELECT COUNT(*) FROM users WHERE email = ? AND status != 'deleted'",
         )
         .bind(email)
         .fetch_one(&self.pool)
@@ -310,12 +324,11 @@ impl UserRepository {
 
     /// Get user count
     pub async fn count(&self) -> UserResult<i64> {
-        let count: Option<i64> = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM users WHERE status != 'deleted'"
-        )
-        .fetch_one(&self.pool)
-        .await
-        .map_err(|e| UserError::DatabaseError(e.to_string()))?;
+        let count: Option<i64> =
+            sqlx::query_scalar("SELECT COUNT(*) FROM users WHERE status != 'deleted'")
+                .fetch_one(&self.pool)
+                .await
+                .map_err(|e| UserError::DatabaseError(e.to_string()))?;
 
         Ok(count.unwrap_or(0))
     }
@@ -323,7 +336,7 @@ impl UserRepository {
     /// Get active users count
     pub async fn count_active(&self) -> UserResult<i64> {
         let count: Option<i64> = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM users WHERE status = 'active' AND is_active = true"
+            "SELECT COUNT(*) FROM users WHERE status = 'active' AND is_active = true",
         )
         .fetch_one(&self.pool)
         .await
@@ -337,7 +350,7 @@ impl UserRepository {
         let now = Utc::now().to_rfc3339();
 
         let result = sqlx::query(
-            "UPDATE users SET is_active = ?, updated_at = ? WHERE id = ? AND status != 'deleted'"
+            "UPDATE users SET is_active = ?, updated_at = ? WHERE id = ? AND status != 'deleted'",
         )
         .bind(is_active)
         .bind(&now)
@@ -413,7 +426,9 @@ impl UserRepository {
                 display_name: row.get("display_name"),
                 avatar_url: row.get("avatar_url"),
                 bio: row.get("bio"),
-                status: crate::entities::user::UserStatus::from(row.get::<String, _>("status").as_str()),
+                status: crate::entities::user::UserStatus::from(
+                    row.get::<String, _>("status").as_str(),
+                ),
                 role: crate::entities::user::UserRole::from(row.get::<String, _>("role").as_str()),
                 created_at: row.get("created_at"),
                 updated_at: row.get("updated_at"),
@@ -428,7 +443,11 @@ impl UserRepository {
     }
 
     /// Get users by role
-    pub async fn find_by_role(&self, role: crate::entities::user::UserRole, limit: u32) -> UserResult<Vec<User>> {
+    pub async fn find_by_role(
+        &self,
+        role: crate::entities::user::UserRole,
+        limit: u32,
+    ) -> UserResult<Vec<User>> {
         let rows = sqlx::query(
             r#"
             SELECT id, public_id, email, username, display_name, avatar_url, bio, status, role, created_at, updated_at, last_login_at, email_verified, is_active
@@ -454,7 +473,9 @@ impl UserRepository {
                 display_name: row.get("display_name"),
                 avatar_url: row.get("avatar_url"),
                 bio: row.get("bio"),
-                status: crate::entities::user::UserStatus::from(row.get::<String, _>("status").as_str()),
+                status: crate::entities::user::UserStatus::from(
+                    row.get::<String, _>("status").as_str(),
+                ),
                 role: crate::entities::user::UserRole::from(row.get::<String, _>("role").as_str()),
                 created_at: row.get("created_at"),
                 updated_at: row.get("updated_at"),
@@ -468,7 +489,11 @@ impl UserRepository {
     }
 
     /// Batch update user status
-    pub async fn batch_update_status(&self, user_ids: &[i64], status: crate::entities::user::UserStatus) -> UserResult<u32> {
+    pub async fn batch_update_status(
+        &self,
+        user_ids: &[i64],
+        status: crate::entities::user::UserStatus,
+    ) -> UserResult<u32> {
         if user_ids.is_empty() {
             return Ok(0);
         }
@@ -502,7 +527,7 @@ impl UserRepository {
 
         // Get counts by role
         let role_rows = sqlx::query(
-            "SELECT role, COUNT(*) as count FROM users WHERE status != 'deleted' GROUP BY role"
+            "SELECT role, COUNT(*) as count FROM users WHERE status != 'deleted' GROUP BY role",
         )
         .fetch_all(&self.pool)
         .await
@@ -510,7 +535,10 @@ impl UserRepository {
 
         let mut by_role = Vec::new();
         for row in role_rows {
-            if let (Some(role), Some(count)) = (row.get::<Option<String>, _>("role"), row.get::<Option<i64>, _>("count")) {
+            if let (Some(role), Some(count)) = (
+                row.get::<Option<String>, _>("role"),
+                row.get::<Option<i64>, _>("count"),
+            ) {
                 let user_role = crate::entities::user::UserRole::from(role.as_str());
                 by_role.push((user_role, count));
             }
@@ -535,8 +563,8 @@ pub struct UserStats {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::TempDir;
     use sqlx::SqlitePool;
+    use tempfile::TempDir;
 
     async fn create_test_pool() -> SqlitePool {
         let temp_dir = TempDir::new().unwrap();
@@ -564,7 +592,7 @@ mod tests {
                 is_active BOOLEAN NOT NULL DEFAULT true,
                 password_hash TEXT
             )
-            "#
+            "#,
         )
         .execute(&pool)
         .await

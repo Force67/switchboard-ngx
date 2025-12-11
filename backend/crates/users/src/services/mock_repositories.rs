@@ -1,9 +1,9 @@
 //! Mock repository implementations for testing core service functionality
 
-use switchboard_database::{User, CreateUserRequest, UpdateUserRequest, UserRole, UserStatus};
-use switchboard_database::{UserError, UserResult};
 use std::collections::HashMap;
 use std::sync::Arc;
+use switchboard_database::{CreateUserRequest, UpdateUserRequest, User, UserRole, UserStatus};
+use switchboard_database::{UserError, UserResult};
 use tokio::sync::RwLock;
 
 /// Mock user repository for testing
@@ -168,8 +168,8 @@ pub struct MockUserStats {
 }
 
 // Mock session repository for testing
-use switchboard_database::{AuthSession, CreateSessionRequest, AuthProvider};
 use switchboard_database::{AuthError, AuthResult};
+use switchboard_database::{AuthProvider, AuthSession, CreateSessionRequest};
 
 pub struct MockSessionRepository {
     sessions: Arc<RwLock<HashMap<String, AuthSession>>>,

@@ -22,11 +22,15 @@ pub fn validate_email(email: &str) -> Result<(), UserError> {
 /// Validate password strength requirements
 pub fn validate_password(password: &str) -> Result<(), UserError> {
     if password.len() < 8 {
-        return Err(UserError::DatabaseError("Password must be at least 8 characters long".to_string()));
+        return Err(UserError::DatabaseError(
+            "Password must be at least 8 characters long".to_string(),
+        ));
     }
 
     if password.len() > 128 {
-        return Err(UserError::DatabaseError("Password must be less than 128 characters long".to_string()));
+        return Err(UserError::DatabaseError(
+            "Password must be less than 128 characters long".to_string(),
+        ));
     }
 
     let has_lowercase = password.chars().any(|c| c.is_lowercase());
@@ -34,15 +38,21 @@ pub fn validate_password(password: &str) -> Result<(), UserError> {
     let has_digit = password.chars().any(|c| c.is_ascii_digit());
 
     if !has_lowercase {
-        return Err(UserError::DatabaseError("Password must contain at least one lowercase letter".to_string()));
+        return Err(UserError::DatabaseError(
+            "Password must contain at least one lowercase letter".to_string(),
+        ));
     }
 
     if !has_uppercase {
-        return Err(UserError::DatabaseError("Password must contain at least one uppercase letter".to_string()));
+        return Err(UserError::DatabaseError(
+            "Password must contain at least one uppercase letter".to_string(),
+        ));
     }
 
     if !has_digit {
-        return Err(UserError::DatabaseError("Password must contain at least one digit".to_string()));
+        return Err(UserError::DatabaseError(
+            "Password must contain at least one digit".to_string(),
+        ));
     }
 
     Ok(())
@@ -51,18 +61,24 @@ pub fn validate_password(password: &str) -> Result<(), UserError> {
 /// Validate username
 pub fn validate_username(username: &str) -> Result<(), UserError> {
     if username.len() < 3 {
-        return Err(UserError::DatabaseError("Username must be at least 3 characters long".to_string()));
+        return Err(UserError::DatabaseError(
+            "Username must be at least 3 characters long".to_string(),
+        ));
     }
 
     if username.len() > 30 {
-        return Err(UserError::DatabaseError("Username must be less than 30 characters long".to_string()));
+        return Err(UserError::DatabaseError(
+            "Username must be less than 30 characters long".to_string(),
+        ));
     }
 
     let username_regex = Regex::new(r"^[a-zA-Z0-9_-]+$")
         .map_err(|_| UserError::DatabaseError("Invalid username regex".to_string()))?;
 
     if !username_regex.is_match(username) {
-        return Err(UserError::DatabaseError("Username can only contain letters, numbers, underscores, and hyphens".to_string()));
+        return Err(UserError::DatabaseError(
+            "Username can only contain letters, numbers, underscores, and hyphens".to_string(),
+        ));
     }
 
     Ok(())
@@ -71,17 +87,23 @@ pub fn validate_username(username: &str) -> Result<(), UserError> {
 /// Validate display name
 pub fn validate_display_name(display_name: &str) -> Result<(), UserError> {
     if display_name.trim().is_empty() {
-        return Err(UserError::DatabaseError("Display name cannot be empty".to_string()));
+        return Err(UserError::DatabaseError(
+            "Display name cannot be empty".to_string(),
+        ));
     }
 
     if display_name.len() > 50 {
-        return Err(UserError::DatabaseError("Display name must be less than 50 characters long".to_string()));
+        return Err(UserError::DatabaseError(
+            "Display name must be less than 50 characters long".to_string(),
+        ));
     }
 
     // Allow most characters but prevent obvious problematic ones
     let disallowed_chars = ['\n', '\r', '\t', '\0'];
     if display_name.chars().any(|c| disallowed_chars.contains(&c)) {
-        return Err(UserError::DatabaseError("Display name contains invalid characters".to_string()));
+        return Err(UserError::DatabaseError(
+            "Display name contains invalid characters".to_string(),
+        ));
     }
 
     Ok(())
@@ -137,7 +159,9 @@ pub fn is_safe_content(content: &str) -> bool {
     let content_lower = content.to_lowercase();
 
     !suspicious_patterns.iter().any(|pattern| {
-        Regex::new(pattern).map(|regex| regex.is_match(&content_lower)).unwrap_or(false)
+        Regex::new(pattern)
+            .map(|regex| regex.is_match(&content_lower))
+            .unwrap_or(false)
     })
 }
 
@@ -206,16 +230,23 @@ mod tests {
     fn test_sanitize_input() {
         assert_eq!(sanitize_input("  hello world  "), "hello world");
         assert_eq!(sanitize_input("hello\0world"), "helloworld");
-        assert_eq!(sanitize_input("a".repeat(1500).as_str()), "a".repeat(1000).as_str());
+        assert_eq!(
+            sanitize_input("a".repeat(1500).as_str()),
+            "a".repeat(1000).as_str()
+        );
     }
 
     #[test]
     fn test_is_safe_content() {
         assert!(is_safe_content("This is safe content"));
-        assert!(is_safe_content("Regular text with links: https://example.com"));
+        assert!(is_safe_content(
+            "Regular text with links: https://example.com"
+        ));
 
         assert!(!is_safe_content("<script>alert('xss')</script>"));
         assert!(!is_safe_content("javascript:alert('xss')"));
-        assert!(!is_safe_content("<div onclick=\"alert('xss')\">Click me</div>"));
+        assert!(!is_safe_content(
+            "<div onclick=\"alert('xss')\">Click me</div>"
+        ));
     }
 }

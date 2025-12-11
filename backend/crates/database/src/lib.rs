@@ -6,51 +6,53 @@
 use anyhow::{Context, Result};
 use sqlx::{sqlite::SqlitePoolOptions, SqlitePool};
 use std::path::Path;
+use switchboard_config::DatabaseConfig;
 use tokio::fs;
 use tracing::{error, info};
-use switchboard_config::DatabaseConfig;
 
 pub mod connection;
+pub mod entities;
 pub mod migrations;
 pub mod repos;
-pub mod entities;
 pub mod types;
 
-pub use connection::{DatabaseConnection, prepare_database};
+pub use connection::{prepare_database, DatabaseConnection};
 pub use migrations::run_migrations;
 
 // Re-export repositories
 pub use repos::{
-    UserRepository, SessionRepository, SettingsRepository, NotificationRepository,
-    AttachmentRepository, ChatRepository, MessageRepository, MemberRepository, InviteRepository,
+    AttachmentRepository, ChatRepository, InviteRepository, MemberRepository, MessageRepository,
+    NotificationRepository, SessionRepository, SettingsRepository, UserRepository,
 };
 
 // Re-export entities
 pub use entities::{
-    user::{User, CreateUserRequest, UpdateUserRequest, UserRole, UserStatus},
-    session::{AuthSession, CreateSessionRequest, AuthProvider},
-    notification::{Notification, NotificationType, NotificationPriority},
-    settings::{UserSettings, UserPreferences},
-    attachment::{MessageAttachment, CreateAttachmentRequest, AttachmentType},
-    chat::{Chat, ChatType, ChatStatus, CreateChatRequest, UpdateChatRequest},
-    message::{ChatMessage, CreateMessageRequest, UpdateMessageRequest, MessageStatus, MessageType},
-    member::{ChatMember, MemberRole, CreateMemberRequest, UpdateMemberRoleRequest},
-    invite::{ChatInvite, InviteStatus, CreateInviteRequest},
+    attachment::{AttachmentType, CreateAttachmentRequest, MessageAttachment},
+    chat::{Chat, ChatStatus, ChatType, CreateChatRequest, UpdateChatRequest},
+    invite::{ChatInvite, CreateInviteRequest, InviteStatus},
+    member::{ChatMember, CreateMemberRequest, MemberRole, UpdateMemberRoleRequest},
+    message::{
+        ChatMessage, CreateMessageRequest, MessageStatus, MessageType, UpdateMessageRequest,
+    },
+    notification::{Notification, NotificationPriority, NotificationType},
+    session::{AuthProvider, AuthSession, CreateSessionRequest},
+    settings::{UserPreferences, UserSettings},
+    user::{CreateUserRequest, UpdateUserRequest, User, UserRole, UserStatus},
 };
 
 // Re-export types
 pub use types::{
-    errors::{DatabaseError, UserError, ChatError, NotificationError, AuthError},
-    DatabaseResult, UserResult, ChatResult, NotificationResult, AuthResult,
-    UpdateSettingsRequest,
+    errors::{AuthError, ChatError, DatabaseError, NotificationError, UserError},
+    AuthResult, ChatResult, DatabaseResult, NotificationResult, UpdateSettingsRequest, UserResult,
 };
 
 /// Re-export commonly used types for convenience
 pub use sqlx::Pool;
 
-
 /// Initialize the database with migrations
-pub async fn initialize_database(config: &DatabaseConfig) -> crate::types::DatabaseResult<SqlitePool> {
+pub async fn initialize_database(
+    config: &DatabaseConfig,
+) -> crate::types::DatabaseResult<SqlitePool> {
     let pool = prepare_database(config)
         .await
         .map_err(|e| crate::types::errors::DatabaseError::ConnectionError(e.to_string()))?;

@@ -1,9 +1,9 @@
 //! Session repository for database operations.
 
 use crate::entities::{AuthSession, CreateSessionRequest};
-use crate::types::{AuthResult};
 use crate::types::errors::AuthError;
-use sqlx::{SqlitePool, Row};
+use crate::types::AuthResult;
+use sqlx::{Row, SqlitePool};
 
 /// Repository for session database operations
 pub struct SessionRepository {
@@ -33,19 +33,36 @@ impl SessionRepository {
         .map_err(|e| AuthError::DatabaseError(e.to_string()))?;
 
         if let Some(row) = row {
-            let provider_str: String = row.try_get("provider")
+            let provider_str: String = row
+                .try_get("provider")
                 .map_err(|e| AuthError::DatabaseError(e.to_string()))?;
 
             Ok(Some(AuthSession {
-                id: row.try_get("id").map_err(|e| AuthError::DatabaseError(e.to_string()))?,
-                public_id: row.try_get("public_id").map_err(|e| AuthError::DatabaseError(e.to_string()))?,
-                user_id: row.try_get("user_id").map_err(|e| AuthError::DatabaseError(e.to_string()))?,
-                token: row.try_get("token").map_err(|e| AuthError::DatabaseError(e.to_string()))?,
+                id: row
+                    .try_get("id")
+                    .map_err(|e| AuthError::DatabaseError(e.to_string()))?,
+                public_id: row
+                    .try_get("public_id")
+                    .map_err(|e| AuthError::DatabaseError(e.to_string()))?,
+                user_id: row
+                    .try_get("user_id")
+                    .map_err(|e| AuthError::DatabaseError(e.to_string()))?,
+                token: row
+                    .try_get("token")
+                    .map_err(|e| AuthError::DatabaseError(e.to_string()))?,
                 provider: crate::entities::session::AuthProvider::from(provider_str.as_str()),
-                expires_at: row.try_get("expires_at").map_err(|e| AuthError::DatabaseError(e.to_string()))?,
-                created_at: row.try_get("created_at").map_err(|e| AuthError::DatabaseError(e.to_string()))?,
-                last_accessed_at: row.try_get("last_accessed_at").map_err(|e| AuthError::DatabaseError(e.to_string()))?,
-                is_active: row.try_get("is_active").map_err(|e| AuthError::DatabaseError(e.to_string()))?,
+                expires_at: row
+                    .try_get("expires_at")
+                    .map_err(|e| AuthError::DatabaseError(e.to_string()))?,
+                created_at: row
+                    .try_get("created_at")
+                    .map_err(|e| AuthError::DatabaseError(e.to_string()))?,
+                last_accessed_at: row
+                    .try_get("last_accessed_at")
+                    .map_err(|e| AuthError::DatabaseError(e.to_string()))?,
+                is_active: row
+                    .try_get("is_active")
+                    .map_err(|e| AuthError::DatabaseError(e.to_string()))?,
             }))
         } else {
             Ok(None)
@@ -90,19 +107,36 @@ impl SessionRepository {
         .map_err(|e| AuthError::DatabaseError(e.to_string()))?;
 
         if let Some(row) = row {
-            let provider_str: String = row.try_get("provider")
+            let provider_str: String = row
+                .try_get("provider")
                 .map_err(|e| AuthError::DatabaseError(e.to_string()))?;
 
             Ok(Some(AuthSession {
-                id: row.try_get("id").map_err(|e| AuthError::DatabaseError(e.to_string()))?,
-                public_id: row.try_get("public_id").map_err(|e| AuthError::DatabaseError(e.to_string()))?,
-                user_id: row.try_get("user_id").map_err(|e| AuthError::DatabaseError(e.to_string()))?,
-                token: row.try_get("token").map_err(|e| AuthError::DatabaseError(e.to_string()))?,
+                id: row
+                    .try_get("id")
+                    .map_err(|e| AuthError::DatabaseError(e.to_string()))?,
+                public_id: row
+                    .try_get("public_id")
+                    .map_err(|e| AuthError::DatabaseError(e.to_string()))?,
+                user_id: row
+                    .try_get("user_id")
+                    .map_err(|e| AuthError::DatabaseError(e.to_string()))?,
+                token: row
+                    .try_get("token")
+                    .map_err(|e| AuthError::DatabaseError(e.to_string()))?,
                 provider: crate::entities::session::AuthProvider::from(provider_str.as_str()),
-                expires_at: row.try_get("expires_at").map_err(|e| AuthError::DatabaseError(e.to_string()))?,
-                created_at: row.try_get("created_at").map_err(|e| AuthError::DatabaseError(e.to_string()))?,
-                last_accessed_at: row.try_get("last_accessed_at").map_err(|e| AuthError::DatabaseError(e.to_string()))?,
-                is_active: row.try_get("is_active").map_err(|e| AuthError::DatabaseError(e.to_string()))?,
+                expires_at: row
+                    .try_get("expires_at")
+                    .map_err(|e| AuthError::DatabaseError(e.to_string()))?,
+                created_at: row
+                    .try_get("created_at")
+                    .map_err(|e| AuthError::DatabaseError(e.to_string()))?,
+                last_accessed_at: row
+                    .try_get("last_accessed_at")
+                    .map_err(|e| AuthError::DatabaseError(e.to_string()))?,
+                is_active: row
+                    .try_get("is_active")
+                    .map_err(|e| AuthError::DatabaseError(e.to_string()))?,
             }))
         } else {
             Ok(None)
@@ -120,22 +154,42 @@ impl SessionRepository {
         .await
         .map_err(|e| AuthError::DatabaseError(e.to_string()))?;
 
-        let sessions = rows.into_iter().map(|row| {
-            let provider_str: String = row.try_get("provider")
-                .map_err(|e| AuthError::DatabaseError(e.to_string()))?;
+        let sessions = rows
+            .into_iter()
+            .map(|row| {
+                let provider_str: String = row
+                    .try_get("provider")
+                    .map_err(|e| AuthError::DatabaseError(e.to_string()))?;
 
-            Ok(AuthSession {
-                id: row.try_get("id").map_err(|e| AuthError::DatabaseError(e.to_string()))?,
-                public_id: row.try_get("public_id").map_err(|e| AuthError::DatabaseError(e.to_string()))?,
-                user_id: row.try_get("user_id").map_err(|e| AuthError::DatabaseError(e.to_string()))?,
-                token: row.try_get("token").map_err(|e| AuthError::DatabaseError(e.to_string()))?,
-                provider: crate::entities::session::AuthProvider::from(provider_str.as_str()),
-                expires_at: row.try_get("expires_at").map_err(|e| AuthError::DatabaseError(e.to_string()))?,
-                created_at: row.try_get("created_at").map_err(|e| AuthError::DatabaseError(e.to_string()))?,
-                last_accessed_at: row.try_get("last_accessed_at").map_err(|e| AuthError::DatabaseError(e.to_string()))?,
-                is_active: row.try_get("is_active").map_err(|e| AuthError::DatabaseError(e.to_string()))?,
+                Ok(AuthSession {
+                    id: row
+                        .try_get("id")
+                        .map_err(|e| AuthError::DatabaseError(e.to_string()))?,
+                    public_id: row
+                        .try_get("public_id")
+                        .map_err(|e| AuthError::DatabaseError(e.to_string()))?,
+                    user_id: row
+                        .try_get("user_id")
+                        .map_err(|e| AuthError::DatabaseError(e.to_string()))?,
+                    token: row
+                        .try_get("token")
+                        .map_err(|e| AuthError::DatabaseError(e.to_string()))?,
+                    provider: crate::entities::session::AuthProvider::from(provider_str.as_str()),
+                    expires_at: row
+                        .try_get("expires_at")
+                        .map_err(|e| AuthError::DatabaseError(e.to_string()))?,
+                    created_at: row
+                        .try_get("created_at")
+                        .map_err(|e| AuthError::DatabaseError(e.to_string()))?,
+                    last_accessed_at: row
+                        .try_get("last_accessed_at")
+                        .map_err(|e| AuthError::DatabaseError(e.to_string()))?,
+                    is_active: row
+                        .try_get("is_active")
+                        .map_err(|e| AuthError::DatabaseError(e.to_string()))?,
+                })
             })
-        }).collect::<Result<Vec<_>, _>>()?;
+            .collect::<Result<Vec<_>, _>>()?;
 
         Ok(sessions)
     }
@@ -167,11 +221,13 @@ impl SessionRepository {
 
     /// Delete all sessions for a user (soft delete by setting is_active to false)
     pub async fn delete_by_user_id(&self, user_id: i64) -> AuthResult<u32> {
-        let result = sqlx::query("UPDATE auth_sessions SET is_active = false WHERE user_id = ? AND is_active = true")
-            .bind(user_id)
-            .execute(&self.pool)
-            .await
-            .map_err(|e| AuthError::DatabaseError(e.to_string()))?;
+        let result = sqlx::query(
+            "UPDATE auth_sessions SET is_active = false WHERE user_id = ? AND is_active = true",
+        )
+        .bind(user_id)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| AuthError::DatabaseError(e.to_string()))?;
 
         Ok(result.rows_affected() as u32)
     }
@@ -180,22 +236,26 @@ impl SessionRepository {
     pub async fn delete_expired(&self) -> AuthResult<u32> {
         let now = chrono::Utc::now().to_rfc3339();
 
-        let result = sqlx::query("UPDATE auth_sessions SET is_active = false WHERE expires_at < ? AND is_active = true")
-            .bind(&now)
-            .execute(&self.pool)
-            .await
-            .map_err(|e| AuthError::DatabaseError(e.to_string()))?;
+        let result = sqlx::query(
+            "UPDATE auth_sessions SET is_active = false WHERE expires_at < ? AND is_active = true",
+        )
+        .bind(&now)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| AuthError::DatabaseError(e.to_string()))?;
 
         Ok(result.rows_affected() as u32)
     }
 
     /// Get active session count for user
     pub async fn count_active_sessions(&self, user_id: i64) -> AuthResult<i64> {
-        let row = sqlx::query("SELECT COUNT(*) as count FROM auth_sessions WHERE user_id = ? AND is_active = true")
-            .bind(user_id)
-            .fetch_optional(&self.pool)
-            .await
-            .map_err(|e| AuthError::DatabaseError(e.to_string()))?;
+        let row = sqlx::query(
+            "SELECT COUNT(*) as count FROM auth_sessions WHERE user_id = ? AND is_active = true",
+        )
+        .bind(user_id)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| AuthError::DatabaseError(e.to_string()))?;
 
         let count = row
             .map(|r| r.try_get::<i64, _>("count").unwrap_or(0))
@@ -226,8 +286,8 @@ impl SessionRepository {
 mod tests {
     use super::*;
     use sqlx::SqlitePool;
-    use tempfile::TempDir;
     use std::path::Path;
+    use tempfile::TempDir;
 
     async fn create_test_pool() -> (SqlitePool, TempDir) {
         let temp_dir = TempDir::new().unwrap();
@@ -248,7 +308,7 @@ mod tests {
                 created_at TEXT NOT NULL,
                 last_accessed_at TEXT,
                 is_active BOOLEAN NOT NULL DEFAULT true
-            )"
+            )",
         )
         .execute(&pool)
         .await

@@ -1,7 +1,9 @@
 //! Invite service for managing chat invitations.
 
-use switchboard_database::{ChatInvite, CreateInviteRequest, InviteRepository, ChatResult, MemberRole, InviteStatus};
 use sqlx::SqlitePool;
+use switchboard_database::{
+    ChatInvite, ChatResult, CreateInviteRequest, InviteRepository, InviteStatus, MemberRole,
+};
 
 /// Service for managing chat invitation operations
 pub struct InviteService {
@@ -52,7 +54,12 @@ impl InviteService {
     }
 
     /// Check if user has specific role in chat
-    pub async fn check_chat_role(&self, chat_id: &str, user_id: i64, role: MemberRole) -> ChatResult<()> {
+    pub async fn check_chat_role(
+        &self,
+        chat_id: &str,
+        user_id: i64,
+        role: MemberRole,
+    ) -> ChatResult<()> {
         // TODO: Implement chat role check logic
         todo!("Implement check_chat_role")
     }

@@ -1,8 +1,8 @@
 //! Repository for chat data access operations.
 
-use crate::entities::{Chat, ChatType, ChatStatus, CreateChatRequest, UpdateChatRequest};
-use crate::types::{ChatResult, ChatError};
-use sqlx::{SqlitePool, Row};
+use crate::entities::{Chat, ChatStatus, ChatType, CreateChatRequest, UpdateChatRequest};
+use crate::types::{ChatError, ChatResult};
+use sqlx::{Row, SqlitePool};
 use tracing::{info, warn};
 
 /// Repository for chat database operations
@@ -32,24 +32,52 @@ impl ChatRepository {
         .map_err(|e| ChatError::DatabaseError(e.to_string()))?;
 
         if let Some(row) = row {
-            let chat_type_str: String = row.try_get("chat_type").map_err(|e| ChatError::DatabaseError(e.to_string()))?;
-            let status_str: String = row.try_get("status").map_err(|e| ChatError::DatabaseError(e.to_string()))?;
+            let chat_type_str: String = row
+                .try_get("chat_type")
+                .map_err(|e| ChatError::DatabaseError(e.to_string()))?;
+            let status_str: String = row
+                .try_get("status")
+                .map_err(|e| ChatError::DatabaseError(e.to_string()))?;
 
             Ok(Some(Chat {
-                id: row.try_get("id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
-                public_id: row.try_get("public_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
-                title: row.try_get("title").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
-                description: row.try_get("description").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
-                avatar_url: row.try_get("avatar_url").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
-                folder_id: row.try_get("folder_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                id: row
+                    .try_get("id")
+                    .map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                public_id: row
+                    .try_get("public_id")
+                    .map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                title: row
+                    .try_get("title")
+                    .map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                description: row
+                    .try_get("description")
+                    .map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                avatar_url: row
+                    .try_get("avatar_url")
+                    .map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                folder_id: row
+                    .try_get("folder_id")
+                    .map_err(|e| ChatError::DatabaseError(e.to_string()))?,
                 chat_type: ChatType::from(chat_type_str.as_str()),
                 status: ChatStatus::from(status_str.as_str()),
-                created_by: row.try_get("created_by").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
-                created_at: row.try_get("created_at").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
-                updated_at: row.try_get("updated_at").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
-                member_count: row.try_get("member_count").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
-                message_count: row.try_get("message_count").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
-                last_message_at: row.try_get("last_message_at").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                created_by: row
+                    .try_get("created_by")
+                    .map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                created_at: row
+                    .try_get("created_at")
+                    .map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                updated_at: row
+                    .try_get("updated_at")
+                    .map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                member_count: row
+                    .try_get("member_count")
+                    .map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                message_count: row
+                    .try_get("message_count")
+                    .map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                last_message_at: row
+                    .try_get("last_message_at")
+                    .map_err(|e| ChatError::DatabaseError(e.to_string()))?,
             }))
         } else {
             Ok(None)
@@ -77,27 +105,58 @@ impl ChatRepository {
         .await
         .map_err(|e| ChatError::DatabaseError(e.to_string()))?;
 
-        let chats = rows.into_iter().map(|row| {
-            let chat_type_str: String = row.try_get("chat_type").map_err(|e| ChatError::DatabaseError(e.to_string()))?;
-            let status_str: String = row.try_get("status").map_err(|e| ChatError::DatabaseError(e.to_string()))?;
+        let chats = rows
+            .into_iter()
+            .map(|row| {
+                let chat_type_str: String = row
+                    .try_get("chat_type")
+                    .map_err(|e| ChatError::DatabaseError(e.to_string()))?;
+                let status_str: String = row
+                    .try_get("status")
+                    .map_err(|e| ChatError::DatabaseError(e.to_string()))?;
 
-            Ok(Chat {
-                id: row.try_get("id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
-                public_id: row.try_get("public_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
-                title: row.try_get("title").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
-                description: row.try_get("description").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
-                avatar_url: row.try_get("avatar_url").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
-                folder_id: row.try_get("folder_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
-                chat_type: ChatType::from(chat_type_str.as_str()),
-                status: ChatStatus::from(status_str.as_str()),
-                created_by: row.try_get("created_by").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
-                created_at: row.try_get("created_at").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
-                updated_at: row.try_get("updated_at").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
-                member_count: row.try_get("member_count").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
-                message_count: row.try_get("message_count").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
-                last_message_at: row.try_get("last_message_at").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                Ok(Chat {
+                    id: row
+                        .try_get("id")
+                        .map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                    public_id: row
+                        .try_get("public_id")
+                        .map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                    title: row
+                        .try_get("title")
+                        .map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                    description: row
+                        .try_get("description")
+                        .map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                    avatar_url: row
+                        .try_get("avatar_url")
+                        .map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                    folder_id: row
+                        .try_get("folder_id")
+                        .map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                    chat_type: ChatType::from(chat_type_str.as_str()),
+                    status: ChatStatus::from(status_str.as_str()),
+                    created_by: row
+                        .try_get("created_by")
+                        .map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                    created_at: row
+                        .try_get("created_at")
+                        .map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                    updated_at: row
+                        .try_get("updated_at")
+                        .map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                    member_count: row
+                        .try_get("member_count")
+                        .map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                    message_count: row
+                        .try_get("message_count")
+                        .map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                    last_message_at: row
+                        .try_get("last_message_at")
+                        .map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                })
             })
-        }).collect::<Result<Vec<_>, _>>()?;
+            .collect::<Result<Vec<_>, _>>()?;
 
         Ok(chats)
     }
@@ -129,24 +188,52 @@ impl ChatRepository {
         .map_err(|e| ChatError::DatabaseError(e.to_string()))?;
 
         if let Some(row) = row {
-            let chat_type_str: String = row.try_get("chat_type").map_err(|e| ChatError::DatabaseError(e.to_string()))?;
-            let status_str: String = row.try_get("status").map_err(|e| ChatError::DatabaseError(e.to_string()))?;
+            let chat_type_str: String = row
+                .try_get("chat_type")
+                .map_err(|e| ChatError::DatabaseError(e.to_string()))?;
+            let status_str: String = row
+                .try_get("status")
+                .map_err(|e| ChatError::DatabaseError(e.to_string()))?;
 
             Ok(Some(Chat {
-                id: row.try_get("id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
-                public_id: row.try_get("public_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
-                title: row.try_get("title").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
-                description: row.try_get("description").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
-                avatar_url: row.try_get("avatar_url").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
-                folder_id: row.try_get("folder_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                id: row
+                    .try_get("id")
+                    .map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                public_id: row
+                    .try_get("public_id")
+                    .map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                title: row
+                    .try_get("title")
+                    .map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                description: row
+                    .try_get("description")
+                    .map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                avatar_url: row
+                    .try_get("avatar_url")
+                    .map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                folder_id: row
+                    .try_get("folder_id")
+                    .map_err(|e| ChatError::DatabaseError(e.to_string()))?,
                 chat_type: ChatType::from(chat_type_str.as_str()),
                 status: ChatStatus::from(status_str.as_str()),
-                created_by: row.try_get("created_by").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
-                created_at: row.try_get("created_at").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
-                updated_at: row.try_get("updated_at").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
-                member_count: row.try_get("member_count").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
-                message_count: row.try_get("message_count").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
-                last_message_at: row.try_get("last_message_at").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                created_by: row
+                    .try_get("created_by")
+                    .map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                created_at: row
+                    .try_get("created_at")
+                    .map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                updated_at: row
+                    .try_get("updated_at")
+                    .map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                member_count: row
+                    .try_get("member_count")
+                    .map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                message_count: row
+                    .try_get("message_count")
+                    .map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                last_message_at: row
+                    .try_get("last_message_at")
+                    .map_err(|e| ChatError::DatabaseError(e.to_string()))?,
             }))
         } else {
             Ok(None)
@@ -205,7 +292,12 @@ impl ChatRepository {
     }
 
     /// Update a chat
-    pub async fn update(&self, public_id: &str, user_id: i64, request: &UpdateChatRequest) -> ChatResult<Chat> {
+    pub async fn update(
+        &self,
+        public_id: &str,
+        user_id: i64,
+        request: &UpdateChatRequest,
+    ) -> ChatResult<Chat> {
         // First check if chat exists and user has permission
         let chat = self.find_by_public_id(public_id).await?;
         if chat.is_none() {
@@ -343,7 +435,7 @@ impl ChatRepository {
             FROM chats c
             LEFT JOIN chat_members cm ON c.id = cm.chat_id
             WHERE (c.created_by = ? OR cm.user_id = ?) AND c.status != 'deleted'
-            "#
+            "#,
         )
         .bind(user_id)
         .bind(user_id)
@@ -386,7 +478,7 @@ mod tests {
                 created_by INTEGER NOT NULL,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
-            )"
+            )",
         )
         .execute(&pool)
         .await
@@ -464,7 +556,10 @@ mod tests {
             status: None,
         };
 
-        let updated = repo.update(&created.public_id, 1, &update_request).await.unwrap();
+        let updated = repo
+            .update(&created.public_id, 1, &update_request)
+            .await
+            .unwrap();
         assert_eq!(updated.title, "Updated Title");
         assert_eq!(updated.description.as_ref().unwrap(), "Updated description");
     }

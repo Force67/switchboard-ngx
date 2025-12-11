@@ -202,8 +202,7 @@ pub fn load() -> anyhow::Result<AppConfig> {
         .set_default("database.max_connections", db_max)
         .unwrap()
         .set_default("auth.session_ttl_seconds", session_ttl_i64)
-        .unwrap()
-        .add_source(config::Environment::with_prefix("SWITCHBOARD").separator("__"));
+        .unwrap();
 
     let mut config_file_attached = false;
 
@@ -227,6 +226,9 @@ pub fn load() -> anyhow::Result<AppConfig> {
     if !config_file_attached {
         debug!("no configuration file found, relying on defaults and environment overrides");
     }
+
+    // Environment should override both defaults and file-backed config
+    builder = builder.add_source(config::Environment::with_prefix("SWITCHBOARD").separator("__"));
 
     let cfg = builder.build().context("unable to build configuration")?;
 

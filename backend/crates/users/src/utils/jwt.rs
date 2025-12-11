@@ -50,7 +50,12 @@ impl JwtManager {
     }
 
     /// Generate a new JWT token
-    pub fn generate_token(&self, user_id: &str, session_id: &str, user_role: &str) -> Result<String, UserError> {
+    pub fn generate_token(
+        &self,
+        user_id: &str,
+        session_id: &str,
+        user_role: &str,
+    ) -> Result<String, UserError> {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map_err(|_| UserError::DatabaseError("System time error".to_string()))?;
@@ -111,12 +116,8 @@ impl JwtManager {
         validation.set_audience(&[&self.audience]);
         validation.set_issuer(&[&self.issuer]);
 
-        let token_data = jsonwebtoken::decode::<Claims>(
-            token,
-            &self.decoding_key,
-            &validation,
-        )
-        .map_err(|e| UserError::DatabaseError(format!("Failed to decode token: {}", e)))?;
+        let token_data = jsonwebtoken::decode::<Claims>(token, &self.decoding_key, &validation)
+            .map_err(|e| UserError::DatabaseError(format!("Failed to decode token: {}", e)))?;
 
         Ok(token_data.claims.session_id)
     }
@@ -157,7 +158,9 @@ mod tests {
         let session_id = "session_456";
         let user_role = "user";
 
-        let token = jwt_manager.generate_token(user_id, session_id, user_role).unwrap();
+        let token = jwt_manager
+            .generate_token(user_id, session_id, user_role)
+            .unwrap();
         assert!(!token.is_empty());
 
         let claims = jwt_manager.validate_token(&token).unwrap();
@@ -184,7 +187,9 @@ mod tests {
         let session_id = "session_456";
         let user_role = "user";
 
-        let original_token = jwt_manager.generate_token(user_id, session_id, user_role).unwrap();
+        let original_token = jwt_manager
+            .generate_token(user_id, session_id, user_role)
+            .unwrap();
 
         // Add a small delay to ensure different timestamps
         std::thread::sleep(std::time::Duration::from_secs(1));
@@ -209,7 +214,9 @@ mod tests {
         let session_id = "session_456";
         let user_role = "user";
 
-        let token = jwt_manager.generate_token(user_id, session_id, user_role).unwrap();
+        let token = jwt_manager
+            .generate_token(user_id, session_id, user_role)
+            .unwrap();
         let extracted_session_id = jwt_manager.extract_session_id(&token).unwrap();
 
         assert_eq!(extracted_session_id, session_id);

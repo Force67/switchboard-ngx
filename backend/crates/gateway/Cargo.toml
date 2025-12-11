@@ -10,6 +10,7 @@ switchboard-users = { path = "../users" }
 switchboard-chats = { path = "../chats" }
 switchboard-auth = { path = "../auth" }
 switchboard-config = { path = "../config" }
+switchboard-orchestrator = { path = "../orchestrator" }
 
 # Web framework
 axum = { workspace = true }
@@ -25,6 +26,7 @@ serde_json = { workspace = true }
 uuid = { workspace = true }
 chrono = { workspace = true }
 tracing = { workspace = true }
+cuid2 = { workspace = true }
 
 # WebSocket
 tokio = { workspace = true, features = ["full"] }
@@ -32,6 +34,13 @@ futures-util = { workspace = true }
 
 # Database
 sqlx = { workspace = true }
+
+# Providers / completion
+denkwerk = { workspace = true }
+
+# Binary data / encoding
+base64 = { workspace = true }
+bytes = { workspace = true }
 
 # OpenAPI documentation
 utoipa = { workspace = true }

@@ -7,6 +7,7 @@ use axum::{
 };
 use serde_json::json;
 use thiserror::Error;
+use switchboard_orchestrator::OrchestratorError;
 
 /// Gateway error types
 #[derive(Error, Debug)]
@@ -175,5 +176,32 @@ impl From<tokio::sync::broadcast::error::RecvError> for GatewayError {
 impl From<serde_json::Error> for GatewayError {
     fn from(error: serde_json::Error) -> Self {
         GatewayError::InvalidRequest(format!("JSON serialization error: {}", error))
+    }
+}
+
+impl From<OrchestratorError> for GatewayError {
+    fn from(error: OrchestratorError) -> Self {
+        match error {
+            OrchestratorError::OpenRouterApiKeyMissing => {
+                GatewayError::ServiceError("OpenRouter API key missing".to_string())
+            }
+            OrchestratorError::ProviderNotFound(model) => {
+                GatewayError::InvalidRequest(format!("Unknown model or provider: {}", model))
+            }
+            OrchestratorError::ProviderIndexMissing => GatewayError::InternalError(
+                "Provider catalogue not initialised".to_string(),
+            ),
+            OrchestratorError::OpenRouterUnavailable => GatewayError::ServiceUnavailable,
+            OrchestratorError::ProviderInit { identifier, .. } => {
+                GatewayError::ServiceError(format!("Failed to initialise provider {}", identifier))
+            }
+            OrchestratorError::ProviderLoad(source) => {
+                GatewayError::InternalError(format!("Failed to load providers: {}", source))
+            }
+            OrchestratorError::ProviderHttp(_) => GatewayError::ServiceUnavailable,
+            OrchestratorError::ProviderResponse(err) => {
+                GatewayError::ServiceError(format!("Invalid provider response: {}", err))
+            }
+        }
     }
 }

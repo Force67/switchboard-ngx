@@ -325,9 +325,11 @@ async fn authenticate_user(
         "Missing token".to_string(),
     ))?;
 
-    let session = state
-        .session_service
-        .validate_session(&token)
+    // Reuse the same token validation path as the HTTP middleware so WebSockets
+    // accept the dev token flow and the legacy `sessions` table.
+    let (_auth_user, session) = state
+        .authenticator()
+        .authenticate_token(&token)
         .await
         .map_err(|e| GatewayError::AuthenticationFailed(format!("Invalid token: {}", e)))?;
 

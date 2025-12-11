@@ -183,15 +183,18 @@ pub async fn run_migrations(pool: &SqlitePool) -> anyhow::Result<()> {
     // Invites, notifications, permissions, settings
     sqlx::query(
         r#"
+        DROP TABLE IF EXISTS chat_invites;
         CREATE TABLE IF NOT EXISTS chat_invites (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             public_id TEXT NOT NULL UNIQUE,
             chat_id INTEGER NOT NULL,
             inviter_id INTEGER NOT NULL,
-            invitee_email TEXT,
+            invited_email TEXT NOT NULL,
+            invite_code TEXT NOT NULL,
             status TEXT NOT NULL DEFAULT 'pending',
             expires_at TEXT NOT NULL,
             created_at TEXT NOT NULL,
+            accepted_at TEXT,
             FOREIGN KEY (chat_id) REFERENCES chats(id) ON DELETE CASCADE,
             FOREIGN KEY (inviter_id) REFERENCES users(id) ON DELETE CASCADE
         );

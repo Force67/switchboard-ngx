@@ -51,7 +51,19 @@ impl ChatService {
             switchboard_database::ChatError::DatabaseError("Invalid created_by user ID".to_string())
         })?;
 
-        self.chat_repository.create(user_id, request).await
+        let chat = self.chat_repository.create(user_id, request).await?;
+
+        // Ensure creator is recorded as an owner member so role checks succeed.
+        let _ = self
+            .member_repository
+            .create(&switchboard_database::CreateMemberRequest {
+                chat_id: chat.id,
+                user_id,
+                role: MemberRole::Owner,
+            })
+            .await;
+
+        Ok(chat)
     }
 
     /// Create a new chat (legacy method)

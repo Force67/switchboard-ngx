@@ -133,7 +133,7 @@ impl ChatEvent {
             ChatEvent::MessageCreated { message, .. } => vec![message.sender_id],
             ChatEvent::MessageUpdated { message, .. } => vec![message.sender_id],
             ChatEvent::MessageDeleted { user_id, .. } => vec![*user_id],
-            ChatEvent::AttachmentCreated { attachment, .. } => vec![], // TODO: Add user_id to attachment
+            ChatEvent::AttachmentCreated { attachment, .. } => vec![attachment.uploader_id],
             ChatEvent::AttachmentDeleted { user_id, .. } => vec![*user_id],
             ChatEvent::MemberAdded { member, .. } => vec![member.user_id],
             ChatEvent::MemberUpdated { member, .. } => vec![member.user_id],

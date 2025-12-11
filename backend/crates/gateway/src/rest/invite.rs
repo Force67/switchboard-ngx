@@ -3,7 +3,7 @@
 use axum::{
     extract::{Path, Query, Request, State},
     response::IntoResponse,
-    Json, Router,
+    Json, Router, Extension,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -205,11 +205,9 @@ pub async fn list_user_invites(
 pub async fn create_invite(
     Path(chat_id): Path<String>,
     State(state): State<Arc<GatewayState>>,
+    Extension(user_id): Extension<i64>,
     Json(payload): Json<CreateInviteRequest>,
 ) -> GatewayResult<impl IntoResponse> {
-    // For now, use a placeholder user_id since we can't extract it without Request
-    let user_id = 1; // TODO: Fix authentication
-
     // Check if user is owner or admin
     state
         .invite_service

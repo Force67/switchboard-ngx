@@ -1,28 +1,29 @@
-use anyhow::Context;
+use anyhow::{anyhow, Context};
 use argon2::password_hash::{
     rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString,
 };
 use argon2::Argon2;
+use authware::{OidcClient, OidcProvider};
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine as _;
 use chrono::{DateTime, Duration, Utc};
 use cuid2::CuidConstructor;
-use oauth2::basic::BasicClient;
-use oauth2::reqwest::async_http_client;
-use oauth2::{
-    AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken, RedirectUrl, Scope,
-    TokenResponse, TokenUrl,
-};
 use once_cell::sync::Lazy;
 use rand::RngCore;
 use reqwest::header::ACCEPT;
 use serde::{Deserialize, Serialize};
 use sqlx::{Row, SqlitePool, Transaction};
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration as StdDuration, Instant};
 use switchboard_config::{AuthConfig, GithubAuthConfig};
 use thiserror::Error;
 use tracing::{debug, info};
+use url::Url;
 
 const GITHUB_USER_API: &str = "https://api.github.com/user";
+const GITHUB_EMAILS_API: &str = "https://api.github.com/user/emails";
+const GITHUB_STATE_TTL: StdDuration = StdDuration::from_secs(600);
 
 static CUID: Lazy<CuidConstructor> = Lazy::new(CuidConstructor::new);
 
@@ -33,12 +34,20 @@ pub struct Authenticator {
     github: Option<GithubOAuth>,
 }
 
+#[derive(Debug, Clone)]
+pub struct GithubLogin {
+    pub authorize_url: String,
+    pub state: String,
+}
+
 #[derive(Debug, Error)]
 pub enum AuthError {
     #[error("user already exists")]
     UserExists,
     #[error("invalid credentials")]
     InvalidCredentials,
+    #[error("invalid oauth state")]
+    InvalidState,
     #[error("github oauth is not configured")]
     GithubOauthDisabled,
     #[error("github oauth error: {0}")]
@@ -98,15 +107,9 @@ impl Authenticator {
         self.github.is_some()
     }
 
-    pub fn github_authorization_url(
-        &self,
-        state: &str,
-        redirect_uri: &str,
-    ) -> Result<String, AuthError> {
+    pub fn github_authorization_url(&self, redirect_uri: &str) -> Result<GithubLogin, AuthError> {
         let github = self.github.as_ref().ok_or(AuthError::GithubOauthDisabled)?;
-        github
-            .authorize_url(state, redirect_uri)
-            .map_err(AuthError::GithubOauth)
+        github.authorization_url(redirect_uri)
     }
 
     pub async fn register_with_password(
@@ -180,14 +183,12 @@ impl Authenticator {
     pub async fn login_with_github_code(
         &self,
         code: &str,
+        state: &str,
         redirect_uri: &str,
-    ) -> Result<AuthSession, AuthError> {
+    ) -> Result<(AuthSession, User), AuthError> {
         let github = self.github.as_ref().ok_or(AuthError::GithubOauthDisabled)?;
 
-        let profile = github
-            .exchange_code(code, redirect_uri)
-            .await
-            .map_err(AuthError::GithubOauth)?;
+        let profile = github.exchange_code(code, state, redirect_uri).await?;
 
         self.login_with_github_profile(profile).await
     }
@@ -195,7 +196,7 @@ impl Authenticator {
     pub async fn login_with_github_profile(
         &self,
         profile: GithubProfile,
-    ) -> Result<AuthSession, AuthError> {
+    ) -> Result<(AuthSession, User), AuthError> {
         let mut tx = self.pool.begin().await?;
 
         if let Some(row) = sqlx::query(
@@ -207,7 +208,9 @@ impl Authenticator {
         {
             let user_id: i64 = row.try_get("user_id")?;
             tx.commit().await?;
-            return self.issue_session(user_id).await;
+            let session = self.issue_session(user_id).await?;
+            let user = self.fetch_user(user_id).await?;
+            return Ok((session, user));
         }
 
         let (user, email) = if let Some(email) = profile.email.as_ref() {
@@ -247,7 +250,8 @@ impl Authenticator {
         tx.commit().await?;
 
         info!(user = %user.public_id, email = ?email, "linked github identity");
-        self.issue_session(user.id).await
+        let session = self.issue_session(user.id).await?;
+        Ok((session, user))
     }
 
     pub async fn authenticate_token(&self, token: &str) -> Result<(User, AuthSession), AuthError> {
@@ -283,6 +287,52 @@ impl Authenticator {
         };
 
         Ok((user, session))
+    }
+
+    pub async fn revoke_session(&self, token: &str) -> Result<(), AuthError> {
+        sqlx::query("DELETE FROM sessions WHERE token = ?")
+            .bind(token)
+            .execute(&self.pool)
+            .await?;
+
+        Ok(())
+    }
+
+    pub async fn create_dev_session(&self) -> Result<(AuthSession, User), AuthError> {
+        let email = "dev@example.com";
+        let display_name = Some("Dev User".to_string());
+
+        let user = if let Some(row) = sqlx::query("SELECT id FROM users WHERE email = ?")
+            .bind(email)
+            .fetch_optional(&self.pool)
+            .await?
+        {
+            let user_id: i64 = row.try_get("id")?;
+            self.fetch_user(user_id).await?
+        } else {
+            let mut tx = self.pool.begin().await?;
+            let user = self
+                .insert_user(&mut tx, Some(email.to_owned()), display_name.clone())
+                .await?;
+
+            let now = Utc::now().to_rfc3339();
+            sqlx::query(
+                "INSERT INTO user_identities (user_id, provider, provider_uid, secret, created_at, updated_at) VALUES (?, ?, ?, NULL, ?, ?)",
+            )
+            .bind(user.id)
+            .bind("development")
+            .bind(email)
+            .bind(&now)
+            .bind(&now)
+            .execute(&mut *tx)
+            .await?;
+
+            tx.commit().await?;
+            user
+        };
+
+        let session = self.issue_session(user.id).await?;
+        Ok((session, user))
     }
 
     pub async fn user_profile(&self, user_id: i64) -> Result<User, AuthError> {
@@ -393,73 +443,117 @@ fn new_public_id() -> String {
 
 #[derive(Clone)]
 struct GithubOAuth {
-    client: BasicClient,
+    client_id: String,
+    client_secret: String,
     http: reqwest::Client,
+    states: Arc<Mutex<HashMap<String, GithubState>>>,
+}
+
+#[derive(Clone)]
+struct GithubState {
+    pkce_verifier: Option<String>,
+    redirect_uri: String,
+    created_at: Instant,
 }
 
 impl GithubOAuth {
     fn from_config(config: &GithubAuthConfig) -> Option<Self> {
         let client_id = config.client_id.clone()?;
         let client_secret = config.client_secret.clone()?;
-        Some(Self::new(client_id, client_secret))
-    }
-
-    fn new(client_id: String, client_secret: String) -> Self {
-        let client = BasicClient::new(
-            ClientId::new(client_id),
-            Some(ClientSecret::new(client_secret)),
-            AuthUrl::new("https://github.com/login/oauth/authorize".to_string())
-                .expect("invalid github auth url"),
-            Some(
-                TokenUrl::new("https://github.com/login/oauth/access_token".to_string())
-                    .expect("invalid github token url"),
-            ),
-        )
-        .set_auth_type(oauth2::AuthType::RequestBody);
 
         let http = reqwest::Client::builder()
             .user_agent("switchboard-backend")
             .build()
             .expect("failed to build github http client");
 
-        Self { client, http }
+        Some(Self {
+            client_id,
+            client_secret,
+            http,
+            states: Arc::new(Mutex::new(HashMap::new())),
+        })
     }
 
-    fn authorize_url(&self, state: &str, redirect_uri: &str) -> anyhow::Result<String> {
-        let redirect = RedirectUrl::new(redirect_uri.to_owned())
-            .context("invalid redirect uri for github oauth")?;
-
-        let (url, _) = self
-            .client
-            .clone()
-            .set_redirect_uri(redirect)
-            .authorize_url(|| CsrfToken::new(state.to_owned()))
-            .add_scope(Scope::new("read:user".to_string()))
-            .add_scope(Scope::new("user:email".to_string()))
-            .url();
-
-        Ok(url.to_string())
+    fn build_client(&self, redirect_uri: &str) -> anyhow::Result<OidcClient> {
+        OidcClient::builder()
+            .new(
+                OidcProvider::GitHub,
+                self.client_id.clone(),
+                redirect_uri.to_owned(),
+            )
+            .client_secret(self.client_secret.clone())
+            .build()
+            .context("failed to build github oidc client")
     }
 
-    async fn exchange_code(&self, code: &str, redirect_uri: &str) -> anyhow::Result<GithubProfile> {
-        let redirect = RedirectUrl::new(redirect_uri.to_owned())
-            .context("invalid redirect uri for github oauth")?;
+    fn authorization_url(&self, redirect_uri: &str) -> Result<GithubLogin, AuthError> {
+        self.cleanup_states();
 
-        let token_response = self
-            .client
-            .clone()
-            .set_redirect_uri(redirect)
-            .exchange_code(AuthorizationCode::new(code.to_owned()))
-            .request_async(async_http_client)
+        let client = self
+            .build_client(redirect_uri)
+            .map_err(AuthError::GithubOauth)?;
+
+        let (url, pkce_pair) = client
+            .authorization_url()
+            .map_err(|err| AuthError::GithubOauth(anyhow!(err)))?;
+
+        let state = extract_state(&url).ok_or(AuthError::InvalidState)?;
+
+        {
+            let mut states = self.states.lock().unwrap();
+            states.insert(
+                state.clone(),
+                GithubState {
+                    pkce_verifier: pkce_pair.map(|pair| pair.code_verifier),
+                    redirect_uri: redirect_uri.to_owned(),
+                    created_at: Instant::now(),
+                },
+            );
+        }
+
+        Ok(GithubLogin {
+            authorize_url: url.to_string(),
+            state,
+        })
+    }
+
+    async fn exchange_code(
+        &self,
+        code: &str,
+        state: &str,
+        redirect_uri: &str,
+    ) -> Result<GithubProfile, AuthError> {
+        self.cleanup_states();
+
+        let stored = {
+            let mut states = self.states.lock().unwrap();
+            states.remove(state)
+        }
+        .ok_or(AuthError::InvalidState)?;
+
+        if stored.redirect_uri != redirect_uri {
+            return Err(AuthError::InvalidState);
+        }
+
+        let client = self
+            .build_client(redirect_uri)
+            .map_err(AuthError::GithubOauth)?;
+
+        let token = client
+            .exchange_code_for_token_with_pkce(code, stored.pkce_verifier.as_deref())
             .await
-            .context("failed to exchange github oauth code")?;
+            .map_err(|err| AuthError::GithubOauth(anyhow!(err)))?;
 
-        let access_token = token_response.access_token().secret();
+        let profile = self.fetch_profile(token.access_token).await?;
 
+        Ok(profile)
+    }
+
+    async fn fetch_profile(&self, access_token: String) -> Result<GithubProfile, AuthError> {
         let user: GithubUserResponse = self
             .http
             .get(GITHUB_USER_API)
-            .bearer_auth(access_token)
+            .bearer_auth(&access_token)
             .header(ACCEPT, "application/vnd.github+json")
             .send()
             .await
@@ -472,12 +566,50 @@ impl GithubOAuth {
 
         debug!(login = %user.login, id = user.id, "fetched github user profile");
 
+        let email = match user.email {
+            Some(email) => Some(email),
+            None => self.fetch_primary_email(&access_token).await?,
+        };
+
         Ok(GithubProfile {
             id: user.id.to_string(),
-            email: user.email,
-            name: user.name,
+            email,
+            name: user.name.or_else(|| Some(user.login.clone())),
         })
     }
+
+    async fn fetch_primary_email(&self, access_token: &str) -> Result<Option<String>, AuthError> {
+        let emails: Vec<GithubEmailResponse> = self
+            .http
+            .get(GITHUB_EMAILS_API)
+            .bearer_auth(access_token)
+            .header(ACCEPT, "application/vnd.github+json")
+            .send()
+            .await
+            .context("failed to call github emails api")?
+            .error_for_status()
+            .context("github emails api returned error")?
+            .json()
+            .await
+            .context("failed to decode github emails response")?;
+
+        Ok(emails
+            .into_iter()
+            .find(|item| item.primary && item.verified)
+            .map(|item| item.email))
+    }
+
+    fn cleanup_states(&self) {
+        let cutoff = Instant::now() - GITHUB_STATE_TTL;
+        let mut states = self.states.lock().unwrap();
+        states.retain(|_, entry| entry.created_at >= cutoff);
+    }
+}
+
+fn extract_state(url: &Url) -> Option<String> {
+    url.query_pairs()
+        .find(|(key, _)| key == "state")
+        .map(|(_, value)| value.to_string())
 }
 
 #[derive(Deserialize)]
@@ -486,4 +618,11 @@ struct GithubUserResponse {
     login: String,
     name: Option<String>,
     email: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct GithubEmailResponse {
+    email: String,
+    primary: bool,
+    verified: bool,
 }

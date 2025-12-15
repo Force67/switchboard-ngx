@@ -1,20 +1,19 @@
 //! Attachment REST endpoints
 
 use axum::{
-    extract::{Path, Query, State, Request},
-    Json,
     body::Body,
-    http::{StatusCode, header},
+    extract::{Path, Query, Request, State},
+    http::{header, StatusCode},
     response::{IntoResponse, Response},
-    Router,
+    Json, Router,
 };
 use serde::{Deserialize, Serialize};
-use utoipa::{IntoParams, ToSchema};
 use std::sync::Arc;
+use utoipa::{IntoParams, ToSchema};
 
-use crate::state::GatewayState;
 use crate::error::{GatewayError, GatewayResult};
 use crate::middleware::extract_user_id;
+use crate::state::GatewayState;
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct AttachmentResponse {
@@ -47,7 +46,7 @@ pub struct CreateAttachmentRequest {
 #[derive(Debug, Deserialize, IntoParams, ToSchema)]
 pub struct ListAttachmentsQuery {
     pub message_id: Option<String>, // Filter by message
-    pub file_type: Option<String>, // Filter by file type
+    pub file_type: Option<String>,  // Filter by file type
     pub limit: Option<i64>,
     pub offset: Option<i64>,
 }
@@ -81,10 +80,22 @@ pub struct ErrorResponse {
 /// Create attachment routes
 pub fn create_attachment_routes() -> Router<Arc<GatewayState>> {
     Router::new()
-        .route("/chats/:chat_id/attachments", axum::routing::get(list_attachments))
-        .route("/chats/:chat_id/messages/:message_id/attachments", axum::routing::get(list_message_attachments).post(create_attachment))
-        .route("/attachments/:attachment_id", axum::routing::get(get_attachment).delete(delete_attachment))
-        .route("/attachments/:attachment_id/download", axum::routing::get(download_attachment))
+        .route(
+            "/chats/:chat_id/attachments",
+            axum::routing::get(list_attachments),
+        )
+        .route(
+            "/chats/:chat_id/messages/:message_id/attachments",
+            axum::routing::get(list_message_attachments).post(create_attachment),
+        )
+        .route(
+            "/attachments/:attachment_id",
+            axum::routing::get(get_attachment).delete(delete_attachment),
+        )
+        .route(
+            "/attachments/:attachment_id/download",
+            axum::routing::get(download_attachment),
+        )
 }
 
 #[utoipa::path(
@@ -129,11 +140,20 @@ pub async fn list_attachments(
 
     let attachments = state
         .attachment_service
-        .list_by_chat(&chat_id, params.message_id.as_deref(), file_type_filter, params.limit, params.offset)
+        .list_by_chat(
+            &chat_id,
+            params.message_id.as_deref(),
+            file_type_filter,
+            params.limit,
+            params.offset,
+        )
         .await
         .map_err(|e| GatewayError::ServiceError(format!("Failed to list attachments: {}", e)))?;
 
-    let attachment_responses: Vec<AttachmentResponse> = attachments.into_iter().map(|attachment| attachment.into()).collect();
+    let attachment_responses: Vec<AttachmentResponse> = attachments
+        .into_iter()
+        .map(|attachment| attachment.into())
+        .collect();
     Ok(Json(attachment_responses))
 }
 
@@ -171,9 +191,14 @@ pub async fn list_message_attachments(
         .attachment_service
         .list_by_message(&message_id, None, None)
         .await
-        .map_err(|e| GatewayError::ServiceError(format!("Failed to list message attachments: {}", e)))?;
+        .map_err(|e| {
+            GatewayError::ServiceError(format!("Failed to list message attachments: {}", e))
+        })?;
 
-    let attachment_responses: Vec<AttachmentResponse> = attachments.into_iter().map(|attachment| attachment.into()).collect();
+    let attachment_responses: Vec<AttachmentResponse> = attachments
+        .into_iter()
+        .map(|attachment| attachment.into())
+        .collect();
     Ok(Json(attachment_responses))
 }
 
@@ -213,19 +238,27 @@ pub async fn create_attachment(
 
     // Validate file size (max 50MB)
     if payload.file_size > 50 * 1024 * 1024 {
-        return Err(GatewayError::InvalidRequest("File size cannot exceed 50MB".to_string()));
+        return Err(GatewayError::InvalidRequest(
+            "File size cannot exceed 50MB".to_string(),
+        ));
     }
 
     // Validate file name
     if payload.file_name.is_empty() || payload.file_name.len() > 255 {
-        return Err(GatewayError::InvalidRequest("File name must be between 1 and 255 characters".to_string()));
+        return Err(GatewayError::InvalidRequest(
+            "File name must be between 1 and 255 characters".to_string(),
+        ));
     }
 
     // Determine file type from mime type or extension
     let file_type = determine_file_type(&payload.file_type, &payload.file_name);
 
     // Generate a unique file URL
-    let file_url = format!("/attachments/{}_{}", chrono::Utc::now().timestamp(), payload.file_name);
+    let file_url = format!(
+        "/attachments/{}_{}",
+        chrono::Utc::now().timestamp(),
+        payload.file_name
+    );
 
     // Get the actual message ID from the public ID
     let message = state
@@ -336,7 +369,10 @@ pub async fn download_attachment(
     let response = Response::builder()
         .status(StatusCode::OK)
         .header(header::CONTENT_TYPE, attachment.file_type.to_string())
-        .header(header::CONTENT_DISPOSITION, format!("attachment; filename=\"{}\"", attachment.file_name))
+        .header(
+            header::CONTENT_DISPOSITION,
+            format!("attachment; filename=\"{}\"", attachment.file_name),
+        )
         .header(header::CONTENT_LENGTH, attachment.file_size.to_string())
         .body(Body::from("File content would be here"))
         .map_err(|_| GatewayError::InternalError("Failed to create response".to_string()))?;
@@ -377,7 +413,11 @@ pub async fn delete_attachment(
     if attachment.uploader_public_id != user_id.to_string() {
         state
             .attachment_service
-            .check_chat_role(&attachment.chat_public_id, user_id, switchboard_database::MemberRole::Admin)
+            .check_chat_role(
+                &attachment.chat_public_id,
+                user_id,
+                switchboard_database::MemberRole::Admin,
+            )
             .await
             .map_err(|e| GatewayError::AuthorizationFailed(format!("Access denied: {}", e)))?;
     }
@@ -395,17 +435,34 @@ fn determine_file_type(mime_type: &str, file_name: &str) -> switchboard_database
     let mime_lower = mime_type.to_lowercase();
     let name_lower = file_name.to_lowercase();
 
-    if mime_lower.starts_with("image/") || name_lower.ends_with(".jpg") || name_lower.ends_with(".jpeg") ||
-       name_lower.ends_with(".png") || name_lower.ends_with(".gif") || name_lower.ends_with(".webp") {
+    if mime_lower.starts_with("image/")
+        || name_lower.ends_with(".jpg")
+        || name_lower.ends_with(".jpeg")
+        || name_lower.ends_with(".png")
+        || name_lower.ends_with(".gif")
+        || name_lower.ends_with(".webp")
+    {
         switchboard_database::AttachmentType::Image
-    } else if mime_lower.starts_with("video/") || name_lower.ends_with(".mp4") || name_lower.ends_with(".avi") ||
-              name_lower.ends_with(".mov") || name_lower.ends_with(".mkv") {
+    } else if mime_lower.starts_with("video/")
+        || name_lower.ends_with(".mp4")
+        || name_lower.ends_with(".avi")
+        || name_lower.ends_with(".mov")
+        || name_lower.ends_with(".mkv")
+    {
         switchboard_database::AttachmentType::Video
-    } else if mime_lower.starts_with("audio/") || name_lower.ends_with(".mp3") || name_lower.ends_with(".wav") ||
-              name_lower.ends_with(".ogg") || name_lower.ends_with(".flac") {
+    } else if mime_lower.starts_with("audio/")
+        || name_lower.ends_with(".mp3")
+        || name_lower.ends_with(".wav")
+        || name_lower.ends_with(".ogg")
+        || name_lower.ends_with(".flac")
+    {
         switchboard_database::AttachmentType::Audio
-    } else if mime_lower.starts_with("application/pdf") || name_lower.ends_with(".pdf") ||
-              name_lower.ends_with(".doc") || name_lower.ends_with(".docx") || name_lower.ends_with(".txt") {
+    } else if mime_lower.starts_with("application/pdf")
+        || name_lower.ends_with(".pdf")
+        || name_lower.ends_with(".doc")
+        || name_lower.ends_with(".docx")
+        || name_lower.ends_with(".txt")
+    {
         switchboard_database::AttachmentType::Document
     } else {
         switchboard_database::AttachmentType::Other

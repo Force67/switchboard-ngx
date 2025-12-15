@@ -15,7 +15,7 @@
 //! ```rust
 //! use switchboard_gateway::{GatewayState, create_router};
 //!
-//! let state = GatewayState::new(pool, jwt_config);
+//! let state = GatewayState::new(pool, authenticator, jwt_config, None);
 //! let app = create_router(state);
 //!
 //! axum::Server::bind(&"0.0.0.0:3000".parse().unwrap())
@@ -24,46 +24,64 @@
 //!     .unwrap();
 //! ```
 
-pub mod rest;
-pub mod websocket;
-pub mod state;
-pub mod middleware;
 pub mod error;
+pub mod middleware;
+pub mod rest;
+pub mod state;
+pub mod websocket;
 
 // Re-export main types for convenience
-pub use state::{GatewayState, create_gateway_state};
 pub use error::{GatewayError, GatewayResult};
 pub use middleware::auth_middleware;
+pub use state::{create_gateway_state, GatewayState};
 
 // Legacy exports for compatibility
 pub use create_router as build_router;
 pub use GatewayState as AppState;
 
 use axum::{
-    Router,
-    http::Method,
-    middleware as axum_middleware,
+    http::{header, Method},
+    middleware as axum_middleware, Router,
 };
-use tower_http::cors::{CorsLayer, Any};
+use std::sync::Arc;
+use tower_http::cors::{AllowHeaders, AllowOrigin, CorsLayer};
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
-use std::sync::Arc;
 
 /// Create the main application router with all routes
 pub fn create_router(state: GatewayState) -> Router {
     let arc_state = Arc::new(state);
+    let api_routes = rest::create_rest_routes()
+        .route_layer(axum_middleware::from_fn_with_state(
+            arc_state.clone(),
+            middleware::auth_middleware,
+        ))
+        .with_state(arc_state.clone());
     let mut router = Router::new()
         // REST API routes
-        .merge(rest::create_rest_routes().with_state(arc_state.clone()))
+        .nest("/api", api_routes)
         // WebSocket routes
         .merge(websocket::create_websocket_routes().with_state(arc_state))
         // CORS middleware
         .layer(
             CorsLayer::new()
-                .allow_origin(Any)
-                .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE, Method::PATCH])
-                .allow_headers(Any)
-                .allow_credentials(true)
+                .allow_origin(AllowOrigin::mirror_request())
+                .allow_methods([
+                    Method::GET,
+                    Method::POST,
+                    Method::PUT,
+                    Method::DELETE,
+                    Method::PATCH,
+                ])
+                .allow_headers([
+                    header::ACCEPT,
+                    header::AUTHORIZATION,
+                    header::CONTENT_TYPE,
+                    header::ORIGIN,
+                    header::ACCESS_CONTROL_REQUEST_HEADERS,
+                    header::ACCESS_CONTROL_REQUEST_METHOD,
+                ])
+                .allow_credentials(true),
         )
         // Logging middleware
         .layer(axum_middleware::from_fn(middleware::logging_middleware));
@@ -152,9 +170,7 @@ pub fn create_router(state: GatewayState) -> Router {
         struct ApiDoc;
 
         router = router
-            .merge(SwaggerUi::new("/swagger-ui")
-                .url("/api-docs/openapi.json", ApiDoc::openapi())
-            );
+            .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()));
     }
 
     router

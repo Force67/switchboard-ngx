@@ -57,19 +57,13 @@ All authenticated endpoints expect the session token issued during GitHub login 
 
 ### GitHub SSO
 
-Create a GitHub OAuth application and configure its callback URL (e.g. `http://localhost:3000/auth/callback`). Populate `SWITCHBOARD__AUTH__GITHUB__CLIENT_ID` and `SWITCHBOARD__AUTH__GITHUB__CLIENT_SECRET`, then copy `backend/crates/config/switchboard.example.toml` to your working config and fill the GitHub credentials. The frontend automatically redirects to the GitHub flow and completes the exchange via the callback endpoint.
+Create a GitHub OAuth application and configure its callback URL (e.g. `http://localhost:3000/auth/callback`). Populate `SWITCHBOARD__AUTH__GITHUB__CLIENT_ID` and `SWITCHBOARD__AUTH__GITHUB__CLIENT_SECRET` in `.env` at the repo root; the backend reads everything from environment variables. The frontend automatically redirects to the GitHub flow and completes the exchange via the callback endpoint.
 
 By default the backend connects to an in-project SQLite database at `sqlite://switchboard.db`. Supply `SWITCHBOARD__DATABASE__URL` to target PostgreSQL instead, e.g. `postgres://user:pass@localhost/switchboard`.
 
 ### OpenRouter Provider
 
-Switchboard NGX ships with an initial OpenRouter integration powered by the [`denkwerk`](https://github.com/Force67/denkwerk) library.
-
-1. Copy `backend/crates/config/switchboard.example.toml` to `backend/crates/config/switchboard.toml` (the latter is ignored by git) or create a `switchboard.toml` next to the backend binary.
-2. Set `orchestrator.openrouter.api_key` to your OpenRouter key and tweak any other settings you need.
-3. Run the backend; the loader now discovers the config automatically, or you can point to a custom file via `SWITCHBOARD_CONFIG`.
-
-Environment overrides such as `OPENROUTER_API_KEY` and `SWITCHBOARD__ORCHESTRATOR__OPENROUTER__*` remain available for per-machine customisation.
+Switchboard NGX ships with an initial OpenRouter integration powered by the [`denkwerk`](https://github.com/Force67/denkwerk) library. Configure it via environment variables (e.g. `SWITCHBOARD__ORCHESTRATOR__OPENROUTER__API_KEY` for your key, `SWITCHBOARD__ORCHESTRATOR__OPENROUTER__BASE_URL`, and `SWITCHBOARD__ORCHESTRATOR__OPENROUTER__REQUEST_TIMEOUT_SECONDS`). The provider search path can be set with `SWITCHBOARD__ORCHESTRATOR__PROVIDER_SEARCH_PATH__0=providers`.
 
 ### Authentication
 

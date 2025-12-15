@@ -1,8 +1,11 @@
 //! Authentication service for managing auth operations.
 
-use switchboard_database::{AuthSession, User, AuthResult, AuthError, UserError, UserRepository, SessionRepository, AuthProvider, CreateUserRequest, CreateSessionRequest};
-use crate::services::{UserService, SessionService};
+use crate::services::{SessionService, UserService};
 use sqlx::SqlitePool;
+use switchboard_database::{
+    AuthError, AuthProvider, AuthResult, AuthSession, CreateSessionRequest, CreateUserRequest,
+    SessionRepository, User, UserError, UserRepository,
+};
 
 /// Service for managing authentication operations
 pub struct AuthService {
@@ -19,7 +22,10 @@ impl AuthService {
     }
 
     /// Create auth service with custom services (for testing)
-    pub fn with_services(user_service: UserService<UserRepository>, session_service: SessionService) -> Self {
+    pub fn with_services(
+        user_service: UserService<UserRepository>,
+        session_service: SessionService,
+    ) -> Self {
         Self {
             user_service,
             session_service,
@@ -27,7 +33,10 @@ impl AuthService {
     }
 
     /// Login user with email and password
-    pub async fn login(&self, request: switchboard_database::types::LoginRequest) -> AuthResult<AuthSession> {
+    pub async fn login(
+        &self,
+        request: switchboard_database::types::LoginRequest,
+    ) -> AuthResult<AuthSession> {
         // Find existing user by email
         let user = match self.user_service.get_user_by_email(&request.email).await {
             Ok(Some(user)) => user,
@@ -50,18 +59,31 @@ impl AuthService {
     }
 
     /// Register new user
-    pub async fn register(&self, request: switchboard_database::types::RegisterRequest) -> AuthResult<(User, AuthSession)> {
+    pub async fn register(
+        &self,
+        request: switchboard_database::types::RegisterRequest,
+    ) -> AuthResult<(User, AuthSession)> {
         // Create user with email
         let create_request = CreateUserRequest {
             email: request.email.clone(),
-            username: format!("user_{}", uuid::Uuid::new_v4().to_string().split('-').next().unwrap_or("unknown")),
+            username: format!(
+                "user_{}",
+                uuid::Uuid::new_v4()
+                    .to_string()
+                    .split('-')
+                    .next()
+                    .unwrap_or("unknown")
+            ),
             display_name: request.display_name.clone(),
             password: request.password.clone(),
             avatar_url: None,
             bio: None,
         };
 
-        let user = self.user_service.create_user(create_request).await
+        let user = self
+            .user_service
+            .create_user(create_request)
+            .await
             .map_err(|_| AuthError::AuthenticationFailed)?;
 
         // Create session for new user
@@ -79,7 +101,9 @@ impl AuthService {
         }
 
         // Check if session exists and is valid
-        let session = self.session_service.validate_session(token)
+        let session = self
+            .session_service
+            .validate_session(token)
             .await
             .map_err(|_| AuthError::AuthenticationFailed)?;
 
@@ -96,7 +120,10 @@ impl AuthService {
         // Delete session
         self.session_service.delete_session(token).await?;
 
-        log::info!("User logged out with token: {}", &token[..8.min(token.len())]);
+        log::info!(
+            "User logged out with token: {}",
+            &token[..8.min(token.len())]
+        );
         Ok(())
     }
 
@@ -114,11 +141,13 @@ impl AuthService {
         let current_session = self.validate_session(token).await?;
 
         // Create new session
-        let new_session = self.create_user_session(
-            current_session.user_id,
-            &None, // AuthSession doesn't have user_agent field
-            &None, // AuthSession doesn't have ip_address field
-        ).await?;
+        let new_session = self
+            .create_user_session(
+                current_session.user_id,
+                &None, // AuthSession doesn't have user_agent field
+                &None, // AuthSession doesn't have ip_address field
+            )
+            .await?;
 
         // Delete old session
         self.session_service.delete_session(token).await?;
@@ -135,7 +164,12 @@ impl AuthService {
     // Private helper methods
 
     /// Create a session for a user
-    async fn create_user_session(&self, user_id: i64, _user_agent: &Option<String>, _ip_address: &Option<String>) -> AuthResult<AuthSession> {
+    async fn create_user_session(
+        &self,
+        user_id: i64,
+        _user_agent: &Option<String>,
+        _ip_address: &Option<String>,
+    ) -> AuthResult<AuthSession> {
         let token = uuid::Uuid::new_v4().to_string();
         let expires_at = (chrono::Utc::now() + chrono::Duration::hours(24)).to_rfc3339();
 

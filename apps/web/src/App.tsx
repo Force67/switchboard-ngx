@@ -6,6 +6,7 @@ import Sidebar from "./components/Sidebar";
 import MainArea from "./components/MainArea";
 import { apiService } from "./api";
 import type { ApiChat } from "./api";
+import { API_BASE } from "./config";
 import {
   actions,
   addChatToSidebar,
@@ -18,15 +19,15 @@ import type { SidebarBootstrapData } from "./components/sidebarStore";
 import { useSocket } from "./hooks/useSocket";
 import type { Chat, Message, TokenUsage } from "./types/chat";
 
-const DEFAULT_API_BASE =
-  typeof window !== "undefined" ? window.location.origin : "http://localhost:7070";
-const API_BASE = import.meta.env.VITE_API_BASE ?? DEFAULT_API_BASE;
 const DEFAULT_MODEL = import.meta.env.VITE_DEFAULT_MODEL ?? "";
 const GITHUB_REDIRECT_PATH =
   import.meta.env.VITE_GITHUB_REDIRECT_PATH ?? "/auth/callback";
 const SESSION_KEY = "switchboard.session";
 const AUTO_DEV_SESSION_ENABLED =
-  import.meta.env.DEV && import.meta.env.VITE_ENABLE_DEV_LOGIN === "true";
+  import.meta.env.VITE_ENABLE_DEV_LOGIN === "true" ||
+  (typeof window !== "undefined" &&
+    (window.location.hostname === "localhost" ||
+      window.location.hostname === "127.0.0.1"));
 
 interface UserProfile {
   id: string;
@@ -309,6 +310,8 @@ export default function App() {
 
   const logout = () => {
     persistSession(null, { suppressAutoBootstrap: true });
+    setAuthError(null);
+    setAuthenticating(false);
     setModels([]);
     setSelectedModels([]);
     setModelStatuses({});
@@ -591,6 +594,9 @@ export default function App() {
         ) {
           return DEFAULT_MODEL;
         }
+        if (availableModels.some(model => model.id === "debug/echo")) {
+          return "debug/echo";
+        }
         return availableModels[0]?.id;
       })();
 
@@ -608,27 +614,6 @@ export default function App() {
     if (!currentId) {
       newChat(); // Create new chat if none selected
       return handleSubmit(event); // Retry
-    }
-
-    // Check WebSocket connection and subscription
-    const connectionStatus = socket.state().status;
-    const subscribedId = currentSubscription();
-
-    console.log("🔍 Pre-send check:", {
-      connectionStatus,
-      currentId,
-      subscribedId,
-      isSubscribed: currentId === subscribedId
-    });
-
-    if (connectionStatus !== 'connected') {
-      setError("Real-time connection not available. Please check your connection.");
-      return;
-    }
-
-    if (currentId !== subscribedId) {
-      setError("Not subscribed to this chat yet. Please wait a moment and try again.");
-      return;
     }
 
     setLoading(true);
@@ -679,39 +664,152 @@ export default function App() {
       return next;
     });
 
+    const pendingChatId = currentId;
+
     try {
-      // Send message via WebSocket
-      socket.sendMessage(currentId, trimmedPrompt, targetModels);
-
-      // Note: Assistant response will come via WebSocket and be handled by the effect above
-
-      const pendingChatId = currentId;
-      // Fallback: Stop loading after 10 seconds in case WebSocket doesn't work
-      setTimeout(() => {
-        if (loading()) {
-          console.log('⏰ Fallback: Stopping loading after timeout');
-          setLoading(false);
-          setModelStatuses(prev => {
-            const entries = Object.keys(prev).map((key) => [key, "idle" as const]);
-            return Object.fromEntries(entries);
-          });
-          setChats(prev =>
-            prev.map(chat =>
-              chat.id === pendingChatId
-                ? {
-                    ...chat,
-                    messages: chat.messages?.filter(message => !message.pending) ?? [],
-                  }
-                : chat,
-            ),
-          );
+      const buildChatUrls = () => {
+        const urls = new Set<string>();
+        urls.add(`${API_BASE}/api/chat`);
+        if (typeof window !== "undefined") {
+          urls.add("/api/chat"); // dev proxy fallback
+          urls.add(`${window.location.origin}/api/chat`);
         }
-      }, 10000);
+        return Array.from(urls);
+      };
 
+      const sendChatRequest = async (formData: FormData) => {
+        const urls = buildChatUrls();
+        let lastError: unknown = null;
+
+        for (const url of urls) {
+          try {
+            const response = await fetch(url, {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${activeSession.token}`,
+              },
+              body: formData,
+            });
+
+            if (!response.ok) {
+              const text = await response.text();
+              throw new Error(text || response.statusText);
+            }
+
+            return (await response.json()) as ChatResponse;
+          } catch (err) {
+            lastError = err;
+            // Retry on network errors (TypeError) with the next URL fallback
+            if (err instanceof TypeError) {
+              continue;
+            }
+            throw err;
+          }
+        }
+
+        throw lastError ?? new Error("Failed to reach chat API");
+      };
+
+      const results = await Promise.allSettled(
+        targetModels.map(async (modelId) => {
+          const formData = new FormData();
+          formData.append("prompt", trimmedPrompt);
+          formData.append("model", modelId);
+
+          const data = await sendChatRequest(formData);
+
+          const assistantMessage: Message = {
+            id: `assistant-${modelId}-${Date.now()}`,
+            chat_id: pendingChatId,
+            role: "assistant",
+            content: data.content,
+            model: data.model,
+            timestamp: new Date().toISOString(),
+            usage: data.usage,
+            reasoning: data.reasoning,
+          };
+
+          setChats(prev =>
+            prev.map(chat => {
+              if (chat.id !== pendingChatId) return chat;
+              const existing = [...(chat.messages ?? [])];
+              const placeholderIndex = existing.findIndex(
+                (msg) => msg.pending && msg.model === modelId,
+              );
+              if (placeholderIndex >= 0) {
+                existing.splice(placeholderIndex, 1);
+              }
+              return { ...chat, messages: [...existing, assistantMessage] };
+            }),
+          );
+
+          setModelStatuses(prev => ({ ...prev, [modelId]: "idle" }));
+        }),
+      );
+
+      const failed = results.find((result) => result.status === "rejected") as PromiseRejectedResult | undefined;
+      if (failed) {
+        throw failed.reason;
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to send message");
+      const friendlyMessage =
+        err instanceof TypeError
+          ? `Network error reaching chat API. Tried ${API_BASE} and local proxies. Ensure the backend is running and VITE_API_BASE matches it.`
+          : err instanceof Error
+            ? err.message
+            : "Failed to send message";
+
+      setError(friendlyMessage);
+      setModelStatuses(prev => {
+        const next: Record<string, "idle" | "pending"> = {};
+        Object.keys(prev).forEach(key => {
+          next[key] = "idle";
+        });
+        return next;
+      });
+      setChats(prev =>
+        prev.map(chat =>
+          chat.id === pendingChatId
+            ? {
+                ...chat,
+                messages: chat.messages?.filter(message => !message.pending) ?? [],
+              }
+            : chat,
+        ),
+      );
+    } finally {
       setLoading(false);
     }
+  };
+
+  const normalizeSocketMessage = (raw: any) => {
+    if (!raw || raw.type !== "message") return null;
+
+    const payload = raw.message ?? raw;
+    const chatId = raw.chat_id ?? payload.chat_id;
+    if (!chatId) return null;
+
+    const rawUserId = payload.user_id ?? payload.sender_id ?? raw.user_id;
+    const sessionUserId = session()?.user.id;
+    const role: Message["role"] =
+      payload.role ??
+      (rawUserId && sessionUserId && String(rawUserId) === String(sessionUserId)
+        ? "user"
+        : "assistant");
+
+    return {
+      chatId,
+      message: {
+        id: payload.id ?? raw.message_id ?? payload.message_id,
+        chat_id: chatId,
+        user_id: typeof rawUserId === "string" ? Number(rawUserId) || undefined : rawUserId,
+        role,
+        content: payload.content ?? raw.content ?? "",
+        model: payload.model ?? raw.model,
+        timestamp: payload.timestamp ?? payload.created_at ?? raw.timestamp ?? new Date().toISOString(),
+        message_type: payload.message_type ?? raw.message_type,
+      } as Message,
+    };
   };
 
   // WebSocket event handling
@@ -737,20 +835,36 @@ export default function App() {
     }
 
     if (message.type === 'message') {
+      const normalized = normalizeSocketMessage(message);
+      if (!normalized) {
+        console.log("❌ Unable to normalize message payload", message);
+        return;
+      }
+
+      const { chatId, message: incoming } = normalized;
+
+      if (chatId !== currentId) {
+        console.log("❌ Message chat ID does NOT match current chat ID:", {
+          messageChatId: chatId,
+          currentId,
+          chatIdsMatch: chatId === currentId
+        });
+        return;
+      }
+
       // Stop loading immediately when any message is received
       setLoading(false);
 
-      if (message.chat_id === currentId) {
-        console.log("✅ Message chat ID matches current chat ID - processing message");
+      console.log("✅ Message chat ID matches current chat ID - processing message");
       // Check if this message already exists in the chat (user messages are added immediately)
       const currentChat = chats().find(c => c.id === currentId);
       console.log("🔍 Current chat found:", !!currentChat);
-      console.log("📊 Current chat messages count:", currentChat?.messages.length || 0);
+      console.log("📊 Current chat messages count:", currentChat?.messages?.length || 0);
 
-      const messageExists = currentChat?.messages.some(m => m.id === message.message_id);
+      const messageExists = currentChat?.messages?.some(m => m.id && incoming.id && m.id === incoming.id);
       console.log("🔍 Message exists in chat:", messageExists);
-      console.log("🔍 Looking for message ID:", message.message_id);
-      console.log("🔍 Current chat message IDs:", currentChat?.messages.map(m => m.id));
+      console.log("🔍 Looking for message ID:", incoming.id);
+      console.log("🔍 Current chat message IDs:", currentChat?.messages?.map(m => m.id));
 
       if (messageExists) {
         // This is a user message that was already added to UI, skip
@@ -760,10 +874,10 @@ export default function App() {
 
       // Check if this looks like a user message by comparing with the last user message
       const lastUserMessage = currentChat?.messages
-        .filter(m => m.role === 'user')
+        ?.filter(m => m.role === 'user')
         .pop();
 
-      if (lastUserMessage && lastUserMessage.content === message.content) {
+      if (incoming.role === 'user' && lastUserMessage && lastUserMessage.content === incoming.content) {
         console.log("⏭️ Skipping user message echo (content matches last user message)");
         return;
       }
@@ -772,19 +886,6 @@ export default function App() {
       // All messages received via WebSocket that aren't already in the chat should be assistant responses
       // User messages are added immediately to UI when sent, so WebSocket messages are always assistant responses
 
-      const newMessage: Message = {
-        id: message.message_id,
-        chat_id: message.chat_id,
-        user_id: message.user_id,
-        role: 'assistant',
-        content: message.content,
-        model: message.model,
-        timestamp: message.timestamp,
-        message_type: message.message_type,
-      };
-
-      console.log("📝 New message to add:", newMessage);
-
       setChats(prev => {
         const updated = prev.map(chat => {
           if (chat.id !== currentId) {
@@ -792,9 +893,9 @@ export default function App() {
           }
 
           const existing = [...(chat.messages ?? [])];
-          if (newMessage.model) {
+          if (incoming.role === "assistant") {
             const placeholderIndex = existing.findIndex(
-              (msg) => msg.pending && msg.model === newMessage.model,
+              (msg) => msg.pending && (incoming.model ? msg.model === incoming.model : true),
             );
             if (placeholderIndex >= 0) {
               existing.splice(placeholderIndex, 1);
@@ -803,7 +904,7 @@ export default function App() {
 
           return {
             ...chat,
-            messages: [...existing, newMessage],
+            messages: [...existing, incoming],
           };
         });
         console.log("🔄 Updated chats:", updated);
@@ -813,21 +914,24 @@ export default function App() {
 
       // Stop loading when any message is received
       setLoading(false);
-      if (message.model) {
-        setModelStatuses(prev => {
-          if (!(message.model in prev) || prev[message.model] === "idle") {
+      setModelStatuses(prev => {
+        if (incoming.model) {
+          if (!(incoming.model in prev) || prev[incoming.model] === "idle") {
             return prev;
           }
-          return { ...prev, [message.model]: "idle" };
+          return { ...prev, [incoming.model]: "idle" };
+        }
+
+        if (Object.keys(prev).length === 0) {
+          return prev;
+        }
+
+        const reset: Record<string, "idle"> = {};
+        Object.keys(prev).forEach(key => {
+          reset[key] = "idle";
         });
-      }
-      } else {
-        console.log("❌ Message chat ID does NOT match current chat ID:", {
-          messageChatId: message.chat_id,
-          currentId,
-          chatIdsMatch: message.chat_id === currentId
-        });
-      }
+        return reset;
+      });
     } else if (message.type === 'error') {
       const details = message.message || "An unexpected error occurred while processing the request.";
       console.error("🚨 Error received via WebSocket:", details);
@@ -1027,6 +1131,7 @@ export default function App() {
             modelsError={modelsError}
             loading={loading}
             error={error}
+            authError={authError}
             modelPickerOpen={modelPickerOpen}
             setModelPickerOpen={setModelPickerOpen}
             session={session}

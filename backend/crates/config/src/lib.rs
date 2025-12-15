@@ -60,7 +60,8 @@ pub struct OrchestratorConfig {
 impl Default for OrchestratorConfig {
     fn default() -> Self {
         Self {
-            default_model: "gpt-4.1".to_string(),
+            // Use a widely available OpenRouter model by default to reduce boot-time errors.
+            default_model: "gpt-4o-mini".to_string(),
             provider_search_path: vec!["providers".to_string()],
             openrouter: OpenRouterProviderConfig::default(),
         }
@@ -202,8 +203,7 @@ pub fn load() -> anyhow::Result<AppConfig> {
         .set_default("database.max_connections", db_max)
         .unwrap()
         .set_default("auth.session_ttl_seconds", session_ttl_i64)
-        .unwrap()
-        .add_source(config::Environment::with_prefix("SWITCHBOARD").separator("__"));
+        .unwrap();
 
     let mut config_file_attached = false;
 
@@ -227,6 +227,9 @@ pub fn load() -> anyhow::Result<AppConfig> {
     if !config_file_attached {
         debug!("no configuration file found, relying on defaults and environment overrides");
     }
+
+    // Environment should override both defaults and file-backed config
+    builder = builder.add_source(config::Environment::with_prefix("SWITCHBOARD").separator("__"));
 
     let cfg = builder.build().context("unable to build configuration")?;
 

@@ -17,6 +17,7 @@ export interface Message {
   message_type?: "text" | "system" | "file";
   thread_id?: string;
   reply_to_id?: string;
+  timestamp?: string;
   created_at?: string;
   updated_at?: string;
   pending?: boolean;

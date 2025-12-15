@@ -3,7 +3,7 @@
 pub mod errors;
 
 // Re-export common types
-pub use errors::{DatabaseError, UserError, ChatError, NotificationError, AuthError};
+pub use errors::{AuthError, ChatError, DatabaseError, NotificationError, UserError};
 
 // Common result types
 pub type DatabaseResult<T> = Result<T, DatabaseError>;
@@ -13,10 +13,9 @@ pub type NotificationResult<T> = Result<T, NotificationError>;
 
 // Re-export request types from entities
 pub use crate::entities::{
-    CreateUserRequest, UpdateUserRequest, CreateNotificationRequest,
-    CreateChatRequest, UpdateChatRequest, CreateMessageRequest, UpdateMessageRequest,
-    CreateAttachmentRequest, CreateMemberRequest, CreateInviteRequest,
-    CreateSessionRequest, LoginRequest, RegisterRequest
+    CreateAttachmentRequest, CreateChatRequest, CreateInviteRequest, CreateMemberRequest,
+    CreateMessageRequest, CreateNotificationRequest, CreateSessionRequest, CreateUserRequest,
+    LoginRequest, RegisterRequest, UpdateChatRequest, UpdateMessageRequest, UpdateUserRequest,
 };
 
 // Additional types that repositories expect

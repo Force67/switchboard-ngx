@@ -1,8 +1,5 @@
+import { API_BASE } from "./config";
 import type { TokenUsage } from "./types/chat";
-
-const DEFAULT_API_BASE =
-  typeof window !== "undefined" ? window.location.origin : "http://localhost:7070";
-const API_BASE = import.meta.env.VITE_API_BASE ?? DEFAULT_API_BASE;
 
 export interface ApiFolder {
   id: number;
@@ -20,7 +17,7 @@ export interface ApiChat {
   id: number;
   public_id: string;
   user_id: number;
-  folder_id: number | null;
+  folder_id: string | null;
   title: string;
   is_group: boolean;
   messages: string | null; // JSON string
@@ -161,7 +158,8 @@ class ApiService {
     }
 
     const data = await response.json();
-    return data.chats;
+    // Backend returns a bare array of chats; support both array and { chats } for safety.
+    return Array.isArray(data) ? data : data.chats ?? [];
   }
 
   async createChat(token: string, req: CreateChatRequest): Promise<ApiChat> {
@@ -193,7 +191,8 @@ class ApiService {
     }
 
     const data = await response.json();
-    return data.chat;
+    // Backend returns the created chat directly (not wrapped).
+    return data.chat ?? data;
   }
 
   async updateChat(token: string, chatId: string, req: UpdateChatRequest): Promise<ApiChat> {
@@ -208,7 +207,8 @@ class ApiService {
     }
 
     const data = await response.json();
-    return data.chat;
+    // Backend returns the chat directly.
+    return data.chat ?? data;
   }
 
   async deleteChat(token: string, chatId: string): Promise<void> {
@@ -233,7 +233,7 @@ class ApiService {
     }
 
     const data = await response.json();
-    return data.members;
+    return Array.isArray(data) ? data : data.members ?? [];
   }
 
   async updateMemberRole(token: string, chatId: string, memberUserId: number, req: UpdateMemberRoleRequest): Promise<ChatMember> {
@@ -248,7 +248,7 @@ class ApiService {
     }
 
     const data = await response.json();
-    return data.member;
+    return data.member ?? data;
   }
 
   async removeMember(token: string, chatId: string, memberUserId: number): Promise<void> {
@@ -273,7 +273,7 @@ class ApiService {
     }
 
     const data = await response.json();
-    return data.invites;
+    return Array.isArray(data) ? data : data.invites ?? [];
   }
 
   async createInvite(token: string, chatId: string, req: CreateInviteRequest): Promise<ChatInvite> {
@@ -288,7 +288,7 @@ class ApiService {
     }
 
     const data = await response.json();
-    return data.invite;
+    return data.invite ?? data;
   }
 
   async acceptInvite(token: string, inviteId: number): Promise<void> {

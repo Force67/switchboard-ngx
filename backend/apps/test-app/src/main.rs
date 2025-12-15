@@ -4,12 +4,14 @@ use reqwest::{Client, StatusCode};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+const DEFAULT_API_URL: &str = "http://localhost:3030";
+
 #[derive(Parser)]
 #[command(name = "api-test-app")]
 #[command(about = "A comprehensive test app for the Switchboard API")]
 #[command(version = "1.0")]
 struct Cli {
-    #[arg(long, default_value = "http://localhost:3030")]
+    #[arg(long, default_value = DEFAULT_API_URL)]
     api_url: String,
 
     #[command(subcommand)]
@@ -117,10 +119,15 @@ impl ApiClient {
             return Err(anyhow::anyhow!("Failed to create user: {}", error));
         }
 
-        let session_response: SessionResponse = response.json().await
+        let session_response: SessionResponse = response
+            .json()
+            .await
             .context("Failed to parse session response")?;
 
-        println!("User created successfully: {}", session_response.user.public_id);
+        println!(
+            "User created successfully: {}",
+            session_response.user.public_id
+        );
         Ok(session_response)
     }
 
@@ -146,14 +153,21 @@ impl ApiClient {
             chat: Chat,
         }
 
-        let chat_response: ChatResponse = response.json().await
+        let chat_response: ChatResponse = response
+            .json()
+            .await
             .context("Failed to parse chat response")?;
 
         println!("Chat created: {}", chat_response.chat.public_id);
         Ok(chat_response.chat)
     }
 
-    async fn send_message(&self, token: &str, chat_id: &str, message: CreateMessageRequest) -> Result<()> {
+    async fn send_message(
+        &self,
+        token: &str,
+        chat_id: &str,
+        message: CreateMessageRequest,
+    ) -> Result<()> {
         println!("Sending message to chat: {}", chat_id);
 
         let response = self
@@ -190,8 +204,13 @@ async fn main() -> Result<()> {
         Commands::TestChats { user_token, count } => {
             test_chat_management(&api_client, &user_token, count).await?;
         }
-        Commands::TestWorkflow { user_count, chats_per_user, messages_per_chat } => {
-            test_complete_workflow(&api_client, user_count, chats_per_user, messages_per_chat).await?;
+        Commands::TestWorkflow {
+            user_count,
+            chats_per_user,
+            messages_per_chat,
+        } => {
+            test_complete_workflow(&api_client, user_count, chats_per_user, messages_per_chat)
+                .await?;
         }
         Commands::RunAll => {
             run_all_tests(&api_client).await?;
@@ -247,12 +266,19 @@ async fn test_chat_management(api_client: &ApiClient, user_token: &str, count: u
     Ok(())
 }
 
-async fn test_complete_workflow(api_client: &ApiClient, user_count: u32, chats_per_user: u32, messages_per_chat: u32) -> Result<()> {
+async fn test_complete_workflow(
+    api_client: &ApiClient,
+    user_count: u32,
+    chats_per_user: u32,
+    messages_per_chat: u32,
+) -> Result<()> {
     println!("\nTesting Complete Workflow");
     println!("===========================");
 
     // Create a user
-    let user_session = api_client.create_user("workflowuser@example.com", "Workflow User").await?;
+    let user_session = api_client
+        .create_user("workflowuser@example.com", "Workflow User")
+        .await?;
 
     // Create chats
     for chat_idx in 1..=chats_per_user {
@@ -262,7 +288,10 @@ async fn test_complete_workflow(api_client: &ApiClient, user_count: u32, chats_p
             folder_id: None,
         };
 
-        match api_client.create_chat(&user_session.token, chat_request).await {
+        match api_client
+            .create_chat(&user_session.token, chat_request)
+            .await
+        {
             Ok(chat) => {
                 println!("Created chat: {}", chat.title);
 
@@ -277,7 +306,10 @@ async fn test_complete_workflow(api_client: &ApiClient, user_count: u32, chats_p
                         reply_to_id: None,
                     };
 
-                    match api_client.send_message(&user_session.token, &chat.public_id, message_request).await {
+                    match api_client
+                        .send_message(&user_session.token, &chat.public_id, message_request)
+                        .await
+                    {
                         Ok(_) => {
                             println!("Sent message {} to chat {}", msg_idx, chat_idx);
                         }
@@ -303,7 +335,9 @@ async fn run_all_tests(api_client: &ApiClient) -> Result<()> {
 
     test_user_creation(api_client, 2).await?;
 
-    let user_session = api_client.create_user("mainuser@example.com", "Main Test User").await?;
+    let user_session = api_client
+        .create_user("mainuser@example.com", "Main Test User")
+        .await?;
 
     test_chat_management(api_client, &user_session.token, 3).await?;
 

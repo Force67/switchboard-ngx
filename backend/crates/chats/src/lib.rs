@@ -28,13 +28,11 @@ pub mod utils;
 
 // Re-export database types and repositories
 pub use switchboard_database::{
-    ChatRepository, MessageRepository, AttachmentRepository, MemberRepository, InviteRepository,
-    ChatResult, ChatError,
-    Chat, ChatMessage, MessageAttachment, ChatMember, ChatInvite,
-    CreateChatRequest, UpdateChatRequest, CreateMessageRequest, UpdateMessageRequest,
-    CreateAttachmentRequest, CreateMemberRequest, CreateInviteRequest,
-    ChatType, ChatStatus, MessageStatus, MemberRole, InviteStatus,
-    AuthProvider,
+    AttachmentRepository, AuthProvider, Chat, ChatError, ChatInvite, ChatMember, ChatMessage,
+    ChatRepository, ChatResult, ChatStatus, ChatType, CreateAttachmentRequest, CreateChatRequest,
+    CreateInviteRequest, CreateMemberRequest, CreateMessageRequest, InviteRepository, InviteStatus,
+    MemberRepository, MemberRole, MessageAttachment, MessageRepository, MessageStatus,
+    UpdateChatRequest, UpdateMessageRequest,
 };
 
 // Re-export sqlx for pool access
@@ -42,7 +40,7 @@ pub use sqlx::SqlitePool;
 
 // Re-export main types for convenience
 pub use services::{
-    ChatService, MessageService, AttachmentService, MemberService, InviteService, CompletionService,
+    AttachmentService, ChatService, CompletionService, InviteService, MemberService, MessageService,
 };
 pub use types::events::ChatEvent;
 

@@ -1,7 +1,7 @@
 //! Notification service for managing user notifications.
 
-use switchboard_database::{Notification, NotificationResult, NotificationError};
 use sqlx::SqlitePool;
+use switchboard_database::{Notification, NotificationError, NotificationResult};
 
 /// Service for managing notification operations
 pub struct NotificationService {
@@ -14,12 +14,20 @@ impl NotificationService {
     }
 
     /// Get notifications for a user
-    pub async fn get_notifications(&self, user_id: i64, limit: u32, offset: u32) -> NotificationResult<Vec<Notification>> {
+    pub async fn get_notifications(
+        &self,
+        user_id: i64,
+        limit: u32,
+        offset: u32,
+    ) -> NotificationResult<Vec<Notification>> {
         todo!("Implement get_notifications")
     }
 
     /// Create a new notification
-    pub async fn create_notification(&self, notification: Notification) -> NotificationResult<Notification> {
+    pub async fn create_notification(
+        &self,
+        notification: Notification,
+    ) -> NotificationResult<Notification> {
         todo!("Implement create_notification")
     }
 
@@ -34,7 +42,11 @@ impl NotificationService {
     }
 
     /// Delete notification
-    pub async fn delete_notification(&self, notification_id: i64, user_id: i64) -> NotificationResult<()> {
+    pub async fn delete_notification(
+        &self,
+        notification_id: i64,
+        user_id: i64,
+    ) -> NotificationResult<()> {
         todo!("Implement delete_notification")
     }
 
@@ -44,12 +56,22 @@ impl NotificationService {
     }
 
     /// Notify new message
-    pub async fn notify_new_message(&self, user_id: i64, chat_id: &str, message_content: &str) -> NotificationResult<()> {
+    pub async fn notify_new_message(
+        &self,
+        user_id: i64,
+        chat_id: &str,
+        message_content: &str,
+    ) -> NotificationResult<()> {
         todo!("Implement notify_new_message")
     }
 
     /// Notify chat invite
-    pub async fn notify_chat_invite(&self, user_id: i64, chat_id: &str, inviter_name: &str) -> NotificationResult<()> {
+    pub async fn notify_chat_invite(
+        &self,
+        user_id: i64,
+        chat_id: &str,
+        inviter_name: &str,
+    ) -> NotificationResult<()> {
         todo!("Implement notify_chat_invite")
     }
 }

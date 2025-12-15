@@ -1,18 +1,15 @@
 //! Event types for real-time chat updates.
 
 use serde::{Deserialize, Serialize};
+use switchboard_database::{Chat, ChatInvite, ChatMember, ChatMessage, MessageAttachment};
 use uuid::Uuid;
-use switchboard_database::{Chat, ChatMessage, MessageAttachment, ChatMember, ChatInvite};
 
 /// Main chat event type
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data")]
 pub enum ChatEvent {
     /// Chat was created
-    ChatCreated {
-        chat_id: String,
-        chat: Chat,
-    },
+    ChatCreated { chat_id: String, chat: Chat },
 
     /// Chat was updated
     ChatUpdated {
@@ -62,16 +59,10 @@ pub enum ChatEvent {
     },
 
     /// Member was added to chat
-    MemberAdded {
-        chat_id: String,
-        member: ChatMember,
-    },
+    MemberAdded { chat_id: String, member: ChatMember },
 
     /// Member role was updated
-    MemberUpdated {
-        chat_id: String,
-        member: ChatMember,
-    },
+    MemberUpdated { chat_id: String, member: ChatMember },
 
     /// Member was removed from chat
     MemberRemoved {
@@ -81,10 +72,7 @@ pub enum ChatEvent {
     },
 
     /// Invitation was created
-    InviteCreated {
-        chat_id: String,
-        invite: ChatInvite,
-    },
+    InviteCreated { chat_id: String, invite: ChatInvite },
 
     /// Invitation was accepted
     InviteAccepted {
@@ -94,32 +82,19 @@ pub enum ChatEvent {
     },
 
     /// Invitation was declined
-    InviteDeclined {
-        chat_id: String,
-        invite: ChatInvite,
-    },
+    InviteDeclined { chat_id: String, invite: ChatInvite },
 
     /// User is typing
-    UserTyping {
-        chat_id: String,
-        user_id: i64,
-    },
+    UserTyping { chat_id: String, user_id: i64 },
 
     /// User stopped typing
-    UserStoppedTyping {
-        chat_id: String,
-        user_id: i64,
-    },
+    UserStoppedTyping { chat_id: String, user_id: i64 },
 
     /// User came online
-    UserOnline {
-        user_id: i64,
-    },
+    UserOnline { user_id: i64 },
 
     /// User went offline
-    UserOffline {
-        user_id: i64,
-    },
+    UserOffline { user_id: i64 },
 }
 
 impl ChatEvent {
@@ -152,13 +127,13 @@ impl ChatEvent {
             ChatEvent::ChatCreated { chat, .. } => {
                 // Parse created_by from string to i64, default to 0 if parsing fails
                 vec![chat.created_by.parse().unwrap_or(0)]
-            },
+            }
             ChatEvent::ChatUpdated { member_ids, .. } => member_ids.clone(),
             ChatEvent::ChatDeleted { member_ids, .. } => member_ids.clone(),
             ChatEvent::MessageCreated { message, .. } => vec![message.sender_id],
             ChatEvent::MessageUpdated { message, .. } => vec![message.sender_id],
             ChatEvent::MessageDeleted { user_id, .. } => vec![*user_id],
-            ChatEvent::AttachmentCreated { attachment, .. } => vec![], // TODO: Add user_id to attachment
+            ChatEvent::AttachmentCreated { attachment, .. } => vec![attachment.uploader_id],
             ChatEvent::AttachmentDeleted { user_id, .. } => vec![*user_id],
             ChatEvent::MemberAdded { member, .. } => vec![member.user_id],
             ChatEvent::MemberUpdated { member, .. } => vec![member.user_id],
@@ -242,7 +217,6 @@ impl EventMetadata {
             event_type: event_type.into(),
             context: std::collections::HashMap::new(),
         }
-
     }
 
     /// Add context information

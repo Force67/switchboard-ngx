@@ -1,7 +1,7 @@
 //! Completion service for AI chat completions.
 
-use switchboard_database::{ChatMessage, CreateMessageRequest, MessageRepository, ChatResult};
 use sqlx::SqlitePool;
+use switchboard_database::{ChatMessage, ChatResult, CreateMessageRequest, MessageRepository};
 
 /// Service for managing AI chat completion operations
 pub struct CompletionService {

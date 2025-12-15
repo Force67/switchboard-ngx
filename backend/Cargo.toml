@@ -58,4 +58,5 @@ tower = "0.4"
 uuid = { version = "1.0", features = ["v4", "serde"] }
 utoipa = { version = "4.0", features = ["axum_extras"] }
 utoipa-swagger-ui = { version = "6.0", features = ["axum"] }
-
+authware = { git = "https://github.com/Force67/authware", rev = "4a997e1bb8f7ff36b8a6dac08cba5deb10d02885" }
+url = "2.5"

@@ -1,7 +1,10 @@
 //! Member service for managing chat members.
 
-use switchboard_database::{ChatMember, CreateMemberRequest, UpdateMemberRoleRequest, MemberRepository, MemberRole, ChatResult};
 use sqlx::SqlitePool;
+use switchboard_database::{
+    ChatMember, ChatResult, CreateMemberRequest, MemberRepository, MemberRole,
+    UpdateMemberRoleRequest,
+};
 
 /// Service for managing member operations
 pub struct MemberService {
@@ -17,7 +20,11 @@ impl MemberService {
     }
 
     /// Check if a user is a member of a chat
-    pub async fn check_chat_membership(&self, chat_public_id: &str, user_id: i64) -> ChatResult<()> {
+    pub async fn check_chat_membership(
+        &self,
+        chat_public_id: &str,
+        user_id: i64,
+    ) -> ChatResult<()> {
         self.member_repository
             .find_by_user_and_chat_public(chat_public_id, user_id)
             .await
@@ -26,8 +33,14 @@ impl MemberService {
     }
 
     /// Check if a user has a specific role or higher in a chat
-    pub async fn check_chat_role(&self, chat_public_id: &str, user_id: i64, required_role: MemberRole) -> ChatResult<()> {
-        let member = self.member_repository
+    pub async fn check_chat_role(
+        &self,
+        chat_public_id: &str,
+        user_id: i64,
+        required_role: MemberRole,
+    ) -> ChatResult<()> {
+        let member = self
+            .member_repository
             .find_by_user_and_chat_public(chat_public_id, user_id)
             .await
             .map_err(|e| switchboard_database::ChatError::DatabaseError(e.to_string()))?

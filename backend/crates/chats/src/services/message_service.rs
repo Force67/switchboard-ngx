@@ -1,7 +1,10 @@
 //! Message service for managing message operations.
 
-use switchboard_database::{ChatMessage, CreateMessageRequest, UpdateMessageRequest, MessageRepository, ChatResult, MemberRole};
 use sqlx::SqlitePool;
+use switchboard_database::{
+    ChatMessage, ChatResult, CreateMessageRequest, MemberRole, MessageRepository,
+    UpdateMessageRequest,
+};
 
 /// Service for managing message operations
 pub struct MessageService {
@@ -53,7 +56,12 @@ impl MessageService {
     }
 
     /// Check if user has specific role in chat
-    pub async fn check_chat_role(&self, chat_id: &str, user_id: i64, role: MemberRole) -> ChatResult<()> {
+    pub async fn check_chat_role(
+        &self,
+        chat_id: &str,
+        user_id: i64,
+        role: MemberRole,
+    ) -> ChatResult<()> {
         // TODO: Implement chat role check logic
         todo!("Implement check_chat_role")
     }
@@ -72,7 +80,11 @@ impl MessageService {
     }
 
     /// Create a new message
-    pub async fn create(&self, request: &CreateMessageRequest, user_id: i64) -> ChatResult<ChatMessage> {
+    pub async fn create(
+        &self,
+        request: &CreateMessageRequest,
+        user_id: i64,
+    ) -> ChatResult<ChatMessage> {
         // TODO: Implement message creation logic
         todo!("Implement create")
     }
@@ -84,7 +96,12 @@ impl MessageService {
     }
 
     /// Update a message
-    pub async fn update(&self, message_id: i64, request: &UpdateMessageRequest, user_id: i64) -> ChatResult<ChatMessage> {
+    pub async fn update(
+        &self,
+        message_id: i64,
+        request: &UpdateMessageRequest,
+        user_id: i64,
+    ) -> ChatResult<ChatMessage> {
         // TODO: Implement message update logic
         todo!("Implement update")
     }

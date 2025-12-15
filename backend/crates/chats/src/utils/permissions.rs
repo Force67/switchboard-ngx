@@ -1,6 +1,6 @@
 //! Permission checking utilities.
 
-use switchboard_database::{ChatMember, MemberRole, ChatError};
+use switchboard_database::{ChatError, ChatMember, MemberRole};
 
 /// Permission checking utilities
 pub struct PermissionChecker;
@@ -9,7 +9,9 @@ impl PermissionChecker {
     /// Check if a user can access a chat
     pub fn can_access_chat(member: &ChatMember, user_id: i64) -> Result<(), ChatError> {
         if member.user_id != user_id {
-            return Err(ChatError::DatabaseError("User is not a member of this chat".to_string()));
+            return Err(ChatError::DatabaseError(
+                "User is not a member of this chat".to_string(),
+            ));
         }
         Ok(())
     }
@@ -18,7 +20,9 @@ impl PermissionChecker {
     pub fn can_manage_members(member: &ChatMember) -> Result<(), ChatError> {
         match member.role {
             MemberRole::Owner | MemberRole::Admin => Ok(()),
-            MemberRole::Member => Err(ChatError::DatabaseError("Only owners and admins can manage members".to_string())),
+            MemberRole::Member => Err(ChatError::DatabaseError(
+                "Only owners and admins can manage members".to_string(),
+            )),
         }
     }
 
@@ -26,7 +30,9 @@ impl PermissionChecker {
     pub fn can_delete_chat(member: &ChatMember) -> Result<(), ChatError> {
         match member.role {
             MemberRole::Owner => Ok(()),
-            MemberRole::Admin | MemberRole::Member => Err(ChatError::DatabaseError("Only chat owners can delete chats".to_string())),
+            MemberRole::Admin | MemberRole::Member => Err(ChatError::DatabaseError(
+                "Only chat owners can delete chats".to_string(),
+            )),
         }
     }
 
@@ -34,7 +40,9 @@ impl PermissionChecker {
     pub fn can_invite_members(member: &ChatMember) -> Result<(), ChatError> {
         match member.role {
             MemberRole::Owner | MemberRole::Admin => Ok(()),
-            MemberRole::Member => Err(ChatError::DatabaseError("Only owners and admins can invite members".to_string())),
+            MemberRole::Member => Err(ChatError::DatabaseError(
+                "Only owners and admins can invite members".to_string(),
+            )),
         }
     }
 
@@ -42,7 +50,9 @@ impl PermissionChecker {
     pub fn can_update_chat(member: &ChatMember) -> Result<(), ChatError> {
         match member.role {
             MemberRole::Owner | MemberRole::Admin => Ok(()),
-            MemberRole::Member => Err(ChatError::DatabaseError("Only owners and admins can update chat settings".to_string())),
+            MemberRole::Member => Err(ChatError::DatabaseError(
+                "Only owners and admins can update chat settings".to_string(),
+            )),
         }
     }
 
@@ -54,7 +64,9 @@ impl PermissionChecker {
     ) -> Result<(), ChatError> {
         // Cannot perform actions on yourself
         if requester.user_id == target.user_id {
-            return Err(ChatError::DatabaseError("Cannot perform actions on yourself".to_string()));
+            return Err(ChatError::DatabaseError(
+                "Cannot perform actions on yourself".to_string(),
+            ));
         }
 
         // Check permission based on action
@@ -63,29 +75,41 @@ impl PermissionChecker {
                 // Only owners can update roles of admins and owners
                 if matches!(target.role, MemberRole::Owner | MemberRole::Admin) {
                     if !matches!(requester.role, MemberRole::Owner) {
-                        return Err(ChatError::DatabaseError("Only owners can manage admins and other owners".to_string()));
+                        return Err(ChatError::DatabaseError(
+                            "Only owners can manage admins and other owners".to_string(),
+                        ));
                     }
                 } else {
                     // Admins can update regular members, owners can update anyone
                     if !matches!(requester.role, MemberRole::Owner | MemberRole::Admin) {
-                        return Err(ChatError::DatabaseError("Insufficient permissions to update member role".to_string()));
+                        return Err(ChatError::DatabaseError(
+                            "Insufficient permissions to update member role".to_string(),
+                        ));
                     }
                 }
             }
             MemberAction::Remove => {
                 // Cannot remove owners
                 if matches!(target.role, MemberRole::Owner) {
-                    return Err(ChatError::DatabaseError("Cannot remove chat owner".to_string()));
+                    return Err(ChatError::DatabaseError(
+                        "Cannot remove chat owner".to_string(),
+                    ));
                 }
 
                 // Admins cannot remove other admins
-                if matches!(target.role, MemberRole::Admin) && matches!(requester.role, MemberRole::Admin) {
-                    return Err(ChatError::DatabaseError("Admins cannot remove other admins".to_string()));
+                if matches!(target.role, MemberRole::Admin)
+                    && matches!(requester.role, MemberRole::Admin)
+                {
+                    return Err(ChatError::DatabaseError(
+                        "Admins cannot remove other admins".to_string(),
+                    ));
                 }
 
                 // Only owners and admins can remove members
                 if !matches!(requester.role, MemberRole::Owner | MemberRole::Admin) {
-                    return Err(ChatError::DatabaseError("Insufficient permissions to remove member".to_string()));
+                    return Err(ChatError::DatabaseError(
+                        "Insufficient permissions to remove member".to_string(),
+                    ));
                 }
             }
         }
@@ -104,11 +128,27 @@ pub enum MemberAction {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use switchboard_database::ChatType;
+    use switchboard_database::MemberRole;
+
+    fn member(chat_id: i64, user_id: i64, role: MemberRole) -> ChatMember {
+        ChatMember {
+            id: user_id,
+            public_id: format!("member-{user_id}"),
+            chat_id,
+            chat_public_id: format!("chat-{chat_id}"),
+            user_id,
+            user_public_id: format!("user-{user_id}"),
+            role,
+            joined_at: "2024-01-01T00:00:00Z".to_string(),
+            user_display_name: None,
+            user_avatar_url: None,
+            user_email: None,
+        }
+    }
 
     #[test]
     fn test_permission_checker_can_access_chat() {
-        let member = ChatMember::new(1, 1, MemberRole::Member);
+        let member = member(1, 1, MemberRole::Member);
 
         assert!(PermissionChecker::can_access_chat(&member, 1).is_ok());
         assert!(PermissionChecker::can_access_chat(&member, 2).is_err());
@@ -116,9 +156,9 @@ mod tests {
 
     #[test]
     fn test_permission_checker_can_manage_members() {
-        let owner = ChatMember::new(1, 1, MemberRole::Owner);
-        let admin = ChatMember::new(1, 2, MemberRole::Admin);
-        let member = ChatMember::new(1, 3, MemberRole::Member);
+        let owner = member(1, 1, MemberRole::Owner);
+        let admin = member(1, 2, MemberRole::Admin);
+        let member = member(1, 3, MemberRole::Member);
 
         assert!(PermissionChecker::can_manage_members(&owner).is_ok());
         assert!(PermissionChecker::can_manage_members(&admin).is_ok());
@@ -127,9 +167,9 @@ mod tests {
 
     #[test]
     fn test_permission_checker_can_delete_chat() {
-        let owner = ChatMember::new(1, 1, MemberRole::Owner);
-        let admin = ChatMember::new(1, 2, MemberRole::Admin);
-        let member = ChatMember::new(1, 3, MemberRole::Member);
+        let owner = member(1, 1, MemberRole::Owner);
+        let admin = member(1, 2, MemberRole::Admin);
+        let member = member(1, 3, MemberRole::Member);
 
         assert!(PermissionChecker::can_delete_chat(&owner).is_ok());
         assert!(PermissionChecker::can_delete_chat(&admin).is_err());
@@ -138,27 +178,46 @@ mod tests {
 
     #[test]
     fn test_permission_checker_can_manage_member() {
-        let owner = ChatMember::new(1, 1, MemberRole::Owner);
-        let admin = ChatMember::new(1, 2, MemberRole::Admin);
-        let member = ChatMember::new(1, 3, MemberRole::Member);
+        let owner = member(1, 1, MemberRole::Owner);
+        let admin = member(1, 2, MemberRole::Admin);
+        let member = member(1, 3, MemberRole::Member);
 
         // Owner can manage everyone
-        assert!(PermissionChecker::can_manage_member(&owner, &admin, MemberAction::UpdateRole).is_ok());
-        assert!(PermissionChecker::can_manage_member(&owner, &member, MemberAction::Remove).is_ok());
+        assert!(
+            PermissionChecker::can_manage_member(&owner, &admin, MemberAction::UpdateRole).is_ok()
+        );
+        assert!(
+            PermissionChecker::can_manage_member(&owner, &member, MemberAction::Remove).is_ok()
+        );
 
         // Admin can manage regular members
-        assert!(PermissionChecker::can_manage_member(&admin, &member, MemberAction::UpdateRole).is_ok());
-        assert!(PermissionChecker::can_manage_member(&admin, &member, MemberAction::Remove).is_ok());
+        assert!(
+            PermissionChecker::can_manage_member(&admin, &member, MemberAction::UpdateRole).is_ok()
+        );
+        assert!(
+            PermissionChecker::can_manage_member(&admin, &member, MemberAction::Remove).is_ok()
+        );
 
         // Admin cannot manage owners or other admins
-        assert!(PermissionChecker::can_manage_member(&admin, &owner, MemberAction::UpdateRole).is_err());
-        assert!(PermissionChecker::can_manage_member(&admin, &owner, MemberAction::Remove).is_err());
+        assert!(
+            PermissionChecker::can_manage_member(&admin, &owner, MemberAction::UpdateRole).is_err()
+        );
+        assert!(
+            PermissionChecker::can_manage_member(&admin, &owner, MemberAction::Remove).is_err()
+        );
 
         // Member cannot manage anyone
-        assert!(PermissionChecker::can_manage_member(&member, &member, MemberAction::UpdateRole).is_err());
-        assert!(PermissionChecker::can_manage_member(&member, &member, MemberAction::Remove).is_err());
+        assert!(
+            PermissionChecker::can_manage_member(&member, &member, MemberAction::UpdateRole)
+                .is_err()
+        );
+        assert!(
+            PermissionChecker::can_manage_member(&member, &member, MemberAction::Remove).is_err()
+        );
 
         // Cannot manage yourself
-        assert!(PermissionChecker::can_manage_member(&owner, &owner, MemberAction::Remove).is_err());
+        assert!(
+            PermissionChecker::can_manage_member(&owner, &owner, MemberAction::Remove).is_err()
+        );
     }
 }

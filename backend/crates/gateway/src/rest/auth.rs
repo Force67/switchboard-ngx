@@ -1,19 +1,18 @@
 //! Authentication REST endpoints
 
 use axum::{
-    extract::{Query, State, Request},
-    Json,
+    extract::{Query, Request, State},
+    http::header,
     response::{IntoResponse, Response},
-    Router,
-    middleware,
+    Json, Router,
 };
 use serde::{Deserialize, Serialize};
-use utoipa::{IntoParams, ToSchema};
 use std::sync::Arc;
+use utoipa::{IntoParams, ToSchema};
 
-use crate::state::GatewayState;
 use crate::error::{GatewayError, GatewayResult};
 use crate::middleware::extract_user_id;
+use crate::state::GatewayState;
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct GithubLoginResponse {
@@ -57,22 +56,22 @@ pub struct ErrorResponse {
 }
 
 impl SessionResponse {
-    pub fn new(session: switchboard_database::AuthSession, user: switchboard_database::User) -> Self {
+    pub fn new(session: switchboard_auth::AuthSession, user: switchboard_auth::User) -> Self {
         Self {
             token: session.token,
             user: user.into(),
-            expires_at: session.expires_at,
+            expires_at: session.expires_at.to_rfc3339(),
         }
     }
 }
 
-impl From<switchboard_database::User> for UserResponse {
-    fn from(user: switchboard_database::User) -> Self {
+impl From<switchboard_auth::User> for UserResponse {
+    fn from(user: switchboard_auth::User) -> Self {
         Self {
             id: user.public_id,
             email: user.email,
             display_name: user.display_name,
-            avatar_url: user.avatar_url,
+            avatar_url: None,
         }
     }
 }
@@ -80,12 +79,15 @@ impl From<switchboard_database::User> for UserResponse {
 /// Create authentication routes
 pub fn create_auth_routes() -> Router<Arc<GatewayState>> {
     Router::new()
-        .route("/github/login", axum::routing::get(github_login))
-        .route("/github/callback", axum::routing::post(github_callback))
-        .route("/logout", axum::routing::post(logout))
-        .route("/me", axum::routing::get(me))
+        .route("/auth/github/login", axum::routing::get(github_login))
+        .route(
+            "/auth/github/callback",
+            axum::routing::post(github_callback),
+        )
+        .route("/auth/logout", axum::routing::post(logout))
+        .route("/auth/me", axum::routing::get(me))
         // Development endpoint (no auth required)
-        .route("/dev/token", axum::routing::get(dev_token))
+        .route("/auth/dev/token", axum::routing::get(dev_token))
 }
 
 #[utoipa::path(
@@ -102,9 +104,14 @@ pub async fn github_login(
     Query(params): Query<GithubLoginQuery>,
     State(state): State<Arc<GatewayState>>,
 ) -> GatewayResult<Json<GithubLoginResponse>> {
-    // TODO: Implement GitHub OAuth login
-    // For now, return a placeholder response
-    Err(GatewayError::ServiceUnavailable)
+    let login = state
+        .authenticator()
+        .github_authorization_url(&params.redirect_uri)
+        .map_err(map_auth_error)?;
+
+    Ok(Json(GithubLoginResponse {
+        authorize_url: login.authorize_url,
+    }))
 }
 
 #[utoipa::path(
@@ -123,9 +130,13 @@ pub async fn github_callback(
     State(state): State<Arc<GatewayState>>,
     Json(payload): Json<GithubCallbackRequest>,
 ) -> GatewayResult<Json<SessionResponse>> {
-    // TODO: Implement GitHub OAuth callback
-    // For now, return a placeholder response
-    Err(GatewayError::ServiceUnavailable)
+    let (session, user) = state
+        .authenticator()
+        .login_with_github_code(&payload.code, &payload.state, &payload.redirect_uri)
+        .await
+        .map_err(map_auth_error)?;
+
+    Ok(Json(SessionResponse::new(session, user)))
 }
 
 /// Development endpoint to create a test token
@@ -143,8 +154,8 @@ pub async fn dev_token(
     State(state): State<Arc<GatewayState>>,
 ) -> GatewayResult<Json<SessionResponse>> {
     let (session, user) = state
-        .session_service()
-        .create_dev_token()
+        .authenticator()
+        .create_dev_session()
         .await
         .map_err(|e| GatewayError::InternalError(format!("Failed to create dev token: {}", e)))?;
 
@@ -161,15 +172,16 @@ pub async fn dev_token(
         (status = 500, description = "Failed to logout", body = ErrorResponse)
     )
 )]
-pub async fn logout(
-    State(state): State<Arc<GatewayState>>,
-    request: Request,
-) -> GatewayResult<()> {
-    let user_id = extract_user_id(&request)?;
+pub async fn logout(State(state): State<Arc<GatewayState>>, request: Request) -> GatewayResult<()> {
+    let token = extract_token(&request).ok_or_else(|| {
+        GatewayError::AuthenticationFailed("Missing authentication token".to_string())
+    })?;
 
-    // For now, we don't have a direct way to logout by user_id
-    // In a real implementation, you might want to invalidate all user sessions
-    // or track active sessions more granularly
+    state
+        .authenticator()
+        .revoke_session(&token)
+        .await
+        .map_err(map_auth_error)?;
 
     Ok(())
 }
@@ -191,10 +203,40 @@ pub async fn me(
     let user_id = extract_user_id(&request)?;
 
     let user = state
-        .user_service()
-        .get_user(user_id)
+        .authenticator()
+        .user_profile(user_id)
         .await
-        .map_err(|e| GatewayError::ServiceError(format!("Failed to get user: {}", e)))?;
+        .map_err(map_auth_error)?;
 
     Ok(Json(UserResponse::from(user)))
+}
+
+fn extract_token(request: &Request) -> Option<String> {
+    request
+        .headers()
+        .get(header::AUTHORIZATION)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.strip_prefix("Bearer "))
+        .map(|value| value.to_string())
+}
+
+fn map_auth_error(error: switchboard_auth::AuthError) -> GatewayError {
+    match error {
+        switchboard_auth::AuthError::GithubOauthDisabled => GatewayError::ServiceUnavailable,
+        switchboard_auth::AuthError::GithubOauth(err) => {
+            GatewayError::AuthenticationFailed(format!("GitHub OAuth failed: {}", err))
+        }
+        switchboard_auth::AuthError::InvalidState
+        | switchboard_auth::AuthError::InvalidCredentials
+        | switchboard_auth::AuthError::SessionNotFound
+        | switchboard_auth::AuthError::SessionExpired
+        | switchboard_auth::AuthError::InvalidSession => {
+            GatewayError::AuthenticationFailed(error.to_string())
+        }
+        switchboard_auth::AuthError::UserExists => GatewayError::InvalidRequest(error.to_string()),
+        switchboard_auth::AuthError::Database(err) => GatewayError::DatabaseError(err.to_string()),
+        switchboard_auth::AuthError::PasswordHash(_) => {
+            GatewayError::InternalError(error.to_string())
+        }
+    }
 }

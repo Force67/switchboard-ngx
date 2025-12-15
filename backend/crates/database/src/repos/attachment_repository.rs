@@ -1,8 +1,8 @@
 //! Repository for attachment data access operations.
 
-use crate::{MessageAttachment, CreateAttachmentRequest, AttachmentType};
-use crate::types::{ChatResult, ChatError};
-use sqlx::{SqlitePool, Row};
+use crate::types::{ChatError, ChatResult};
+use crate::{AttachmentType, CreateAttachmentRequest, MessageAttachment};
+use sqlx::{Row, SqlitePool};
 use tracing::{info, warn};
 
 /// Repository for attachment database operations
@@ -33,33 +33,65 @@ impl AttachmentRepository {
         .await
         .map_err(|e| ChatError::DatabaseError(e.to_string()))?;
 
-        let attachments = rows.into_iter().map(|row| {
-            let file_type_str: String = row.try_get("file_type").map_err(|e| ChatError::DatabaseError(e.to_string()))?;
+        let attachments = rows
+            .into_iter()
+            .map(|row| {
+                let file_type_str: String = row
+                    .try_get("file_type")
+                    .map_err(|e| ChatError::DatabaseError(e.to_string()))?;
 
-            Ok(MessageAttachment {
-                id: row.try_get("id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
-                public_id: row.try_get("public_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
-                message_id: row.try_get("message_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
-                message_public_id: row.try_get("message_public_id").unwrap_or("unknown".to_string()),
-                chat_id: row.try_get("chat_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
-                chat_public_id: row.try_get("chat_public_id").unwrap_or("unknown".to_string()),
-                file_name: row.try_get("file_name").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
-                file_type: AttachmentType::from(file_type_str.as_str()),
-                file_size: row.try_get("file_size").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
-                file_url: row.try_get("file_url").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
-                created_at: row.try_get("created_at").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
-                uploader_id: row.try_get("uploader_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
-                uploader_public_id: row.try_get("uploader_public_id").unwrap_or("unknown".to_string()),
-                uploader_display_name: row.try_get("uploader_display_name").ok(),
-                uploader_avatar_url: row.try_get("uploader_avatar_url").ok(),
+                Ok(MessageAttachment {
+                    id: row
+                        .try_get("id")
+                        .map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                    public_id: row
+                        .try_get("public_id")
+                        .map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                    message_id: row
+                        .try_get("message_id")
+                        .map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                    message_public_id: row
+                        .try_get("message_public_id")
+                        .unwrap_or("unknown".to_string()),
+                    chat_id: row
+                        .try_get("chat_id")
+                        .map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                    chat_public_id: row
+                        .try_get("chat_public_id")
+                        .unwrap_or("unknown".to_string()),
+                    file_name: row
+                        .try_get("file_name")
+                        .map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                    file_type: AttachmentType::from(file_type_str.as_str()),
+                    file_size: row
+                        .try_get("file_size")
+                        .map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                    file_url: row
+                        .try_get("file_url")
+                        .map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                    created_at: row
+                        .try_get("created_at")
+                        .map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                    uploader_id: row
+                        .try_get("uploader_id")
+                        .map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                    uploader_public_id: row
+                        .try_get("uploader_public_id")
+                        .unwrap_or("unknown".to_string()),
+                    uploader_display_name: row.try_get("uploader_display_name").ok(),
+                    uploader_avatar_url: row.try_get("uploader_avatar_url").ok(),
+                })
             })
-        }).collect::<Result<Vec<_>, _>>()?;
+            .collect::<Result<Vec<_>, _>>()?;
 
         Ok(attachments)
     }
 
     /// Find an attachment by its public ID
-    pub async fn find_by_public_id(&self, public_id: &str) -> ChatResult<Option<MessageAttachment>> {
+    pub async fn find_by_public_id(
+        &self,
+        public_id: &str,
+    ) -> ChatResult<Option<MessageAttachment>> {
         let row = sqlx::query(
             "SELECT ma.id, ma.public_id, ma.message_id, ma.file_name, ma.file_type, ma.file_size, ma.file_url, ma.created_at, ma.uploader_id,
                     m.public_id as message_public_id, m.chat_id, c.public_id as chat_public_id,
@@ -76,22 +108,48 @@ impl AttachmentRepository {
         .map_err(|e| ChatError::DatabaseError(e.to_string()))?;
 
         if let Some(row) = row {
-            let file_type_str: String = row.try_get("file_type").map_err(|e| ChatError::DatabaseError(e.to_string()))?;
+            let file_type_str: String = row
+                .try_get("file_type")
+                .map_err(|e| ChatError::DatabaseError(e.to_string()))?;
 
             Ok(Some(MessageAttachment {
-                id: row.try_get("id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
-                public_id: row.try_get("public_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
-                message_id: row.try_get("message_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
-                message_public_id: row.try_get("message_public_id").unwrap_or("unknown".to_string()),
-                chat_id: row.try_get("chat_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
-                chat_public_id: row.try_get("chat_public_id").unwrap_or("unknown".to_string()),
-                file_name: row.try_get("file_name").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                id: row
+                    .try_get("id")
+                    .map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                public_id: row
+                    .try_get("public_id")
+                    .map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                message_id: row
+                    .try_get("message_id")
+                    .map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                message_public_id: row
+                    .try_get("message_public_id")
+                    .unwrap_or("unknown".to_string()),
+                chat_id: row
+                    .try_get("chat_id")
+                    .map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                chat_public_id: row
+                    .try_get("chat_public_id")
+                    .unwrap_or("unknown".to_string()),
+                file_name: row
+                    .try_get("file_name")
+                    .map_err(|e| ChatError::DatabaseError(e.to_string()))?,
                 file_type: AttachmentType::from(file_type_str.as_str()),
-                file_size: row.try_get("file_size").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
-                file_url: row.try_get("file_url").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
-                created_at: row.try_get("created_at").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
-                uploader_id: row.try_get("uploader_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
-                uploader_public_id: row.try_get("uploader_public_id").unwrap_or("unknown".to_string()),
+                file_size: row
+                    .try_get("file_size")
+                    .map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                file_url: row
+                    .try_get("file_url")
+                    .map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                created_at: row
+                    .try_get("created_at")
+                    .map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                uploader_id: row
+                    .try_get("uploader_id")
+                    .map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                uploader_public_id: row
+                    .try_get("uploader_public_id")
+                    .unwrap_or("unknown".to_string()),
                 uploader_display_name: row.try_get("uploader_display_name").ok(),
                 uploader_avatar_url: row.try_get("uploader_avatar_url").ok(),
             }))
@@ -147,11 +205,12 @@ impl AttachmentRepository {
             None
         };
 
-        let user_row = sqlx::query("SELECT public_id, display_name, avatar_url FROM users WHERE id = ?")
-            .bind(request.uploader_id)
-            .fetch_optional(&self.pool)
-            .await
-            .map_err(|e| ChatError::DatabaseError(e.to_string()))?;
+        let user_row =
+            sqlx::query("SELECT public_id, display_name, avatar_url FROM users WHERE id = ?")
+                .bind(request.uploader_id)
+                .fetch_optional(&self.pool)
+                .await
+                .map_err(|e| ChatError::DatabaseError(e.to_string()))?;
 
         Ok(MessageAttachment {
             id: attachment_id,
@@ -178,7 +237,9 @@ impl AttachmentRepository {
                 .as_ref()
                 .and_then(|r| r.try_get::<String, _>("public_id").ok())
                 .unwrap_or("unknown".to_string()),
-            uploader_display_name: user_row.as_ref().and_then(|r| r.try_get("display_name").ok()),
+            uploader_display_name: user_row
+                .as_ref()
+                .and_then(|r| r.try_get("display_name").ok()),
             uploader_avatar_url: user_row.as_ref().and_then(|r| r.try_get("avatar_url").ok()),
         })
     }
@@ -201,10 +262,7 @@ impl AttachmentRepository {
             return Err(ChatError::AttachmentNotFound);
         }
 
-        info!(
-            public_id = public_id,
-            "deleted attachment"
-        );
+        info!(public_id = public_id, "deleted attachment");
 
         Ok(())
     }
@@ -247,11 +305,12 @@ impl AttachmentRepository {
 
     /// Count attachments for a message
     pub async fn count_attachments_for_message(&self, message_id: i64) -> ChatResult<i64> {
-        let row = sqlx::query("SELECT COUNT(*) as count FROM message_attachments WHERE message_id = ?")
-            .bind(message_id)
-            .fetch_optional(&self.pool)
-            .await
-            .map_err(|e| ChatError::DatabaseError(e.to_string()))?;
+        let row =
+            sqlx::query("SELECT COUNT(*) as count FROM message_attachments WHERE message_id = ?")
+                .bind(message_id)
+                .fetch_optional(&self.pool)
+                .await
+                .map_err(|e| ChatError::DatabaseError(e.to_string()))?;
 
         let count = row
             .map(|r| r.try_get::<i64, _>("count").unwrap_or(0))
@@ -280,16 +339,72 @@ mod tests {
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 public_id TEXT NOT NULL UNIQUE,
                 message_id INTEGER NOT NULL,
-                filename TEXT NOT NULL,
-                content_type TEXT NOT NULL,
+                file_name TEXT NOT NULL,
+                file_type TEXT NOT NULL,
                 file_size INTEGER NOT NULL,
-                file_path TEXT NOT NULL,
-                created_at TEXT NOT NULL
-            )"
+                file_url TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                uploader_id INTEGER NOT NULL
+            )",
         )
         .execute(&pool)
         .await
         .unwrap();
+
+        sqlx::query(
+            "CREATE TABLE messages (
+                id INTEGER PRIMARY KEY,
+                public_id TEXT NOT NULL,
+                chat_id INTEGER NOT NULL
+            )",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        sqlx::query(
+            "CREATE TABLE chats (
+                id INTEGER PRIMARY KEY,
+                public_id TEXT NOT NULL
+            )",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        sqlx::query(
+            "CREATE TABLE users (
+                id INTEGER PRIMARY KEY,
+                public_id TEXT NOT NULL,
+                display_name TEXT,
+                avatar_url TEXT
+            )",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        sqlx::query("INSERT INTO chats (id, public_id) VALUES (?, ?)")
+            .bind(1)
+            .bind("chat-1")
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        sqlx::query("INSERT INTO messages (id, public_id, chat_id) VALUES (?, ?, ?)")
+            .bind(1)
+            .bind("message-1")
+            .bind(1)
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        sqlx::query("INSERT INTO users (id, public_id) VALUES (?, ?)")
+            .bind(1)
+            .bind("user-1")
+            .execute(&pool)
+            .await
+            .unwrap();
 
         (pool, temp_dir)
     }
@@ -301,17 +416,20 @@ mod tests {
 
         let request = CreateAttachmentRequest {
             message_id: 1,
-            filename: "test.txt".to_string(),
-            content_type: "text/plain".to_string(),
+            message_public_id: "message-1".to_string(),
+            uploader_id: 1,
+            uploader_public_id: "user-1".to_string(),
+            file_name: "test.txt".to_string(),
+            file_type: AttachmentType::Document,
             file_size: 1024,
-            file_path: "/uploads/test.txt".to_string(),
+            file_url: "/uploads/test.txt".to_string(),
         };
 
         let attachment = repo.create(&request).await.unwrap();
         assert!(attachment.id > 0);
         assert_eq!(attachment.message_id, 1);
-        assert_eq!(attachment.filename, "test.txt");
-        assert_eq!(attachment.content_type, "text/plain");
+        assert_eq!(attachment.file_name, "test.txt");
+        assert_eq!(attachment.file_type, AttachmentType::Document);
         assert_eq!(attachment.file_size, 1024);
     }
 
@@ -322,17 +440,20 @@ mod tests {
 
         let request = CreateAttachmentRequest {
             message_id: 1,
-            filename: "test.txt".to_string(),
-            content_type: "text/plain".to_string(),
+            message_public_id: "message-1".to_string(),
+            uploader_id: 1,
+            uploader_public_id: "user-1".to_string(),
+            file_name: "test.txt".to_string(),
+            file_type: AttachmentType::Document,
             file_size: 1024,
-            file_path: "/uploads/test.txt".to_string(),
+            file_url: "/uploads/test.txt".to_string(),
         };
 
         repo.create(&request).await.unwrap();
 
         let attachments = repo.find_by_message_id(1).await.unwrap();
         assert_eq!(attachments.len(), 1);
-        assert_eq!(attachments[0].filename, "test.txt");
+        assert_eq!(attachments[0].file_name, "test.txt");
     }
 
     #[tokio::test]
@@ -342,10 +463,13 @@ mod tests {
 
         let request = CreateAttachmentRequest {
             message_id: 1,
-            filename: "test.txt".to_string(),
-            content_type: "text/plain".to_string(),
+            message_public_id: "message-1".to_string(),
+            uploader_id: 1,
+            uploader_public_id: "user-1".to_string(),
+            file_name: "test.txt".to_string(),
+            file_type: AttachmentType::Document,
             file_size: 1024,
-            file_path: "/uploads/test.txt".to_string(),
+            file_url: "/uploads/test.txt".to_string(),
         };
 
         let created = repo.create(&request).await.unwrap();
@@ -364,10 +488,13 @@ mod tests {
 
         let request = CreateAttachmentRequest {
             message_id: 1,
-            filename: "test.txt".to_string(),
-            content_type: "text/plain".to_string(),
+            message_public_id: "message-1".to_string(),
+            uploader_id: 1,
+            uploader_public_id: "user-1".to_string(),
+            file_name: "test.txt".to_string(),
+            file_type: AttachmentType::Document,
             file_size: 1024,
-            file_path: "/uploads/test.txt".to_string(),
+            file_url: "/uploads/test.txt".to_string(),
         };
 
         let created = repo.create(&request).await.unwrap();
@@ -384,18 +511,24 @@ mod tests {
 
         let request1 = CreateAttachmentRequest {
             message_id: 1,
-            filename: "test1.txt".to_string(),
-            content_type: "text/plain".to_string(),
+            message_public_id: "message-1".to_string(),
+            uploader_id: 1,
+            uploader_public_id: "user-1".to_string(),
+            file_name: "test1.txt".to_string(),
+            file_type: AttachmentType::Document,
             file_size: 1024,
-            file_path: "/uploads/test1.txt".to_string(),
+            file_url: "/uploads/test1.txt".to_string(),
         };
 
         let request2 = CreateAttachmentRequest {
             message_id: 1,
-            filename: "test2.txt".to_string(),
-            content_type: "text/plain".to_string(),
+            message_public_id: "message-1".to_string(),
+            uploader_id: 1,
+            uploader_public_id: "user-1".to_string(),
+            file_name: "test2.txt".to_string(),
+            file_type: AttachmentType::Document,
             file_size: 2048,
-            file_path: "/uploads/test2.txt".to_string(),
+            file_url: "/uploads/test2.txt".to_string(),
         };
 
         repo.create(&request1).await.unwrap();

@@ -1,8 +1,5 @@
 import { createSignal } from "solid-js";
-
-const DEFAULT_API_BASE =
-  typeof window !== "undefined" ? window.location.origin : "http://localhost:7070";
-const API_BASE = import.meta.env.VITE_API_BASE ?? DEFAULT_API_BASE;
+import { API_BASE } from "./config";
 
 type ConnectionStatus = "online" | "offline" | "connecting" | "limited";
 
@@ -12,6 +9,11 @@ interface ConnectionState {
   lastSyncISO: string | null;
   lastCheck: number;
 }
+
+const HEALTH_CHECK_TIMEOUT_MS = 5_000;
+const LIMITED_LATENCY_THRESHOLD_MS = 1_000;
+const MONITOR_INTERVAL_MS = 30_000;
+const HEALTH_ENDPOINT = "/api/health";
 
 const [connectionState, setConnectionState] = createSignal<ConnectionState>({
   status: "connecting",
@@ -27,9 +29,9 @@ const checkConnection = async () => {
   const startTime = Date.now();
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+    const timeoutId = setTimeout(() => controller.abort(), HEALTH_CHECK_TIMEOUT_MS);
 
-    const response = await fetch(`${API_BASE}/health`, {
+    const response = await fetch(`${API_BASE}${HEALTH_ENDPOINT}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -44,7 +46,7 @@ const checkConnection = async () => {
     if (response.ok) {
       const data = await response.json();
       setConnectionState({
-        status: latency > 1000 ? "limited" : "online",
+        status: latency > LIMITED_LATENCY_THRESHOLD_MS ? "limited" : "online",
         latencyMs: latency,
         lastSyncISO: data.timestamp,
         lastCheck: endTime,
@@ -75,7 +77,7 @@ const startConnectionMonitoring = () => {
   checkConnection();
 
   // Check every 30 seconds
-  intervalId = window.setInterval(checkConnection, 30000);
+  intervalId = window.setInterval(checkConnection, MONITOR_INTERVAL_MS);
 };
 
 const stopConnectionMonitoring = () => {

@@ -1,8 +1,8 @@
 //! Event types for the user management system.
 
-use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
-use switchboard_database::{UserRole, UserStatus, NotificationType};
+use serde::{Deserialize, Serialize};
+use switchboard_database::{NotificationType, UserRole, UserStatus};
 
 /// User-related events
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -441,17 +441,17 @@ mod tests {
         let deserialized: Event = serde_json::from_str(&json).unwrap();
 
         match (event, deserialized) {
-            (Event::User(original), Event::User(deserialized)) => {
-                match (original, deserialized) {
-                    (
-                        UserEvent::UserCreated { user_id: orig_id, .. },
-                        UserEvent::UserCreated { user_id: de_id, .. },
-                    ) => {
-                        assert_eq!(orig_id, de_id);
-                    }
-                    _ => panic!("Event types don't match"),
+            (Event::User(original), Event::User(deserialized)) => match (original, deserialized) {
+                (
+                    UserEvent::UserCreated {
+                        user_id: orig_id, ..
+                    },
+                    UserEvent::UserCreated { user_id: de_id, .. },
+                ) => {
+                    assert_eq!(orig_id, de_id);
                 }
-            }
+                _ => panic!("Event types don't match"),
+            },
             _ => panic!("Event categories don't match"),
         }
     }

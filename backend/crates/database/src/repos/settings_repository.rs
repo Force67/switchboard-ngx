@@ -1,9 +1,9 @@
 //! Settings repository for database operations.
 
 use crate::entities::UserSettings;
-use crate::types::{UserResult, UpdateSettingsRequest};
 use crate::types::errors::UserError;
-use sqlx::{SqlitePool, Row};
+use crate::types::{UpdateSettingsRequest, UserResult};
+use sqlx::{Row, SqlitePool};
 
 /// Repository for user settings database operations
 pub struct SettingsRepository {
@@ -20,7 +20,7 @@ impl SettingsRepository {
     pub async fn find_by_user_id(&self, user_id: i64) -> UserResult<Option<UserSettings>> {
         let row = sqlx::query(
             "SELECT id, user_id, preferences, created_at, updated_at
-             FROM user_settings WHERE user_id = ?"
+             FROM user_settings WHERE user_id = ?",
         )
         .bind(user_id)
         .fetch_optional(&self.pool)
@@ -28,18 +28,27 @@ impl SettingsRepository {
         .map_err(|e| UserError::DatabaseError(e.to_string()))?;
 
         if let Some(row) = row {
-            let preferences_str: String = row.try_get("preferences")
+            let preferences_str: String = row
+                .try_get("preferences")
                 .map_err(|e| UserError::DatabaseError(e.to_string()))?;
 
             let preferences = serde_json::from_str(&preferences_str)
                 .map_err(|e| UserError::DatabaseError(e.to_string()))?;
 
             Ok(Some(UserSettings {
-                id: row.try_get("id").map_err(|e| UserError::DatabaseError(e.to_string()))?,
-                user_id: row.try_get("user_id").map_err(|e| UserError::DatabaseError(e.to_string()))?,
+                id: row
+                    .try_get("id")
+                    .map_err(|e| UserError::DatabaseError(e.to_string()))?,
+                user_id: row
+                    .try_get("user_id")
+                    .map_err(|e| UserError::DatabaseError(e.to_string()))?,
                 preferences,
-                created_at: row.try_get("created_at").map_err(|e| UserError::DatabaseError(e.to_string()))?,
-                updated_at: row.try_get("updated_at").map_err(|e| UserError::DatabaseError(e.to_string()))?,
+                created_at: row
+                    .try_get("created_at")
+                    .map_err(|e| UserError::DatabaseError(e.to_string()))?,
+                updated_at: row
+                    .try_get("updated_at")
+                    .map_err(|e| UserError::DatabaseError(e.to_string()))?,
             }))
         } else {
             Ok(None)
@@ -54,7 +63,7 @@ impl SettingsRepository {
 
         let result = sqlx::query(
             "INSERT INTO user_settings (user_id, preferences, created_at, updated_at)
-             VALUES (?, ?, ?, ?)"
+             VALUES (?, ?, ?, ?)",
         )
         .bind(user_id)
         .bind(preferences_json)
@@ -71,7 +80,11 @@ impl SettingsRepository {
     }
 
     /// Update settings
-    pub async fn update(&self, user_id: i64, request: &UpdateSettingsRequest) -> UserResult<UserSettings> {
+    pub async fn update(
+        &self,
+        user_id: i64,
+        request: &UpdateSettingsRequest,
+    ) -> UserResult<UserSettings> {
         // Update with new preferences
         let preferences_json = serde_json::to_string(&request.preferences)
             .map_err(|e| UserError::DatabaseError(e.to_string()))?;
@@ -79,7 +92,7 @@ impl SettingsRepository {
         let now = chrono::Utc::now().to_rfc3339();
 
         let result = sqlx::query(
-            "UPDATE user_settings SET preferences = ?, updated_at = ? WHERE user_id = ?"
+            "UPDATE user_settings SET preferences = ?, updated_at = ? WHERE user_id = ?",
         )
         .bind(preferences_json)
         .bind(&now)
@@ -92,20 +105,18 @@ impl SettingsRepository {
             return Err(UserError::UserNotFound);
         }
 
-        self.find_by_user_id(user_id).await?.ok_or_else(|| {
-            UserError::UserNotFound
-        })
+        self.find_by_user_id(user_id)
+            .await?
+            .ok_or_else(|| UserError::UserNotFound)
     }
 
     /// Delete settings
     pub async fn delete(&self, user_id: i64) -> UserResult<()> {
-        sqlx::query(
-            "DELETE FROM user_settings WHERE user_id = ?"
-        )
-        .bind(user_id)
-        .execute(&self.pool)
-        .await
-        .map_err(|e| UserError::DatabaseError(e.to_string()))?;
+        sqlx::query("DELETE FROM user_settings WHERE user_id = ?")
+            .bind(user_id)
+            .execute(&self.pool)
+            .await
+            .map_err(|e| UserError::DatabaseError(e.to_string()))?;
 
         Ok(())
     }
@@ -126,9 +137,10 @@ impl SettingsRepository {
 
     /// Export settings
     pub async fn export_settings(&self, user_id: i64) -> UserResult<String> {
-        let settings = self.find_by_user_id(user_id).await?.ok_or_else(|| {
-            UserError::UserNotFound
-        })?;
+        let settings = self
+            .find_by_user_id(user_id)
+            .await?
+            .ok_or_else(|| UserError::UserNotFound)?;
 
         let export_data = serde_json::json!({
             "preferences": settings.preferences,
@@ -140,23 +152,46 @@ impl SettingsRepository {
     }
 
     /// Import settings
-    pub async fn import_settings(&self, user_id: i64, settings_json: &str) -> UserResult<UserSettings> {
+    pub async fn import_settings(
+        &self,
+        user_id: i64,
+        settings_json: &str,
+    ) -> UserResult<UserSettings> {
         let import_data: serde_json::Value = serde_json::from_str(settings_json)
             .map_err(|e| UserError::DatabaseError(e.to_string()))?;
 
-        let preferences: crate::entities::UserPreferences = if let Some(pref) = import_data.get("preferences") {
-            serde_json::from_value(pref.clone())
-                .map_err(|e| UserError::DatabaseError(e.to_string()))?
-        } else {
-            // Try to extract individual fields if preferences wrapper is not present
-            crate::entities::UserPreferences {
-                theme: import_data.get("theme").and_then(|v| v.as_str()).unwrap_or("dark").to_string(),
-                language: import_data.get("language").and_then(|v| v.as_str()).unwrap_or("en").to_string(),
-                notifications_enabled: import_data.get("notifications_enabled").and_then(|v| v.as_bool()).unwrap_or(true),
-                email_notifications: import_data.get("email_notifications").and_then(|v| v.as_bool()).unwrap_or(true),
-                timezone: import_data.get("timezone").and_then(|v| v.as_str()).unwrap_or("UTC").to_string(),
-            }
-        };
+        let preferences: crate::entities::UserPreferences =
+            if let Some(pref) = import_data.get("preferences") {
+                serde_json::from_value(pref.clone())
+                    .map_err(|e| UserError::DatabaseError(e.to_string()))?
+            } else {
+                // Try to extract individual fields if preferences wrapper is not present
+                crate::entities::UserPreferences {
+                    theme: import_data
+                        .get("theme")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("dark")
+                        .to_string(),
+                    language: import_data
+                        .get("language")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("en")
+                        .to_string(),
+                    notifications_enabled: import_data
+                        .get("notifications_enabled")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(true),
+                    email_notifications: import_data
+                        .get("email_notifications")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(true),
+                    timezone: import_data
+                        .get("timezone")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("UTC")
+                        .to_string(),
+                }
+            };
 
         let update_request = UpdateSettingsRequest { preferences };
 
@@ -199,7 +234,7 @@ mod tests {
                 preferences TEXT NOT NULL,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
-            )"
+            )",
         )
         .execute(&pool)
         .await

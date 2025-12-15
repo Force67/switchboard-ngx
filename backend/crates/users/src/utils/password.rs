@@ -21,8 +21,7 @@ pub fn hash_password(password: &str) -> Result<String, UserError> {
 
 /// Verify a password against its hash
 pub fn verify_password(password: &str, hash: &str) -> Result<bool, UserError> {
-    let parsed_hash = PasswordHash::new(hash)
-        .map_err(|_| UserError::InvalidPassword)?;
+    let parsed_hash = PasswordHash::new(hash).map_err(|_| UserError::InvalidPassword)?;
 
     let argon2 = Argon2::default();
 
@@ -67,7 +66,10 @@ pub fn check_password_strength(password: &str) -> PasswordStrength {
     if password.chars().any(|c| c.is_ascii_digit()) {
         score += 1;
     }
-    if password.chars().any(|c| "!@#$%^&*()_+-=[]{}|;:,.<>?".contains(c)) {
+    if password
+        .chars()
+        .any(|c| "!@#$%^&*()_+-=[]{}|;:,.<>?".contains(c))
+    {
         score += 1;
     }
 
@@ -103,8 +105,14 @@ mod tests {
     fn test_password_strength() {
         assert_eq!(check_password_strength("123"), PasswordStrength::Weak);
         assert_eq!(check_password_strength("password"), PasswordStrength::Weak);
-        assert_eq!(check_password_strength("Password123"), PasswordStrength::Medium);
-        assert_eq!(check_password_strength("Password123!@#"), PasswordStrength::Strong);
+        assert_eq!(
+            check_password_strength("Password123"),
+            PasswordStrength::Medium
+        );
+        assert_eq!(
+            check_password_strength("Password123!@#"),
+            PasswordStrength::Strong
+        );
     }
 
     #[test]

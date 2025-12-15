@@ -4,14 +4,14 @@
 //! the core business logic for user operations. Services coordinate
 //! between repositories and handle business rules.
 
-pub mod user_service;
 pub mod auth_service;
+mod mock_repositories;
 pub mod notification_service;
 pub mod session_service;
-mod mock_repositories;
+pub mod user_service;
 
 // Re-export all services
-pub use user_service::{UserService, UserRepo};
 pub use auth_service::AuthService;
 pub use notification_service::NotificationService;
 pub use session_service::SessionService;
+pub use user_service::{UserRepo, UserService};

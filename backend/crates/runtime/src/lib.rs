@@ -2,13 +2,18 @@ use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use redis::aio::ConnectionManager;
+use sqlx::SqlitePool;
 use switchboard_auth::Authenticator;
 use switchboard_config::AppConfig;
-use switchboard_database::{initialize_database};
-use sqlx::SqlitePool;
+use switchboard_database::initialize_database;
 use switchboard_orchestrator::Orchestrator;
 use tracing::info;
 
+const DEFAULT_REDIS_URL: &str = "redis://127.0.0.1:6379";
+
+fn resolve_redis_url() -> String {
+    std::env::var("REDIS_URL").unwrap_or_else(|_| DEFAULT_REDIS_URL.to_string())
+}
 
 pub mod telemetry {
     use anyhow::Result;
@@ -49,31 +54,33 @@ impl BackendServices {
         );
 
         // Initialize Redis connection (optional for development)
-        let redis_conn = match redis::Client::open("redis://127.0.0.1:6379") {
+        let redis_url = resolve_redis_url();
+        let redis_conn = match redis::Client::open(redis_url.as_str()) {
             Ok(client) => match ConnectionManager::new(client).await {
                 Ok(conn) => {
-                    info!("redis connection established");
+                    info!(%redis_url, "redis connection established");
                     Some(conn)
                 }
                 Err(e) => {
                     tracing::warn!(
+                        %redis_url,
                         "failed to connect to redis, proceeding without redis: {}",
-                        e
+                        e,
                     );
                     None
                 }
             },
             Err(e) => {
                 tracing::warn!(
+                    %redis_url,
                     "failed to create redis client, proceeding without redis: {}",
-                    e
+                    e,
                 );
                 None
             }
         };
 
         info!(model = ?orchestrator.active_model(), "orchestrator ready");
-        info!("redis connection established");
 
         Ok(Self {
             db_pool,

@@ -1,14 +1,9 @@
 //! WebSocket endpoints for the gateway
 
-pub mod user;
 pub mod chat;
+pub mod user;
 
-use axum::{
-    extract::State,
-    response::Response,
-    routing::get,
-    Router,
-};
+use axum::{extract::State, response::Response, routing::get, Router};
 use std::sync::Arc;
 
 use crate::state::GatewayState;
@@ -23,5 +18,5 @@ pub fn create_websocket_routes() -> Router<Arc<GatewayState>> {
 }
 
 // Re-export for convenience
-pub use user::*;
 pub use chat::*;
+pub use user::*;

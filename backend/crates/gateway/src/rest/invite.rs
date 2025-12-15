@@ -1,18 +1,17 @@
 //! Invite REST endpoints
 
 use axum::{
-    extract::{Path, Query, State, Request},
-    Json,
+    extract::{Path, Query, Request, State},
     response::IntoResponse,
-    Router,
+    Json, Router, Extension,
 };
 use serde::{Deserialize, Serialize};
-use utoipa::{IntoParams, ToSchema};
 use std::sync::Arc;
+use utoipa::{IntoParams, ToSchema};
 
-use crate::state::GatewayState;
 use crate::error::{GatewayError, GatewayResult};
 use crate::middleware::extract_user_id;
+use crate::state::GatewayState;
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct InviteResponse {
@@ -38,7 +37,7 @@ pub struct InviteInviterResponse {
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateInviteRequest {
     pub email: String,
-    pub role: Option<String>, // Will default to 'member'
+    pub role: Option<String>,          // Will default to 'member'
     pub expires_in_hours: Option<i64>, // Optional custom expiration
 }
 
@@ -85,9 +84,18 @@ pub struct ErrorResponse {
 pub fn create_invite_routes() -> Router<Arc<GatewayState>> {
     Router::new()
         .route("/invites", axum::routing::get(list_user_invites))
-        .route("/invites/:invite_id", axum::routing::get(get_invite).delete(delete_invite))
-        .route("/invites/:invite_id/respond", axum::routing::post(respond_to_invite))
-        .route("/chats/:chat_id/invites", axum::routing::get(list_invites).post(create_invite))
+        .route(
+            "/invites/:invite_id",
+            axum::routing::get(get_invite).delete(delete_invite),
+        )
+        .route(
+            "/invites/:invite_id/respond",
+            axum::routing::post(respond_to_invite),
+        )
+        .route(
+            "/chats/:chat_id/invites",
+            axum::routing::get(list_invites).post(create_invite),
+        )
 }
 
 #[utoipa::path(
@@ -135,7 +143,8 @@ pub async fn list_invites(
         .await
         .map_err(|e| GatewayError::ServiceError(format!("Failed to list invites: {}", e)))?;
 
-    let invite_responses: Vec<InviteResponse> = invites.into_iter().map(|invite| invite.into()).collect();
+    let invite_responses: Vec<InviteResponse> =
+        invites.into_iter().map(|invite| invite.into()).collect();
     Ok(Json(invite_responses))
 }
 
@@ -171,7 +180,8 @@ pub async fn list_user_invites(
         .await
         .map_err(|e| GatewayError::ServiceError(format!("Failed to list user invites: {}", e)))?;
 
-    let invite_responses: Vec<InviteResponse> = invites.into_iter().map(|invite| invite.into()).collect();
+    let invite_responses: Vec<InviteResponse> =
+        invites.into_iter().map(|invite| invite.into()).collect();
     Ok(Json(invite_responses))
 }
 
@@ -195,11 +205,9 @@ pub async fn list_user_invites(
 pub async fn create_invite(
     Path(chat_id): Path<String>,
     State(state): State<Arc<GatewayState>>,
+    Extension(user_id): Extension<i64>,
     Json(payload): Json<CreateInviteRequest>,
 ) -> GatewayResult<impl IntoResponse> {
-    // For now, use a placeholder user_id since we can't extract it without Request
-    let user_id = 1; // TODO: Fix authentication
-
     // Check if user is owner or admin
     state
         .invite_service
@@ -209,12 +217,17 @@ pub async fn create_invite(
 
     // Validate email format
     if !payload.email.contains('@') || payload.email.len() > 255 {
-        return Err(GatewayError::InvalidRequest("Invalid email format".to_string()));
+        return Err(GatewayError::InvalidRequest(
+            "Invalid email format".to_string(),
+        ));
     }
 
     let expires_in_hours = payload.expires_in_hours.unwrap_or(24 * 7); // Default 7 days
-    if expires_in_hours <= 0 || expires_in_hours > 24 * 30 { // Max 30 days
-        return Err(GatewayError::InvalidRequest("Expiration must be between 1 hour and 30 days".to_string()));
+    if expires_in_hours <= 0 || expires_in_hours > 24 * 30 {
+        // Max 30 days
+        return Err(GatewayError::InvalidRequest(
+            "Expiration must be between 1 hour and 30 days".to_string(),
+        ));
     }
 
     let create_req = switchboard_database::CreateInviteRequest {
@@ -268,7 +281,9 @@ pub async fn get_invite(
         // Check if user's email matches the invited email
         // This would require looking up the user, which is outside the scope of the invite service
         // For now, we'll only allow the inviter to view the invite
-        return Err(GatewayError::AuthorizationFailed("Access denied".to_string()));
+        return Err(GatewayError::AuthorizationFailed(
+            "Access denied".to_string(),
+        ));
     }
 
     Ok(Json(InviteResponse::from(invite)))
@@ -311,18 +326,24 @@ pub async fn respond_to_invite(
                 .invite_service
                 .accept_invite(invite.id, user_id)
                 .await
-                .map_err(|e| GatewayError::ServiceError(format!("Failed to accept invite: {}", e)))?;
+                .map_err(|e| {
+                    GatewayError::ServiceError(format!("Failed to accept invite: {}", e))
+                })?;
             Ok(Json(InviteResponse::from(updated_invite)))
-        },
+        }
         "reject" => {
             let updated_invite = state
                 .invite_service
                 .reject_invite(invite.id, user_id)
                 .await
-                .map_err(|e| GatewayError::ServiceError(format!("Failed to reject invite: {}", e)))?;
+                .map_err(|e| {
+                    GatewayError::ServiceError(format!("Failed to reject invite: {}", e))
+                })?;
             Ok(Json(InviteResponse::from(updated_invite)))
-        },
-        _ => Err(GatewayError::InvalidRequest("Action must be 'accept' or 'reject'".to_string())),
+        }
+        _ => Err(GatewayError::InvalidRequest(
+            "Action must be 'accept' or 'reject'".to_string(),
+        )),
     }
 }
 
@@ -359,7 +380,11 @@ pub async fn delete_invite(
     if invite.invited_by_public_id != user_id.to_string() {
         state
             .invite_service
-            .check_chat_role(&invite.chat_public_id, user_id, switchboard_database::MemberRole::Admin)
+            .check_chat_role(
+                &invite.chat_public_id,
+                user_id,
+                switchboard_database::MemberRole::Admin,
+            )
             .await
             .map_err(|e| GatewayError::AuthorizationFailed(format!("Access denied: {}", e)))?;
     }

@@ -1,18 +1,17 @@
 //! Message REST endpoints
 
 use axum::{
-    extract::{Path, Query, State, Request},
-    Json,
+    extract::{Path, Query, Request, State},
     response::IntoResponse,
-    Router,
+    Json, Router,
 };
 use serde::{Deserialize, Serialize};
-use utoipa::{IntoParams, ToSchema};
 use std::sync::Arc;
+use utoipa::{IntoParams, ToSchema};
 
-use crate::state::GatewayState;
 use crate::error::{GatewayError, GatewayResult};
 use crate::middleware::extract_user_id;
+use crate::state::GatewayState;
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct MessageResponse {
@@ -49,7 +48,6 @@ pub struct AttachmentResponse {
     pub created_at: String,
 }
 
-
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateMessageRequest {
     pub content: Option<String>,
@@ -67,11 +65,10 @@ pub struct UpdateMessageRequest {
 pub struct ListMessagesQuery {
     pub limit: Option<i64>,
     pub offset: Option<i64>,
-    pub before: Option<String>, // Message ID to get messages before
-    pub after: Option<String>,  // Message ID to get messages after
+    pub before: Option<String>,    // Message ID to get messages before
+    pub after: Option<String>,     // Message ID to get messages after
     pub thread_id: Option<String>, // Filter by thread
 }
-
 
 impl From<switchboard_database::ChatMessage> for MessageResponse {
     fn from(message: switchboard_database::ChatMessage) -> Self {
@@ -106,8 +103,16 @@ pub struct ErrorResponse {
 /// Create message routes
 pub fn create_message_routes() -> Router<Arc<GatewayState>> {
     Router::new()
-        .route("/chats/:chat_id/messages", axum::routing::get(list_messages).post(create_message))
-        .route("/chats/:chat_id/messages/:message_id", axum::routing::get(get_message).put(update_message).delete(delete_message))
+        .route(
+            "/chats/:chat_id/messages",
+            axum::routing::get(list_messages).post(create_message),
+        )
+        .route(
+            "/chats/:chat_id/messages/:message_id",
+            axum::routing::get(get_message)
+                .put(update_message)
+                .delete(delete_message),
+        )
 }
 
 #[utoipa::path(
@@ -143,11 +148,18 @@ pub async fn list_messages(
 
     let messages = state
         .message_service
-        .list_by_chat(&chat_id, params.limit, params.offset, params.before.as_deref(), params.after.as_deref())
+        .list_by_chat(
+            &chat_id,
+            params.limit,
+            params.offset,
+            params.before.as_deref(),
+            params.after.as_deref(),
+        )
         .await
         .map_err(|e| GatewayError::ServiceError(format!("Failed to list messages: {}", e)))?;
 
-    let message_responses: Vec<MessageResponse> = messages.into_iter().map(|message| message.into()).collect();
+    let message_responses: Vec<MessageResponse> =
+        messages.into_iter().map(|message| message.into()).collect();
     Ok(Json(message_responses))
 }
 
@@ -251,7 +263,9 @@ pub async fn get_message(
 
     // Verify message belongs to the specified chat
     if message.chat_public_id != chat_id {
-        return Err(GatewayError::NotFound("Message does not belong to specified chat".to_string()));
+        return Err(GatewayError::NotFound(
+            "Message does not belong to specified chat".to_string(),
+        ));
     }
 
     Ok(Json(MessageResponse::from(message)))
@@ -374,4 +388,3 @@ pub async fn delete_message(
 
     Ok(axum::http::StatusCode::NO_CONTENT)
 }
-

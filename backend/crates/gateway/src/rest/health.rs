@@ -1,4 +1,7 @@
-use axum::Json;
+use std::sync::Arc;
+
+use crate::state::GatewayState;
+use axum::{routing::get, Json, Router};
 use chrono::Utc;
 use serde::Serialize;
 use utoipa::ToSchema;
@@ -22,4 +25,9 @@ pub async fn health_check() -> Json<HealthResponse> {
         status: "ok".to_string(),
         timestamp: Utc::now().to_rfc3339(),
     })
+}
+
+/// Create health routes
+pub fn create_health_routes() -> Router<Arc<GatewayState>> {
+    Router::<Arc<GatewayState>>::new().route("/health", get(health_check))
 }

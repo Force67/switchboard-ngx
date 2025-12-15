@@ -117,7 +117,7 @@ pub fn create_message_routes() -> Router<Arc<GatewayState>> {
 
 #[utoipa::path(
     get,
-    path = "/api/chats/{chat_id}/messages",
+    path = "/api/v1/chats/{chat_id}/messages",
     tag = "Messages",
     params(
         ("chat_id" = String, Path, description = "Chat public ID"),
@@ -165,7 +165,7 @@ pub async fn list_messages(
 
 #[utoipa::path(
     post,
-    path = "/api/chats/{chat_id}/messages",
+    path = "/api/v1/chats/{chat_id}/messages",
     tag = "Messages",
     params(
         ("chat_id" = String, Path, description = "Chat public ID")
@@ -184,9 +184,9 @@ pub async fn create_message(
     Path(chat_id): Path<String>,
     State(state): State<Arc<GatewayState>>,
     Json(payload): Json<CreateMessageRequest>,
+    request: Request,
 ) -> GatewayResult<impl IntoResponse> {
-    // For now, use a placeholder user_id since we can't extract it without Request
-    let user_id = 1; // TODO: Fix authentication
+    let user_id = extract_user_id(&request)?;
 
     // Check chat membership
     state
@@ -226,7 +226,7 @@ pub async fn create_message(
 
 #[utoipa::path(
     get,
-    path = "/api/chats/{chat_id}/messages/{message_id}",
+    path = "/api/v1/chats/{chat_id}/messages/{message_id}",
     tag = "Messages",
     params(
         ("chat_id" = String, Path, description = "Chat public ID"),
@@ -273,7 +273,7 @@ pub async fn get_message(
 
 #[utoipa::path(
     put,
-    path = "/api/chats/{chat_id}/messages/{message_id}",
+    path = "/api/v1/chats/{chat_id}/messages/{message_id}",
     tag = "Messages",
     params(
         ("chat_id" = String, Path, description = "Chat public ID"),
@@ -336,7 +336,7 @@ pub async fn update_message(
 
 #[utoipa::path(
     delete,
-    path = "/api/chats/{chat_id}/messages/{message_id}",
+    path = "/api/v1/chats/{chat_id}/messages/{message_id}",
     tag = "Messages",
     params(
         ("chat_id" = String, Path, description = "Chat public ID"),

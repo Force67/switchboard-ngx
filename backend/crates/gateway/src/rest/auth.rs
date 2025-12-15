@@ -92,7 +92,7 @@ pub fn create_auth_routes() -> Router<Arc<GatewayState>> {
 
 #[utoipa::path(
     get,
-    path = "/api/auth/github/login",
+    path = "/api/v1/auth/github/login",
     tag = "Auth",
     params(GithubLoginQuery),
     responses(
@@ -116,7 +116,7 @@ pub async fn github_login(
 
 #[utoipa::path(
     post,
-    path = "/api/auth/github/callback",
+    path = "/api/v1/auth/github/callback",
     tag = "Auth",
     request_body = GithubCallbackRequest,
     responses(
@@ -143,7 +143,7 @@ pub async fn github_callback(
 #[cfg(debug_assertions)]
 #[utoipa::path(
     get,
-    path = "/api/auth/dev/token",
+    path = "/api/v1/auth/dev/token",
     tag = "Auth",
     responses(
         (status = 200, description = "Development session issued", body = SessionResponse),
@@ -164,7 +164,7 @@ pub async fn dev_token(
 
 #[utoipa::path(
     post,
-    path = "/api/auth/logout",
+    path = "/api/v1/auth/logout",
     tag = "Auth",
     responses(
         (status = 200, description = "Successfully logged out"),
@@ -188,7 +188,7 @@ pub async fn logout(State(state): State<Arc<GatewayState>>, request: Request) ->
 
 #[utoipa::path(
     get,
-    path = "/api/auth/me",
+    path = "/api/v1/auth/me",
     tag = "Auth",
     responses(
         (status = 200, description = "Current user information", body = UserResponse),

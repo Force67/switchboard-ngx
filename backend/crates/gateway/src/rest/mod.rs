@@ -10,6 +10,8 @@ pub mod invite;
 pub mod member;
 pub mod message;
 pub mod models;
+pub mod notifications;
+pub mod permissions;
 
 use crate::state::GatewayState;
 use axum::Router;
@@ -40,7 +42,11 @@ pub fn create_rest_routes() -> Router<Arc<GatewayState>> {
                 // Attachment routes
                 .merge(attachment::create_attachment_routes())
                 // Models routes
-                .merge(models::create_models_routes()),
+                .merge(models::create_models_routes())
+                // Notifications routes
+                .merge(notifications::create_notification_routes())
+                // Permissions routes
+                .merge(permissions::create_permission_routes()),
         )
 }
 

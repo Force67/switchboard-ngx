@@ -61,7 +61,7 @@ pub fn create_folder_routes() -> Router<Arc<GatewayState>> {
 
 #[utoipa::path(
     get,
-    path = "/api/folders",
+    path = "/api/v1/folders",
     tag = "Folders",
     responses(
         (status = 200, description = "List folders for the current user", body = FoldersResponse),
@@ -89,7 +89,7 @@ pub async fn list_folders(
 
 #[utoipa::path(
     post,
-    path = "/api/folders",
+    path = "/api/v1/folders",
     tag = "Folders",
     request_body = CreateFolderRequest,
     responses(
@@ -135,7 +135,7 @@ pub async fn create_folder(
 
 #[utoipa::path(
     get,
-    path = "/api/folders/{folder_id}",
+    path = "/api/v1/folders/{folder_id}",
     tag = "Folders",
     params(
         ("folder_id" = String, Path, description = "Folder public identifier")
@@ -158,7 +158,7 @@ pub async fn get_folder(
 
 #[utoipa::path(
     put,
-    path = "/api/folders/{folder_id}",
+    path = "/api/v1/folders/{folder_id}",
     tag = "Folders",
     params(
         ("folder_id" = String, Path, description = "Folder public identifier")
@@ -219,7 +219,7 @@ pub async fn update_folder(
 
 #[utoipa::path(
     delete,
-    path = "/api/folders/{folder_id}",
+    path = "/api/v1/folders/{folder_id}",
     tag = "Folders",
     params(
         ("folder_id" = String, Path, description = "Folder public identifier")

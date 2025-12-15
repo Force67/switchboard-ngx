@@ -58,8 +58,8 @@ pub fn create_router(state: GatewayState) -> Router {
         ))
         .with_state(arc_state.clone());
     let mut router = Router::new()
-        // REST API routes
-        .nest("/api", api_routes)
+        // REST API routes with versioning
+        .nest("/api/v1", api_routes)
         // WebSocket routes
         .merge(websocket::create_websocket_routes().with_state(arc_state))
         // CORS middleware
@@ -124,6 +124,16 @@ pub fn create_router(state: GatewayState) -> Router {
                 rest::attachment::get_attachment,
                 rest::attachment::download_attachment,
                 rest::attachment::delete_attachment,
+                rest::models::list_models,
+                rest::notifications::get_notifications,
+                rest::notifications::get_unread_count,
+                rest::notifications::mark_notification_read,
+                rest::notifications::mark_all_read,
+                rest::notifications::delete_notification,
+                rest::permissions::get_user_permissions,
+                rest::permissions::get_resource_permissions,
+                rest::permissions::create_permission,
+                rest::permissions::delete_permission,
             ),
             components(
                 schemas(
@@ -156,6 +166,15 @@ pub fn create_router(state: GatewayState) -> Router {
                     rest::attachment::CreateAttachmentRequest,
                     rest::attachment::ListAttachmentsQuery,
                     rest::attachment::ErrorResponse,
+                    rest::models::ModelsResponse,
+                    rest::notifications::NotificationsResponse,
+                    rest::notifications::UnreadCountResponse,
+                    rest::notifications::BulkUpdateResponse,
+                    rest::notifications::MarkNotificationReadRequest,
+                    rest::permissions::PermissionsResponse,
+                    rest::permissions::PermissionResponse,
+                    rest::permissions::CreatePermissionRequest,
+                    rest::error::ErrorResponse,
                 )
             ),
             tags(
@@ -165,6 +184,9 @@ pub fn create_router(state: GatewayState) -> Router {
                 (name = "invites", description = "Chat invitations"),
                 (name = "members", description = "Chat member management"),
                 (name = "attachments", description = "File attachments"),
+                (name = "models", description = "AI model information"),
+                (name = "notifications", description = "User notifications"),
+                (name = "permissions", description = "Resource permissions"),
             )
         )]
         struct ApiDoc;

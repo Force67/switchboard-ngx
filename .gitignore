@@ -15,3 +15,4 @@ backend/crates/config/switchboard.toml
 apps/web-dev.log
 apps/apps-web-dev.log
 switchboard-backend.log
+opencode.json

@@ -95,7 +95,7 @@ const loadStoredSession = (): SessionData | null => {
 // Auto-fetch dev token for development
 const fetchDevSession = async (): Promise<SessionData | null> => {
   try {
-    const response = await fetch(`${API_BASE}/api/auth/dev/token`);
+    const response = await fetch(`${API_BASE}/api/v1/auth/dev/token`);
     if (!response.ok) return null;
 
     const data = await response.json();
@@ -184,7 +184,7 @@ export default function App() {
   const finalizeGithubLogin = async (code: string, state: string) => {
     setAuthError(null);
     try {
-      const response = await fetch(`${API_BASE}/api/auth/github/callback`, {
+      const response = await fetch(`${API_BASE}/api/v1/auth/github/callback`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -227,7 +227,7 @@ export default function App() {
     setAuthenticating(true);
     try {
       const response = await fetch(
-        `${API_BASE}/api/auth/github/login?redirect_uri=${encodeURIComponent(redirectUri())}`,
+        `${API_BASE}/api/v1/auth/github/login?redirect_uri=${encodeURIComponent(redirectUri())}`,
       );
 
       if (!response.ok) {
@@ -254,7 +254,7 @@ export default function App() {
     setModelsLoading(true);
     setModelsError(null);
     try {
-      const response = await fetch(`${API_BASE}/api/models`, {
+      const response = await fetch(`${API_BASE}/api/v1/models`, {
         headers: {
           Authorization: `Bearer ${activeSession.token}`,
         },
@@ -669,7 +669,7 @@ export default function App() {
     try {
       const buildChatUrls = () => {
         const urls = new Set<string>();
-        urls.add(`${API_BASE}/api/chat`);
+        urls.add(`${API_BASE}/api/v1/chat`);
         if (typeof window !== "undefined") {
           urls.add("/api/chat"); // dev proxy fallback
           urls.add(`${window.location.origin}/api/chat`);

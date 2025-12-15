@@ -100,7 +100,7 @@ pub fn create_invite_routes() -> Router<Arc<GatewayState>> {
 
 #[utoipa::path(
     get,
-    path = "/api/chats/{chat_id}/invites",
+    path = "/api/v1/chats/{chat_id}/invites",
     tag = "Invites",
     params(
         ("chat_id" = String, Path, description = "Chat public ID"),
@@ -150,7 +150,7 @@ pub async fn list_invites(
 
 #[utoipa::path(
     get,
-    path = "/api/invites",
+    path = "/api/v1/invites",
     tag = "Invites",
     params(ListInvitesQuery),
     responses(
@@ -187,7 +187,7 @@ pub async fn list_user_invites(
 
 #[utoipa::path(
     post,
-    path = "/api/chats/{chat_id}/invites",
+    path = "/api/v1/chats/{chat_id}/invites",
     tag = "Invites",
     params(
         ("chat_id" = String, Path, description = "Chat public ID")
@@ -250,7 +250,7 @@ pub async fn create_invite(
 
 #[utoipa::path(
     get,
-    path = "/api/invites/{invite_id}",
+    path = "/api/v1/invites/{invite_id}",
     tag = "Invites",
     params(
         ("invite_id" = String, Path, description = "Invite public ID")
@@ -291,7 +291,7 @@ pub async fn get_invite(
 
 #[utoipa::path(
     post,
-    path = "/api/invites/{invite_id}/respond",
+    path = "/api/v1/invites/{invite_id}/respond",
     tag = "Invites",
     params(
         ("invite_id" = String, Path, description = "Invite public ID")
@@ -309,9 +309,9 @@ pub async fn respond_to_invite(
     Path(invite_id): Path<String>,
     State(state): State<Arc<GatewayState>>,
     Json(payload): Json<RespondToInviteRequest>,
+    request: Request,
 ) -> GatewayResult<Json<InviteResponse>> {
-    // For now, use a placeholder user_id since we can't extract it without Request
-    let user_id = 1; // TODO: Fix authentication
+    let user_id = extract_user_id(&request)?;
 
     let invite = state
         .invite_service
@@ -349,7 +349,7 @@ pub async fn respond_to_invite(
 
 #[utoipa::path(
     delete,
-    path = "/api/invites/{invite_id}",
+    path = "/api/v1/invites/{invite_id}",
     tag = "Invites",
     params(
         ("invite_id" = String, Path, description = "Invite public ID")

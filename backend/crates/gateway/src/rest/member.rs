@@ -84,7 +84,7 @@ pub fn create_member_routes() -> Router<Arc<GatewayState>> {
 
 #[utoipa::path(
     get,
-    path = "/api/chats/{chat_id}/members",
+    path = "/api/v1/chats/{chat_id}/members",
     tag = "Members",
     params(
         ("chat_id" = String, Path, description = "Chat public ID"),
@@ -133,7 +133,7 @@ pub async fn list_members(
 
 #[utoipa::path(
     get,
-    path = "/api/chats/{chat_id}/members/{member_id}",
+    path = "/api/v1/chats/{chat_id}/members/{member_id}",
     tag = "Members",
     params(
         ("chat_id" = String, Path, description = "Chat public ID"),
@@ -180,7 +180,7 @@ pub async fn get_member(
 
 #[utoipa::path(
     put,
-    path = "/api/chats/{chat_id}/members/{member_id}/role",
+    path = "/api/v1/chats/{chat_id}/members/{member_id}/role",
     tag = "Members",
     params(
         ("chat_id" = String, Path, description = "Chat public ID"),
@@ -200,9 +200,9 @@ pub async fn update_member_role(
     Path((chat_id, member_id)): Path<(String, String)>,
     State(state): State<Arc<GatewayState>>,
     Json(payload): Json<UpdateMemberRoleRequest>,
+    request: Request,
 ) -> GatewayResult<Json<MemberResponse>> {
-    // For now, use a placeholder user_id since we can't extract it without Request
-    let user_id = 1; // TODO: Fix authentication
+    let user_id = extract_user_id(&request)?;
 
     // Check if user is owner or admin
     state
@@ -266,7 +266,7 @@ pub async fn update_member_role(
 
 #[utoipa::path(
     delete,
-    path = "/api/chats/{chat_id}/members/{member_id}",
+    path = "/api/v1/chats/{chat_id}/members/{member_id}",
     tag = "Members",
     params(
         ("chat_id" = String, Path, description = "Chat public ID"),
@@ -335,7 +335,7 @@ pub async fn remove_member(
 
 #[utoipa::path(
     delete,
-    path = "/api/chats/{chat_id}/leave",
+    path = "/api/v1/chats/{chat_id}/leave",
     tag = "Members",
     params(
         ("chat_id" = String, Path, description = "Chat public ID")

@@ -100,7 +100,7 @@ pub fn create_attachment_routes() -> Router<Arc<GatewayState>> {
 
 #[utoipa::path(
     get,
-    path = "/api/chats/{chat_id}/attachments",
+    path = "/api/v1/chats/{chat_id}/attachments",
     tag = "Attachments",
     params(
         ("chat_id" = String, Path, description = "Chat public ID"),
@@ -159,7 +159,7 @@ pub async fn list_attachments(
 
 #[utoipa::path(
     get,
-    path = "/api/chats/{chat_id}/messages/{message_id}/attachments",
+    path = "/api/v1/chats/{chat_id}/messages/{message_id}/attachments",
     tag = "Attachments",
     params(
         ("chat_id" = String, Path, description = "Chat public ID"),
@@ -204,7 +204,7 @@ pub async fn list_message_attachments(
 
 #[utoipa::path(
     post,
-    path = "/api/chats/{chat_id}/messages/{message_id}/attachments",
+    path = "/api/v1/chats/{chat_id}/messages/{message_id}/attachments",
     tag = "Attachments",
     params(
         ("chat_id" = String, Path, description = "Chat public ID"),
@@ -225,9 +225,9 @@ pub async fn create_attachment(
     Path((chat_id, message_id)): Path<(String, String)>,
     State(state): State<Arc<GatewayState>>,
     Json(payload): Json<CreateAttachmentRequest>,
+    request: Request,
 ) -> GatewayResult<impl IntoResponse> {
-    // For now, use a placeholder user_id since we can't extract it without Request
-    let user_id = 1; // TODO: Fix authentication
+    let user_id = extract_user_id(&request)?;
 
     // Check chat membership
     state
@@ -291,7 +291,7 @@ pub async fn create_attachment(
 
 #[utoipa::path(
     get,
-    path = "/api/attachments/{attachment_id}",
+    path = "/api/v1/attachments/{attachment_id}",
     tag = "Attachments",
     params(
         ("attachment_id" = String, Path, description = "Attachment public ID")
@@ -330,7 +330,7 @@ pub async fn get_attachment(
 
 #[utoipa::path(
     get,
-    path = "/api/attachments/{attachment_id}/download",
+    path = "/api/v1/attachments/{attachment_id}/download",
     tag = "Attachments",
     params(
         ("attachment_id" = String, Path, description = "Attachment public ID")
@@ -382,7 +382,7 @@ pub async fn download_attachment(
 
 #[utoipa::path(
     delete,
-    path = "/api/attachments/{attachment_id}",
+    path = "/api/v1/attachments/{attachment_id}",
     tag = "Attachments",
     params(
         ("attachment_id" = String, Path, description = "Attachment public ID")

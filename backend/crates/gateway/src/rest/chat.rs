@@ -142,7 +142,7 @@ pub fn create_chat_routes() -> Router<Arc<GatewayState>> {
 
 #[utoipa::path(
     get,
-    path = "/api/chats",
+    path = "/api/v1/chats",
     tag = "Chats",
     params(ListChatsQuery),
     responses(
@@ -168,7 +168,7 @@ pub async fn list_chats(
 
 #[utoipa::path(
     post,
-    path = "/api/chats",
+    path = "/api/v1/chats",
     tag = "Chats",
     request_body = CreateChatRequest,
     responses(
@@ -211,7 +211,7 @@ pub async fn create_chat(
 
 #[utoipa::path(
     get,
-    path = "/api/chats/{chat_id}",
+    path = "/api/v1/chats/{chat_id}",
     tag = "Chats",
     params(
         ("chat_id" = String, Path, description = "Chat public ID")
@@ -248,7 +248,7 @@ pub async fn get_chat(
 
 #[utoipa::path(
     put,
-    path = "/api/chats/{chat_id}",
+    path = "/api/v1/chats/{chat_id}",
     tag = "Chats",
     params(
         ("chat_id" = String, Path, description = "Chat public ID")
@@ -289,7 +289,7 @@ pub async fn update_chat(
 
 #[utoipa::path(
     delete,
-    path = "/api/chats/{chat_id}",
+    path = "/api/v1/chats/{chat_id}",
     tag = "Chats",
     params(
         ("chat_id" = String, Path, description = "Chat public ID")

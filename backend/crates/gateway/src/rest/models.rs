@@ -356,7 +356,7 @@ pub struct MessagesResponse {
 
 #[utoipa::path(
     get,
-    path = "/api/models",
+    path = "/api/v1/models",
     tag = "Models",
     responses(
         (status = 200, description = "List available language models", body = ModelsResponse),

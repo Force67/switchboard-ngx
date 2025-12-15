@@ -94,7 +94,7 @@ class ApiService {
 
   // Folder API methods
   async listFolders(token: string): Promise<ApiFolder[]> {
-    const response = await fetch(`${API_BASE}/api/folders`, {
+    const response = await fetch(`${API_BASE}/api/v1/folders`, {
       headers: this.getAuthHeaders(token),
     });
 
@@ -107,7 +107,7 @@ class ApiService {
   }
 
   async createFolder(token: string, req: CreateFolderRequest): Promise<ApiFolder> {
-    const response = await fetch(`${API_BASE}/api/folders`, {
+    const response = await fetch(`${API_BASE}/api/v1/folders`, {
       method: "POST",
       headers: this.getAuthHeaders(token),
       body: JSON.stringify(req),
@@ -122,7 +122,7 @@ class ApiService {
   }
 
   async updateFolder(token: string, folderId: string, req: UpdateFolderRequest): Promise<ApiFolder> {
-    const response = await fetch(`${API_BASE}/api/folders/${folderId}`, {
+    const response = await fetch(`${API_BASE}/api/v1/folders/${folderId}`, {
       method: "PUT",
       headers: this.getAuthHeaders(token),
       body: JSON.stringify(req),
@@ -137,7 +137,7 @@ class ApiService {
   }
 
   async deleteFolder(token: string, folderId: string): Promise<void> {
-    const response = await fetch(`${API_BASE}/api/folders/${folderId}`, {
+    const response = await fetch(`${API_BASE}/api/v1/folders/${folderId}`, {
       method: "DELETE",
       headers: this.getAuthHeaders(token),
     });
@@ -149,7 +149,7 @@ class ApiService {
 
   // Chat API methods
   async listChats(token: string): Promise<ApiChat[]> {
-    const response = await fetch(`${API_BASE}/api/chats`, {
+    const response = await fetch(`${API_BASE}/api/v1/chats`, {
       headers: this.getAuthHeaders(token),
     });
 
@@ -176,7 +176,7 @@ class ApiService {
     console.log('Request body being sent:', requestBody);
     console.log('Using token:', token.substring(0, 20) + '...');
 
-    const response = await fetch(`${API_BASE}/api/chats`, {
+    const response = await fetch(`${API_BASE}/api/v1/chats`, {
       method: "POST",
       headers: this.getAuthHeaders(token),
       body: requestBody,
@@ -196,7 +196,7 @@ class ApiService {
   }
 
   async updateChat(token: string, chatId: string, req: UpdateChatRequest): Promise<ApiChat> {
-    const response = await fetch(`${API_BASE}/api/chats/${chatId}`, {
+    const response = await fetch(`${API_BASE}/api/v1/chats/${chatId}`, {
       method: "PUT",
       headers: this.getAuthHeaders(token),
       body: JSON.stringify(req),
@@ -212,7 +212,7 @@ class ApiService {
   }
 
   async deleteChat(token: string, chatId: string): Promise<void> {
-    const response = await fetch(`${API_BASE}/api/chats/${chatId}`, {
+    const response = await fetch(`${API_BASE}/api/v1/chats/${chatId}`, {
       method: "DELETE",
       headers: this.getAuthHeaders(token),
     });
@@ -224,7 +224,7 @@ class ApiService {
 
   // Member API methods
   async listMembers(token: string, chatId: string): Promise<ChatMember[]> {
-    const response = await fetch(`${API_BASE}/api/chats/${chatId}/members`, {
+    const response = await fetch(`${API_BASE}/api/v1/chats/${chatId}/members`, {
       headers: this.getAuthHeaders(token),
     });
 
@@ -237,7 +237,7 @@ class ApiService {
   }
 
   async updateMemberRole(token: string, chatId: string, memberUserId: number, req: UpdateMemberRoleRequest): Promise<ChatMember> {
-    const response = await fetch(`${API_BASE}/api/chats/${chatId}/members/${memberUserId}`, {
+    const response = await fetch(`${API_BASE}/api/v1/chats/${chatId}/members/${memberUserId}`, {
       method: "PUT",
       headers: this.getAuthHeaders(token),
       body: JSON.stringify(req),
@@ -252,7 +252,7 @@ class ApiService {
   }
 
   async removeMember(token: string, chatId: string, memberUserId: number): Promise<void> {
-    const response = await fetch(`${API_BASE}/api/chats/${chatId}/members/${memberUserId}`, {
+    const response = await fetch(`${API_BASE}/api/v1/chats/${chatId}/members/${memberUserId}`, {
       method: "DELETE",
       headers: this.getAuthHeaders(token),
     });
@@ -264,7 +264,7 @@ class ApiService {
 
   // Invite API methods
   async listInvites(token: string, chatId: string): Promise<ChatInvite[]> {
-    const response = await fetch(`${API_BASE}/api/chats/${chatId}/invites`, {
+    const response = await fetch(`${API_BASE}/api/v1/chats/${chatId}/invites`, {
       headers: this.getAuthHeaders(token),
     });
 
@@ -277,7 +277,7 @@ class ApiService {
   }
 
   async createInvite(token: string, chatId: string, req: CreateInviteRequest): Promise<ChatInvite> {
-    const response = await fetch(`${API_BASE}/api/chats/${chatId}/invites`, {
+    const response = await fetch(`${API_BASE}/api/v1/chats/${chatId}/invites`, {
       method: "POST",
       headers: this.getAuthHeaders(token),
       body: JSON.stringify(req),
@@ -292,7 +292,7 @@ class ApiService {
   }
 
   async acceptInvite(token: string, inviteId: number): Promise<void> {
-    const response = await fetch(`${API_BASE}/api/invites/${inviteId}/accept`, {
+    const response = await fetch(`${API_BASE}/api/v1/invites/${inviteId}/accept`, {
       method: "POST",
       headers: this.getAuthHeaders(token),
     });
@@ -303,7 +303,7 @@ class ApiService {
   }
 
   async rejectInvite(token: string, inviteId: number): Promise<void> {
-    const response = await fetch(`${API_BASE}/api/invites/${inviteId}/reject`, {
+    const response = await fetch(`${API_BASE}/api/v1/invites/${inviteId}/reject`, {
       method: "POST",
       headers: this.getAuthHeaders(token),
     });

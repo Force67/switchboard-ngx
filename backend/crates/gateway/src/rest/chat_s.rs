@@ -61,7 +61,7 @@ pub struct ChatCompletionForm {
 
 #[utoipa::path(
     post,
-    path = "/api/chat",
+    path = "/api/v1/chat",
     tag = "Chat",
     security(("bearerAuth" = [])),
     request_body(

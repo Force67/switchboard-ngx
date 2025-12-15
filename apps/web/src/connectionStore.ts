@@ -13,7 +13,7 @@ interface ConnectionState {
 const HEALTH_CHECK_TIMEOUT_MS = 5_000;
 const LIMITED_LATENCY_THRESHOLD_MS = 1_000;
 const MONITOR_INTERVAL_MS = 30_000;
-const HEALTH_ENDPOINT = "/api/health";
+const HEALTH_ENDPOINT = "/api/v1/health";
 
 const [connectionState, setConnectionState] = createSignal<ConnectionState>({
   status: "connecting",

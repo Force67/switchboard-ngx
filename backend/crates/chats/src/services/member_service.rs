@@ -2,20 +2,22 @@
 
 use sqlx::SqlitePool;
 use switchboard_database::{
-    ChatMember, ChatResult, CreateMemberRequest, MemberRepository, MemberRole,
-    UpdateMemberRoleRequest,
+    ChatError, ChatMember, ChatRepository, ChatResult, CreateMemberRequest, MemberRepository,
+    MemberRole, UpdateMemberRoleRequest,
 };
 
 /// Service for managing member operations
 pub struct MemberService {
     member_repository: MemberRepository,
+    chat_repository: ChatRepository,
 }
 
 impl MemberService {
     /// Create a new member service instance
     pub fn new(pool: SqlitePool) -> Self {
         Self {
-            member_repository: MemberRepository::new(pool),
+            member_repository: MemberRepository::new(pool.clone()),
+            chat_repository: ChatRepository::new(pool),
         }
     }
 
@@ -106,7 +108,17 @@ impl MemberService {
 
     /// List members of a chat (legacy method for compatibility)
     pub async fn list_members(&self, chat_id: &str, user_id: i64) -> ChatResult<Vec<ChatMember>> {
-        todo!("Implement list_members")
+        // First check if user is a member of the chat
+        self.check_chat_membership(chat_id, user_id).await?;
+
+        // Get the chat to find the internal ID
+        let chat = self
+            .chat_repository
+            .find_by_public_id(chat_id)
+            .await?
+            .ok_or(ChatError::ChatNotFound)?;
+
+        self.member_repository.find_by_chat_id(chat.id).await
     }
 
     /// Add a member to a chat
@@ -116,7 +128,11 @@ impl MemberService {
         user_id: i64,
         request: CreateMemberRequest,
     ) -> ChatResult<ChatMember> {
-        todo!("Implement add_member")
+        // Check if user has permission to add members (admin or owner)
+        self.check_chat_role(chat_id, user_id, MemberRole::Admin)
+            .await?;
+
+        self.member_repository.create(&request).await
     }
 
     /// Update member role (legacy method for compatibility)
@@ -127,7 +143,23 @@ impl MemberService {
         member_user_id: i64,
         new_role: String,
     ) -> ChatResult<ChatMember> {
-        todo!("Implement update_member_role")
+        // Check if user has permission to change roles (admin or owner)
+        self.check_chat_role(chat_id, user_id, MemberRole::Admin)
+            .await?;
+
+        // Get the chat to find the internal ID
+        let chat = self
+            .chat_repository
+            .find_by_public_id(chat_id)
+            .await?
+            .ok_or(ChatError::ChatNotFound)?;
+
+        // Parse the role string
+        let role = MemberRole::from(new_role.as_str());
+
+        self.member_repository
+            .update_role(chat.id, member_user_id, role, user_id)
+            .await
     }
 
     /// Remove a member from a chat (legacy method for compatibility)
@@ -137,6 +169,15 @@ impl MemberService {
         user_id: i64,
         member_user_id: i64,
     ) -> ChatResult<()> {
-        todo!("Implement remove_member")
+        // Get the chat to find the internal ID
+        let chat = self
+            .chat_repository
+            .find_by_public_id(chat_id)
+            .await?
+            .ok_or(ChatError::ChatNotFound)?;
+
+        self.member_repository
+            .delete(chat.id, member_user_id, user_id)
+            .await
     }
 }

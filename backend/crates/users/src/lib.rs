@@ -39,7 +39,7 @@ pub use switchboard_database::{
 pub use sqlx::sqlite::SqlitePool;
 
 // Re-export main types for convenience
-pub use services::{AuthService, SessionService, UserService};
+pub use services::{AuthService, NotificationService, SessionService, UserService};
 pub use types::events::UserEvent;
 
 #[cfg(test)]

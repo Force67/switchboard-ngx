@@ -97,6 +97,9 @@ pub enum ChatError {
     #[error("Chat is archived")]
     ChatArchived,
 
+    #[error("Service unavailable: {0}")]
+    ServiceUnavailable(String),
+
     #[error("Database error: {0}")]
     DatabaseError(String),
 }

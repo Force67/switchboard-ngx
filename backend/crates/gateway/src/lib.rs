@@ -174,7 +174,7 @@ pub fn create_router(state: GatewayState) -> Router {
                     rest::permissions::PermissionsResponse,
                     rest::permissions::PermissionResponse,
                     rest::permissions::CreatePermissionRequest,
-                    rest::error::ErrorResponse,
+                    error::ErrorResponse,
                 )
             ),
             tags(

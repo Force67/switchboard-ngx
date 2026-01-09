@@ -1,10 +1,10 @@
 use axum::{
-    extract::{Path, Query, Request, State},
+    extract::{Extension, Path, Query, Request, State},
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
-use utoipa::{IntoParams, ToSchema};
 use std::sync::Arc;
+use utoipa::{IntoParams, ToSchema};
 
 use crate::error::{GatewayError, GatewayResult};
 use crate::middleware::extract_user_id;
@@ -43,6 +43,19 @@ pub struct MarkNotificationReadRequest {
     pub read: bool,
 }
 
+/// Convert database notification to API response model
+fn to_api_notification(n: switchboard_database::Notification) -> crate::rest::models::Notification {
+    crate::rest::models::Notification {
+        id: n.id.unwrap_or(0),
+        user_id: n.user_id,
+        r#type: n.notification_type.to_string(),
+        title: n.title,
+        body: n.message,
+        read: n.is_read,
+        created_at: n.created_at,
+    }
+}
+
 // Get user notifications
 #[utoipa::path(
     get,
@@ -63,9 +76,19 @@ pub async fn get_notifications(
 ) -> GatewayResult<Json<NotificationsResponse>> {
     let user_id = extract_user_id(&request)?;
 
-    // For now, return empty list as notification service is not fully implemented
+    let limit = query.limit.unwrap_or(50) as u32;
+    let offset = query.offset.unwrap_or(0) as u32;
+
+    let notifications = state
+        .notification_service()
+        .get_notifications(user_id, limit, offset)
+        .await
+        .map_err(|e| GatewayError::DatabaseError(e.to_string()))?;
+
+    let api_notifications = notifications.into_iter().map(to_api_notification).collect();
+
     Ok(Json(NotificationsResponse {
-        notifications: vec![],
+        notifications: api_notifications,
     }))
 }
 
@@ -83,12 +106,19 @@ pub async fn get_notifications(
 )]
 pub async fn get_unread_count(
     State(state): State<Arc<GatewayState>>,
-    request: axum::http::Request<()>,
+    request: Request,
 ) -> GatewayResult<Json<UnreadCountResponse>> {
     let user_id = extract_user_id(&request)?;
 
-    // For now, return 0 as notification service is not fully implemented
-    Ok(Json(UnreadCountResponse { unread_count: 0 }))
+    let count = state
+        .notification_service()
+        .get_unread_count(user_id)
+        .await
+        .map_err(|e| GatewayError::DatabaseError(e.to_string()))?;
+
+    Ok(Json(UnreadCountResponse {
+        unread_count: count as i64,
+    }))
 }
 
 // Mark notification as read
@@ -111,18 +141,16 @@ pub async fn get_unread_count(
 pub async fn mark_notification_read(
     State(state): State<Arc<GatewayState>>,
     Path(notification_id): Path<i64>,
+    Extension(user_id): Extension<i64>,
     Json(payload): Json<MarkNotificationReadRequest>,
-    request: axum::http::Request<()>,
 ) -> GatewayResult<()> {
-    let user_id = extract_user_id(&request)?;
-
-    // TODO: Implement actual notification update
-    tracing::info!(
-        "User {} marking notification {} as read={}",
-        user_id,
-        notification_id,
-        payload.read
-    );
+    if payload.read {
+        state
+            .notification_service()
+            .mark_as_read(notification_id, user_id)
+            .await
+            .map_err(|e| GatewayError::DatabaseError(e.to_string()))?;
+    }
 
     Ok(())
 }
@@ -141,14 +169,19 @@ pub async fn mark_notification_read(
 )]
 pub async fn mark_all_read(
     State(state): State<Arc<GatewayState>>,
-    request: axum::http::Request<()>,
+    request: Request,
 ) -> GatewayResult<Json<BulkUpdateResponse>> {
     let user_id = extract_user_id(&request)?;
 
-    // TODO: Implement actual bulk update
-    tracing::info!("User {} marking all notifications as read", user_id);
+    let updated_count = state
+        .notification_service()
+        .mark_all_as_read(user_id)
+        .await
+        .map_err(|e| GatewayError::DatabaseError(e.to_string()))?;
 
-    Ok(Json(BulkUpdateResponse { updated_count: 0 }))
+    Ok(Json(BulkUpdateResponse {
+        updated_count: updated_count as u64,
+    }))
 }
 
 // Delete notification
@@ -170,16 +203,15 @@ pub async fn mark_all_read(
 pub async fn delete_notification(
     State(state): State<Arc<GatewayState>>,
     Path(notification_id): Path<i64>,
-    request: axum::http::Request<()>,
+    request: Request,
 ) -> GatewayResult<()> {
     let user_id = extract_user_id(&request)?;
 
-    // TODO: Implement actual deletion
-    tracing::info!(
-        "User {} deleting notification {}",
-        user_id,
-        notification_id
-    );
+    state
+        .notification_service()
+        .delete_notification(notification_id, user_id)
+        .await
+        .map_err(|e| GatewayError::DatabaseError(e.to_string()))?;
 
     Ok(())
 }

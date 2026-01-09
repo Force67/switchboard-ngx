@@ -308,10 +308,9 @@ pub async fn get_invite(
 pub async fn respond_to_invite(
     Path(invite_id): Path<String>,
     State(state): State<Arc<GatewayState>>,
+    Extension(user_id): Extension<i64>,
     Json(payload): Json<RespondToInviteRequest>,
-    request: Request,
 ) -> GatewayResult<Json<InviteResponse>> {
-    let user_id = extract_user_id(&request)?;
 
     let invite = state
         .invite_service

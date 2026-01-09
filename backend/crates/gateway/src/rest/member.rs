@@ -1,7 +1,7 @@
 //! Member REST endpoints
 
 use axum::{
-    extract::{Path, Query, Request, State},
+    extract::{Extension, Path, Query, Request, State},
     response::IntoResponse,
     Json, Router,
 };
@@ -199,10 +199,9 @@ pub async fn get_member(
 pub async fn update_member_role(
     Path((chat_id, member_id)): Path<(String, String)>,
     State(state): State<Arc<GatewayState>>,
+    Extension(user_id): Extension<i64>,
     Json(payload): Json<UpdateMemberRoleRequest>,
-    request: Request,
 ) -> GatewayResult<Json<MemberResponse>> {
-    let user_id = extract_user_id(&request)?;
 
     // Check if user is owner or admin
     state

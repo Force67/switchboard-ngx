@@ -2,7 +2,7 @@
 
 use axum::{
     body::Body,
-    extract::{Path, Query, Request, State},
+    extract::{Extension, Path, Query, Request, State},
     http::{header, StatusCode},
     response::{IntoResponse, Response},
     Json, Router,
@@ -224,10 +224,9 @@ pub async fn list_message_attachments(
 pub async fn create_attachment(
     Path((chat_id, message_id)): Path<(String, String)>,
     State(state): State<Arc<GatewayState>>,
+    Extension(user_id): Extension<i64>,
     Json(payload): Json<CreateAttachmentRequest>,
-    request: Request,
 ) -> GatewayResult<impl IntoResponse> {
-    let user_id = extract_user_id(&request)?;
 
     // Check chat membership
     state

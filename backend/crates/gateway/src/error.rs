@@ -5,9 +5,18 @@ use axum::{
     response::{IntoResponse, Response},
     Json,
 };
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use thiserror::Error;
 use switchboard_orchestrator::OrchestratorError;
+use utoipa::ToSchema;
+
+/// Standard error response for API errors
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct ErrorResponse {
+    pub error: String,
+    pub message: String,
+}
 
 /// Gateway error types
 #[derive(Error, Debug)]
@@ -155,6 +164,9 @@ impl From<switchboard_chats::ChatError> for GatewayError {
             }
             switchboard_chats::ChatError::ChatArchived => {
                 GatewayError::AuthorizationFailed("Chat is archived".to_string())
+            }
+            switchboard_chats::ChatError::ServiceUnavailable(msg) => {
+                GatewayError::ServiceError(msg)
             }
             switchboard_chats::ChatError::DatabaseError(msg) => GatewayError::DatabaseError(msg),
         }

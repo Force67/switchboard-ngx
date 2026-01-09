@@ -1,10 +1,10 @@
 use axum::{
-    extract::{Path, State},
+    extract::{Extension, Path, Request, State},
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
-use utoipa::{IntoParams, ToSchema};
 use std::sync::Arc;
+use utoipa::{IntoParams, ToSchema};
 
 use crate::error::{GatewayError, GatewayResult};
 use crate::middleware::extract_user_id;
@@ -48,7 +48,7 @@ pub struct PermissionResponse {
 pub async fn get_user_permissions(
     State(state): State<Arc<GatewayState>>,
     Path(user_public_id): Path<String>,
-    request: axum::http::Request<()>,
+    request: Request,
 ) -> GatewayResult<Json<PermissionsResponse>> {
     let current_user_id = extract_user_id(&request)?;
 
@@ -85,7 +85,7 @@ pub async fn get_user_permissions(
 pub async fn get_resource_permissions(
     State(state): State<Arc<GatewayState>>,
     Path((resource_type, resource_id)): Path<(String, String)>,
-    request: axum::http::Request<()>,
+    request: Request,
 ) -> GatewayResult<Json<PermissionsResponse>> {
     let user_id = extract_user_id(&request)?;
 
@@ -122,13 +122,11 @@ pub async fn get_resource_permissions(
     )
 )]
 pub async fn create_permission(
-    State(state): State<Arc<GatewayState>>,
+    State(_state): State<Arc<GatewayState>>,
     Path((resource_type, resource_id)): Path<(String, String)>,
+    Extension(user_id): Extension<i64>,
     Json(payload): Json<CreatePermissionRequest>,
-    request: axum::http::Request<()>,
 ) -> GatewayResult<Json<PermissionResponse>> {
-    let user_id = extract_user_id(&request)?;
-
     // TODO: Implement actual permission creation
     tracing::info!(
         "User {} creating permission: user={}, resource={}/{}, level={}",
@@ -174,7 +172,7 @@ pub async fn create_permission(
 pub async fn delete_permission(
     State(state): State<Arc<GatewayState>>,
     Path((resource_type, resource_id, user_id)): Path<(String, String, String)>,
-    request: axum::http::Request<()>,
+    request: Request,
 ) -> GatewayResult<()> {
     let current_user_id = extract_user_id(&request)?;
 

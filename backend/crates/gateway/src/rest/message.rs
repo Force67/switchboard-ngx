@@ -1,7 +1,7 @@
 //! Message REST endpoints
 
 use axum::{
-    extract::{Path, Query, Request, State},
+    extract::{Extension, Path, Query, Request, State},
     response::IntoResponse,
     Json, Router,
 };
@@ -183,10 +183,9 @@ pub async fn list_messages(
 pub async fn create_message(
     Path(chat_id): Path<String>,
     State(state): State<Arc<GatewayState>>,
+    Extension(user_id): Extension<i64>,
     Json(payload): Json<CreateMessageRequest>,
-    request: Request,
 ) -> GatewayResult<impl IntoResponse> {
-    let user_id = extract_user_id(&request)?;
 
     // Check chat membership
     state
@@ -292,10 +291,9 @@ pub async fn get_message(
 pub async fn update_message(
     Path((chat_id, message_id)): Path<(String, String)>,
     State(state): State<Arc<GatewayState>>,
+    Extension(user_id): Extension<i64>,
     Json(payload): Json<UpdateMessageRequest>,
 ) -> GatewayResult<Json<MessageResponse>> {
-    // For now, use a placeholder user_id since we can't extract it without Request
-    let user_id = 1; // TODO: Fix authentication
 
     // Check chat membership
     state

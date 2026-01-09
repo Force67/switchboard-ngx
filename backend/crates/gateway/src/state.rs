@@ -12,7 +12,7 @@ use switchboard_database::{
     AttachmentRepository, ChatRepository, InviteRepository, MemberRepository, MessageRepository,
 };
 use switchboard_orchestrator::Orchestrator;
-use switchboard_users::{AuthService, SessionService, UserService};
+use switchboard_users::{AuthService, NotificationService, SessionService, UserService};
 
 /// JWT configuration
 #[derive(Debug, Clone)]
@@ -47,6 +47,8 @@ pub struct GatewayState {
     pub auth_service: Arc<AuthService>,
     /// Session service
     pub session_service: Arc<SessionService>,
+    /// Notification service
+    pub notification_service: Arc<NotificationService>,
     /// Chat service
     pub chat_service: Arc<ChatService>,
     /// Message service
@@ -73,6 +75,7 @@ impl GatewayState {
         let user_service = Arc::new(UserService::new(pool.clone()));
         let auth_service = Arc::new(AuthService::new(pool.clone()));
         let session_service = Arc::new(SessionService::new(pool.clone()));
+        let notification_service = Arc::new(NotificationService::new(pool.clone()));
 
         // Initialize chat services
         let chat_service = Arc::new(ChatService::new(pool.clone()));
@@ -88,6 +91,7 @@ impl GatewayState {
             user_service,
             auth_service,
             session_service,
+            notification_service,
             chat_service,
             message_service,
             member_service,
@@ -129,6 +133,11 @@ impl GatewayState {
     /// Get a session service reference
     pub fn session_service(&self) -> &SessionService {
         &self.session_service
+    }
+
+    /// Get a notification service reference
+    pub fn notification_service(&self) -> &NotificationService {
+        &self.notification_service
     }
 
     /// Get a chat service reference

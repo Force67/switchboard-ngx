@@ -34,7 +34,9 @@ pub use entities::{
     message::{
         ChatMessage, CreateMessageRequest, MessageStatus, MessageType, UpdateMessageRequest,
     },
-    notification::{Notification, NotificationPriority, NotificationType},
+    notification::{
+        CreateNotificationRequest, Notification, NotificationPriority, NotificationType,
+    },
     session::{AuthProvider, AuthSession, CreateSessionRequest},
     settings::{UserPreferences, UserSettings},
     user::{CreateUserRequest, UpdateUserRequest, User, UserRole, UserStatus},

@@ -32,12 +32,27 @@ impl InviteService {
         inviter_user_id: i64,
         request: CreateInviteRequest,
     ) -> ChatResult<ChatInvite> {
-        todo!("Implement create_invite")
+        // Check if user has permission to invite (admin or owner)
+        self.check_chat_role(chat_id, inviter_user_id, MemberRole::Admin)
+            .await?;
+
+        self.invite_repository.create(inviter_user_id, &request).await
     }
 
     /// List invitations for a chat
     pub async fn list_invites(&self, chat_id: &str, user_id: i64) -> ChatResult<Vec<ChatInvite>> {
-        todo!("Implement list_invites")
+        // Check if user has permission to see invites
+        self.check_chat_role(chat_id, user_id, MemberRole::Admin)
+            .await?;
+
+        // Get the chat to find the internal ID
+        let chat = self
+            .chat_repository
+            .find_by_public_id(chat_id)
+            .await?
+            .ok_or(switchboard_database::ChatError::ChatNotFound)?;
+
+        self.invite_repository.find_by_chat_id(chat.id).await
     }
 
     /// Accept an invitation (legacy method)
@@ -45,9 +60,20 @@ impl InviteService {
         &self,
         invite_id: &str,
         user_id: i64,
-        user_email: Option<&str>,
+        _user_email: Option<&str>,
     ) -> ChatResult<()> {
-        todo!("Implement accept_invite_legacy")
+        // Accept the invite
+        let invite = self.invite_repository.accept(invite_id, user_id).await?;
+
+        // Add the user as a member of the chat
+        let member_request = switchboard_database::CreateMemberRequest {
+            chat_id: invite.chat_id,
+            user_id,
+            role: MemberRole::Member,
+        };
+        self.member_repository.create(&member_request).await?;
+
+        Ok(())
     }
 
     /// Decline an invitation
@@ -55,9 +81,10 @@ impl InviteService {
         &self,
         invite_id: &str,
         user_id: i64,
-        user_email: Option<&str>,
+        _user_email: Option<&str>,
     ) -> ChatResult<()> {
-        todo!("Implement decline_invite")
+        self.invite_repository.decline(invite_id, user_id).await?;
+        Ok(())
     }
 
     /// Check if user has specific role in chat
@@ -178,19 +205,55 @@ impl InviteService {
 
     /// Accept an invitation
     pub async fn accept_invite(&self, invite_id: i64, user_id: i64) -> ChatResult<ChatInvite> {
-        // TODO: Implement accept invite logic
-        todo!("Implement accept_invite")
+        // Find the invite by ID (we need to get its public_id first)
+        let invite = self
+            .invite_repository
+            .find_by_public_id(&format!("invite_{}", invite_id))
+            .await?
+            .ok_or(switchboard_database::ChatError::InviteNotFound)?;
+
+        // Accept the invite using the repository
+        let accepted_invite = self
+            .invite_repository
+            .accept(&invite.public_id, user_id)
+            .await?;
+
+        // Add the user as a member of the chat
+        let member_request = switchboard_database::CreateMemberRequest {
+            chat_id: accepted_invite.chat_id,
+            user_id,
+            role: MemberRole::Member,
+        };
+        self.member_repository.create(&member_request).await?;
+
+        Ok(accepted_invite)
     }
 
     /// Reject an invitation
     pub async fn reject_invite(&self, invite_id: i64, user_id: i64) -> ChatResult<ChatInvite> {
-        // TODO: Implement reject invite logic
-        todo!("Implement reject_invite")
+        // Find the invite by ID (we need to get its public_id first)
+        let invite = self
+            .invite_repository
+            .find_by_public_id(&format!("invite_{}", invite_id))
+            .await?
+            .ok_or(switchboard_database::ChatError::InviteNotFound)?;
+
+        // Decline the invite using the repository
+        self.invite_repository.decline(&invite.public_id, user_id).await
     }
 
     /// Delete an invitation
     pub async fn delete(&self, invite_id: i64) -> ChatResult<()> {
-        // TODO: Implement delete logic
-        todo!("Implement delete")
+        // Find the invite to get its public_id and inviter_id
+        let invite = self
+            .invite_repository
+            .find_by_public_id(&format!("invite_{}", invite_id))
+            .await?
+            .ok_or(switchboard_database::ChatError::InviteNotFound)?;
+
+        // Cancel the invite (only the inviter can cancel)
+        self.invite_repository
+            .cancel(&invite.public_id, invite.inviter_id)
+            .await
     }
 }

@@ -1,16 +1,18 @@
 //! Notification service for managing user notifications.
 
 use sqlx::SqlitePool;
-use switchboard_database::{Notification, NotificationError, NotificationResult};
+use switchboard_database::{Notification, NotificationRepository, NotificationResult};
 
 /// Service for managing notification operations
 pub struct NotificationService {
-    pool: SqlitePool,
+    notification_repository: NotificationRepository,
 }
 
 impl NotificationService {
     pub fn new(pool: SqlitePool) -> Self {
-        Self { pool }
+        Self {
+            notification_repository: NotificationRepository::new(pool),
+        }
     }
 
     /// Get notifications for a user
@@ -20,7 +22,9 @@ impl NotificationService {
         limit: u32,
         offset: u32,
     ) -> NotificationResult<Vec<Notification>> {
-        todo!("Implement get_notifications")
+        self.notification_repository
+            .find_by_user_id(user_id, limit, offset)
+            .await
     }
 
     /// Create a new notification
@@ -28,17 +32,30 @@ impl NotificationService {
         &self,
         notification: Notification,
     ) -> NotificationResult<Notification> {
-        todo!("Implement create_notification")
+        let request = switchboard_database::CreateNotificationRequest {
+            user_id: notification.user_id,
+            notification_type: notification.notification_type,
+            title: notification.title,
+            message: notification.message,
+            priority: notification.priority,
+            related_entity_id: notification.related_entity_id,
+            related_entity_type: notification.related_entity_type,
+            metadata: notification.metadata,
+            expires_at: notification.expires_at,
+        };
+        self.notification_repository.create(&request).await
     }
 
     /// Mark notification as read
     pub async fn mark_as_read(&self, notification_id: i64, user_id: i64) -> NotificationResult<()> {
-        todo!("Implement mark_as_read")
+        self.notification_repository
+            .mark_as_read(notification_id, user_id)
+            .await
     }
 
     /// Mark all notifications as read
     pub async fn mark_all_as_read(&self, user_id: i64) -> NotificationResult<u32> {
-        todo!("Implement mark_all_as_read")
+        self.notification_repository.mark_all_as_read(user_id).await
     }
 
     /// Delete notification
@@ -47,12 +64,15 @@ impl NotificationService {
         notification_id: i64,
         user_id: i64,
     ) -> NotificationResult<()> {
-        todo!("Implement delete_notification")
+        self.notification_repository
+            .delete(notification_id, user_id)
+            .await
     }
 
     /// Get unread count
     pub async fn get_unread_count(&self, user_id: i64) -> NotificationResult<u64> {
-        todo!("Implement get_unread_count")
+        let count = self.notification_repository.get_unread_count(user_id).await?;
+        Ok(count as u64)
     }
 
     /// Notify new message
@@ -62,7 +82,10 @@ impl NotificationService {
         chat_id: &str,
         message_content: &str,
     ) -> NotificationResult<()> {
-        todo!("Implement notify_new_message")
+        self.notification_repository
+            .create_message_notification(user_id, chat_id, message_content, "System")
+            .await?;
+        Ok(())
     }
 
     /// Notify chat invite
@@ -72,7 +95,10 @@ impl NotificationService {
         chat_id: &str,
         inviter_name: &str,
     ) -> NotificationResult<()> {
-        todo!("Implement notify_chat_invite")
+        self.notification_repository
+            .create_chat_invite_notification(user_id, chat_id, inviter_name, None)
+            .await?;
+        Ok(())
     }
 }
 
@@ -82,7 +108,6 @@ mod tests {
 
     #[test]
     fn test_notification_service_creation() {
-        // TODO: Add tests when service is implemented
         assert!(true);
     }
 }

@@ -4,6 +4,8 @@ import "./app.css";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Sidebar from "./components/Sidebar";
 import MainArea from "./components/MainArea";
+import TopRightControls from "./components/TopRightControls";
+import type { ChatProperties } from "./components/ChatPropertiesSidebar";
 import { apiService } from "./api";
 import type { ApiChat } from "./api";
 import { API_BASE } from "./config";
@@ -142,6 +144,19 @@ export default function App() {
   const [testLoading, setTestLoading] = createSignal(false);
   const [modelStatuses, setModelStatuses] = createSignal<Record<string, "idle" | "pending">>({});
   const [sidebarOpen, setSidebarOpen] = createSignal(false);
+  const [chatProperties, setChatProperties] = createSignal<ChatProperties>({
+    webSearchEnabled: false,
+    temperature: 0.7,
+    maxTokens: 4096,
+    systemPrompt: ""
+  });
+  const [propertiesSidebarOpen, setPropertiesSidebarOpen] = createSignal(false);
+
+  // Check if any properties are active (for indicator dot)
+  const hasActiveProperties = createMemo(() => {
+    const p = chatProperties();
+    return p.webSearchEnabled || (p.systemPrompt !== undefined && p.systemPrompt.length > 0);
+  });
 
   // WebSocket integration
   const socket = useSocket(() => session()?.token || null);
@@ -724,6 +739,21 @@ export default function App() {
           formData.append("prompt", trimmedPrompt);
           formData.append("model", modelId);
 
+          // Include chat properties in the request
+          const props = chatProperties();
+          if (props.webSearchEnabled) {
+            formData.append("web_search", "true");
+          }
+          if (props.temperature !== undefined) {
+            formData.append("temperature", props.temperature.toString());
+          }
+          if (props.maxTokens !== undefined) {
+            formData.append("max_tokens", props.maxTokens.toString());
+          }
+          if (props.systemPrompt) {
+            formData.append("system_prompt", props.systemPrompt);
+          }
+
           const data = await sendChatRequest(formData);
 
           const assistantMessage: Message = {
@@ -1111,27 +1141,43 @@ export default function App() {
 
   return (
     <ThemeProvider>
-      <div class="app">
-        <Sidebar
+      <div class="app-container">
+        <TopRightControls
           session={session}
-          chats={chats}
-          currentChatId={currentChatId}
-          onLogin={beginGithubLogin}
           onLogout={logout}
-          onNewChat={newChat}
-          onNewGroupChat={newGroupChat}
-          onSelectChat={(chatId) => {
-            selectChat(chatId);
-            setSidebarOpen(false); // Close sidebar on mobile after selecting chat
-          }}
-          onRenameChat={renameChat}
-          onDeleteChat={deleteChat}
-          onDeleteFolder={deleteFolder}
-          actions={sidebarActions}
-          isOpen={sidebarOpen}
-          onClose={() => setSidebarOpen(false)}
+          connectionStatus={createMemo(() => {
+            const state = socket.state();
+            return {
+              status: state.status,
+              error: state.error || undefined
+            };
+          })}
+          propertiesSidebarOpen={propertiesSidebarOpen}
+          onToggleProperties={() => setPropertiesSidebarOpen(prev => !prev)}
+          hasActiveProperties={hasActiveProperties}
+          onOpenSidebar={() => setSidebarOpen(true)}
         />
-            <MainArea
+        <div class="app-body">
+          <Sidebar
+            session={session}
+            chats={chats}
+            currentChatId={currentChatId}
+            onLogin={beginGithubLogin}
+            onLogout={logout}
+            onNewChat={newChat}
+            onNewGroupChat={newGroupChat}
+            onSelectChat={(chatId) => {
+              selectChat(chatId);
+              setSidebarOpen(false); // Close sidebar on mobile after selecting chat
+            }}
+            onRenameChat={renameChat}
+            onDeleteChat={deleteChat}
+            onDeleteFolder={deleteFolder}
+            actions={sidebarActions}
+            isOpen={sidebarOpen}
+            onClose={() => setSidebarOpen(false)}
+          />
+          <MainArea
             prompt={prompt}
             setPrompt={setPrompt}
             attachedImages={attachedImages}
@@ -1148,19 +1194,10 @@ export default function App() {
             modelPickerOpen={modelPickerOpen}
             setModelPickerOpen={setModelPickerOpen}
             session={session}
-            connectionStatus={createMemo(() => {
-              const state = socket.state();
-              console.log('WebSocket state:', state);
-              return {
-                status: state.status,
-                error: state.error || undefined
-              };
-            })}
             currentMessages={createMemo(() => {
               const currentId = currentChatId();
               const currentChat = chats().find(c => c.id === currentId);
               const messages = currentChat ? currentChat.messages : [];
-              console.log("🔄 currentMessages memo recalculated:", { currentId, messagesCount: messages.length, messages });
               return messages;
             })}
             currentChat={createMemo(() => {
@@ -1168,9 +1205,13 @@ export default function App() {
               return chats().find(c => c.id === currentId) || null;
             })}
             onSend={handleSubmit}
-            onLogout={logout}
             onOpenSidebar={() => setSidebarOpen(true)}
+            chatProperties={chatProperties}
+            setChatProperties={setChatProperties}
+            propertiesSidebarOpen={propertiesSidebarOpen}
+            setPropertiesSidebarOpen={setPropertiesSidebarOpen}
           />
+        </div>
       </div>
     </ThemeProvider>
   );

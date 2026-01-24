@@ -1,12 +1,13 @@
-import { Accessor, Setter, For, createMemo, createSignal, createEffect, Show } from "solid-js";
+import { Accessor, Setter, For, createMemo, createSignal, Show } from "solid-js";
 import { onMount, onCleanup } from "solid-js";
-import TopRightControls from "./TopRightControls";
 import Composer from "./Composer";
 import ModelPickerPanel from "./model-picker/ModelPickerPanel";
 import { ModelMeta } from "./model-picker/models";
 import MarkdownRenderer from "./MarkdownRenderer";
 import GroupChatManager from "./GroupChatManager";
+import ChatPropertiesSidebar, { ChatProperties } from "./ChatPropertiesSidebar";
 import type { Chat, Message } from "../types/chat";
+import "./chat-properties.css";
 
 interface ModelOption {
   id: string;
@@ -46,7 +47,6 @@ interface Props {
   setSelectedModels: Setter<string[]>;
   models: Accessor<ModelOption[]>;
   modelStatuses: Accessor<Record<string, "idle" | "pending">>;
-  connectionStatus?: Accessor<{ status: string; error?: string }>;
   modelsLoading: Accessor<boolean>;
   modelsError: Accessor<string | null>;
   loading: Accessor<boolean>;
@@ -58,13 +58,32 @@ interface Props {
   currentChat?: Accessor<Chat | null>;
   session: Accessor<SessionData | null>;
   onSend: (event: Event) => void;
-  onLogout: () => void;
   onOpenSidebar?: () => void;
+  chatProperties?: Accessor<ChatProperties>;
+  setChatProperties?: Setter<ChatProperties>;
+  propertiesSidebarOpen?: Accessor<boolean>;
+  setPropertiesSidebarOpen?: Setter<boolean>;
 }
 
 export default function MainArea(props: Props) {
   const [showGroupManager, setShowGroupManager] = createSignal(false);
   const sessionUserId = createMemo(() => props.session()?.user.id);
+
+  // Local chat properties state if not provided via props
+  const [localChatProperties, setLocalChatProperties] = createSignal<ChatProperties>({
+    webSearchEnabled: false,
+    temperature: 0.7,
+    maxTokens: 4096,
+    systemPrompt: ""
+  });
+
+  const chatProperties = () => props.chatProperties?.() ?? localChatProperties();
+  const setChatProperties = props.setChatProperties ?? setLocalChatProperties;
+
+  // Use props for sidebar state, fallback to local state
+  const [localSidebarOpen, setLocalSidebarOpen] = createSignal(false);
+  const propertiesSidebarOpen = () => props.propertiesSidebarOpen?.() ?? localSidebarOpen();
+  const setPropertiesSidebarOpen = props.setPropertiesSidebarOpen ?? setLocalSidebarOpen;
 
   const convertedModels = createMemo((): ModelMeta[] => {
     return props.models().map(model => {
@@ -129,6 +148,10 @@ export default function MainArea(props: Props) {
         e.preventDefault();
         props.setModelPickerOpen(true);
       }
+      if (e.shiftKey && e.key === 'S') {
+        e.preventDefault();
+        setPropertiesSidebarOpen(prev => !prev);
+      }
     };
 
     document.addEventListener('keydown', handleKeyDown);
@@ -140,17 +163,6 @@ export default function MainArea(props: Props) {
 
   return (
     <div class="main">
-      {/* Mobile menu button */}
-      <button
-        class="mobile-menu-btn hide-desktop"
-        onClick={() => props.onOpenSidebar?.()}
-        aria-label="Open sidebar menu"
-      >
-        <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" fill="none" stroke-width="2">
-          <path d="M3 12h18M3 6h18M3 18h18" />
-        </svg>
-      </button>
-      <TopRightControls session={props.session} onLogout={props.onLogout} connectionStatus={props.connectionStatus} />
       {props.currentChat?.()?.isGroup && (
         <div style={{
           padding: "8px 20px",
@@ -189,20 +201,6 @@ export default function MainArea(props: Props) {
             Authentication error: {props.authError!()}
           </div>
         )}
-        {props.connectionStatus && (() => {
-          const status = props.connectionStatus!().status;
-          const error = props.connectionStatus!().error;
-          if (status === 'connected') return null;
-          return (
-            <div style={`padding: 10px 20px; border-radius: 8px; margin: 20px; background: ${status === 'error' ? 'rgba(255,107,107,0.1)' : 'rgba(255,193,7,0.1)'}; color: ${status === 'error' ? '#ff6b6b' : '#ffc107'};`}>
-              {status === 'error' ? `Connection Error: ${error || 'Unknown error'}` :
-               status === 'connecting' ? 'Connecting...' :
-               status === 'disconnected' ? 'Disconnected - messages may not be delivered' :
-               (!status || status === 'undefined') ? 'Connection Status Unknown' :
-               `Connection: ${status}`}
-            </div>
-          );
-        })()}
         <Show when={pendingModels().length > 0}>
           <div class="model-pending-banner">
             <span class="banner-title">Models still thinking</span>
@@ -353,6 +351,15 @@ export default function MainArea(props: Props) {
             onClose={() => setShowGroupManager(false)}
           />
         )}
+
+        {/* Chat Properties Sidebar */}
+        <ChatPropertiesSidebar
+          isOpen={propertiesSidebarOpen}
+          onClose={() => setPropertiesSidebarOpen(false)}
+          properties={chatProperties}
+          setProperties={setChatProperties}
+          currentModelId={createMemo(() => props.selectedModels()[0] ?? null)}
+        />
       </div>
   );
 }

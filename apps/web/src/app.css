@@ -14,10 +14,19 @@ html, body {
   overflow-x: hidden;
 }
 
-.app {
+.app-container {
   display: flex;
-  min-height: 100vh;
+  flex-direction: column;
+  height: 100vh;
   background: var(--bg-0);
+  overflow: hidden;
+}
+
+.app-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 
 /* ==========================================================================
@@ -27,9 +36,7 @@ html, body {
   width: var(--sidebar-width);
   min-width: var(--sidebar-width);
   max-width: var(--sidebar-width);
-  height: 100vh;
-  position: sticky;
-  top: 0;
+  height: 100%;
   background: var(--bg-1);
   padding: 16px 18px;
   display: flex;
@@ -38,6 +45,7 @@ html, body {
   box-sizing: border-box;
   border-right: 1px solid var(--hair);
   flex-shrink: 0;
+  overflow-y: auto;
 }
 
 .sidebar .spacer {
@@ -53,7 +61,7 @@ html, body {
   position: relative;
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 100%;
   overflow: hidden;
 }
 
@@ -63,9 +71,7 @@ html, body {
 .top-bar {
   height: 56px;
   min-height: 56px;
-  background: color-mix(in srgb, var(--bg-1) 85%, transparent);
-  backdrop-filter: blur(16px) saturate(180%);
-  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  background: var(--bg-1);
   border-bottom: 1px solid var(--hair);
   display: flex;
   align-items: center;
@@ -73,6 +79,7 @@ html, body {
   padding: 0 24px;
   position: relative;
   z-index: 10;
+  flex-shrink: 0;
 }
 
 .top-left {
@@ -241,6 +248,11 @@ html, body {
   background: var(--bg-3);
 }
 
+/* Hide mobile menu on desktop */
+.mobile-menu-btn {
+  display: none;
+}
+
 /* Hide on desktop */
 .hide-desktop {
   display: none;
@@ -251,11 +263,26 @@ html, body {
    ========================================================================== */
 @media (max-width: 768px) {
   .hide-desktop {
+    display: none;
+  }
+
+  .mobile-menu-btn {
     display: grid;
   }
 
   .sidebar {
-    display: none;
+    position: fixed;
+    top: 56px;
+    left: 0;
+    height: calc(100vh - 56px);
+    z-index: 200;
+    transform: translateX(-100%);
+    transition: transform var(--duration-slow) var(--ease-out-expo);
+    box-shadow: 20px 0 60px rgba(0, 0, 0, 0.15);
+  }
+
+  .sidebar.open {
+    transform: translateX(0);
   }
 
   .content-well {

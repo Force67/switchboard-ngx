@@ -1,64 +1,101 @@
+/* ==========================================================================
+   SWITCHBOARD NGX — "Neural Nexus" Design System
+   A refined dark futurism palette with warm organic undertones
+   ========================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap');
+
 :root {
-  /* Light theme colors (default) */
-  --bg-0-light: #ffffff;
-  --bg-1-light: #f8fafc;
-  --bg-2-light: #f1f5f9;
-  --bg-3-light: #e2e8f0;
-  --text-0-light: #0f172a;
-  --text-1-light: #475569;
-  --text-dim-light: #64748b;
-  --accent-light: #3b82f6;
-  --brand-light: #2563eb;
+  /* ==========================================================================
+     TYPOGRAPHY TOKENS
+     ========================================================================== */
+  --font-display: 'Instrument Serif', Georgia, 'Times New Roman', serif;
+  --font-body: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', Monaco, Consolas, monospace;
+
+  /* ==========================================================================
+     LIGHT THEME COLORS
+     Clean, warm paper-like aesthetic with slate undertones
+     ========================================================================== */
+  --bg-0-light: #faf9f7;
+  --bg-1-light: #f4f2ef;
+  --bg-2-light: #eae7e2;
+  --bg-3-light: #ddd9d2;
+  --text-0-light: #1a1916;
+  --text-1-light: #5c5850;
+  --text-dim-light: #8a847a;
+  --accent-light: #c4841d;
+  --brand-light: #b07318;
   --panel-light: #ffffff;
-  --panel-2-light: #f8fafc;
-  --panel-3-light: #f1f5f9;
-  --badge-bg-light: #f8fafc;
-  --badge-hair-light: rgba(0, 0, 0, 0.10);
-  --chip-light: #e2e8f0;
-  --hair-light: rgba(0, 0, 0, 0.08);
-  --ok-light: #22c55e;
-  --warn-light: #f59e0b;
-  --err-light: #ef4444;
-  --status-bg-light: rgba(0, 0, 0, 0.06);
-  --status-hair-light: rgba(0, 0, 0, 0.10);
-  --glass-light: rgba(0, 0, 0, 0.08);
-  --focus-light: 0 0 0 2px rgba(59, 130, 246, 0.35);
-  --button-light: #3b82f6;
-  --button-hover-light: #2563eb;
+  --panel-2-light: #faf9f7;
+  --panel-3-light: #f4f2ef;
+  --badge-bg-light: #f4f2ef;
+  --badge-hair-light: rgba(26, 25, 22, 0.08);
+  --chip-light: #eae7e2;
+  --hair-light: rgba(26, 25, 22, 0.06);
+  --ok-light: #2d8659;
+  --warn-light: #c4841d;
+  --err-light: #c44536;
+  --status-bg-light: rgba(26, 25, 22, 0.04);
+  --status-hair-light: rgba(26, 25, 22, 0.08);
+  --glass-light: rgba(26, 25, 22, 0.03);
+  --focus-light: 0 0 0 2px rgba(196, 132, 29, 0.25);
+  --button-light: #1a1916;
+  --button-hover-light: #2d2b26;
 
-  /* Dark theme colors (current theme) */
-  --bg-0-dark: #0f0c10;
-  --bg-1-dark: #17121b;
-  --bg-2-dark: #1e1723;
-  --bg-3-dark: #241a29;
-  --text-0-dark: #f2eef5;
-  --text-1-dark: #cbbad7;
-  --text-dim-dark: #8c7a98;
-  --accent-dark: #e54cbf;
-  --brand-dark: #b83a7e;
-  --panel-dark: #141016;
-  --panel-2-dark: #1a141d;
-  --panel-3-dark: #211827;
-  --badge-bg-dark: #241c2b;
-  --badge-hair-dark: rgba(255, 255, 255, 0.10);
-  --chip-dark: #2a2230;
-  --hair-dark: rgba(255, 255, 255, 0.08);
-  --ok-dark: #4ade80;
-  --warn-dark: #fbbf24;
-  --err-dark: #f87171;
-  --status-bg-dark: rgba(255, 255, 255, 0.06);
-  --status-hair-dark: rgba(255, 255, 255, 0.10);
-  --glass-dark: rgba(255, 255, 255, 0.08);
-  --focus-dark: 0 0 0 2px rgba(229, 76, 191, 0.35);
-  --button-dark: #e54cbf;
-  --button-hover-dark: #d140a6;
+  /* ==========================================================================
+     DARK THEME COLORS
+     Charcoal-slate base with warm amber accents — neural, alive, sophisticated
+     ========================================================================== */
+  --bg-0-dark: #0d0e10;
+  --bg-1-dark: #131416;
+  --bg-2-dark: #1a1b1e;
+  --bg-3-dark: #222326;
+  --text-0-dark: #f0ede8;
+  --text-1-dark: #a8a49c;
+  --text-dim-dark: #6b6860;
+  --accent-dark: #e8a832;
+  --brand-dark: #d4952a;
+  --panel-dark: #111214;
+  --panel-2-dark: #161719;
+  --panel-3-dark: #1c1d20;
+  --badge-bg-dark: #1e1f22;
+  --badge-hair-dark: rgba(240, 237, 232, 0.08);
+  --chip-dark: #252628;
+  --hair-dark: rgba(240, 237, 232, 0.06);
+  --ok-dark: #5dba7d;
+  --warn-dark: #e8a832;
+  --err-dark: #e85c4a;
+  --status-bg-dark: rgba(240, 237, 232, 0.04);
+  --status-hair-dark: rgba(240, 237, 232, 0.08);
+  --glass-dark: rgba(240, 237, 232, 0.03);
+  --focus-dark: 0 0 0 2px rgba(232, 168, 50, 0.30);
+  --button-dark: #e8a832;
+  --button-hover-dark: #f5b93e;
 
-  /* Layout variables (theme-independent) */
-  --sidebar-width: 240px;
-  --content-padding: 16px;
+  /* ==========================================================================
+     LAYOUT TOKENS
+     ========================================================================== */
+  --sidebar-width: 260px;
+  --content-padding: 20px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+
+  /* ==========================================================================
+     ANIMATION TOKENS
+     ========================================================================== */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out-sine: cubic-bezier(0.37, 0, 0.63, 1);
+  --duration-fast: 150ms;
+  --duration-normal: 250ms;
+  --duration-slow: 400ms;
 }
 
-/* Light theme - default */
+/* ==========================================================================
+   LIGHT THEME — Default
+   ========================================================================== */
 :root {
   --bg-0: var(--bg-0-light);
   --bg-1: var(--bg-1-light);
@@ -87,7 +124,9 @@
   --button-hover: var(--button-hover-light);
 }
 
-/* Dark theme */
+/* ==========================================================================
+   DARK THEME — Activated via data-theme="dark"
+   ========================================================================== */
 [data-theme="dark"] {
   --bg-0: var(--bg-0-dark);
   --bg-1: var(--bg-1-dark);
@@ -116,12 +155,9 @@
   --button-hover: var(--button-hover-dark);
 }
 
-/* Smooth transitions for theme switching */
-:root {
-  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
-}
-
-/* System preference support */
+/* ==========================================================================
+   SYSTEM PREFERENCE SUPPORT — Auto dark mode
+   ========================================================================== */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg-0: var(--bg-0-dark);
@@ -152,7 +188,9 @@
   }
 }
 
-/* Force light theme when data-theme="light" */
+/* ==========================================================================
+   FORCE LIGHT THEME — Explicit override
+   ========================================================================== */
 [data-theme="light"] {
   --bg-0: var(--bg-0-light);
   --bg-1: var(--bg-1-light);
@@ -179,4 +217,14 @@
   --focus: var(--focus-light);
   --button: var(--button-light);
   --button-hover: var(--button-hover-light);
+}
+
+/* ==========================================================================
+   SMOOTH THEME TRANSITIONS
+   ========================================================================== */
+:root {
+  transition:
+    background-color var(--duration-slow) var(--ease-out-expo),
+    color var(--duration-slow) var(--ease-out-expo),
+    border-color var(--duration-slow) var(--ease-out-expo);
 }

@@ -4,6 +4,15 @@ use anyhow::Context;
 use sqlx::SqlitePool;
 use tracing::info;
 
+/// Execute a single SQL statement
+async fn exec(pool: &SqlitePool, sql: &str) -> anyhow::Result<()> {
+    sqlx::query(sql)
+        .execute(pool)
+        .await
+        .with_context(|| format!("failed to execute: {}", sql.chars().take(50).collect::<String>()))?;
+    Ok(())
+}
+
 /// Run database migrations
 ///
 /// The codebase expects a fairly featureful schema (users, auth sessions, chats, folders,
@@ -13,9 +22,8 @@ use tracing::info;
 pub async fn run_migrations(pool: &SqlitePool) -> anyhow::Result<()> {
     info!("running lightweight builtin migrations (SQLite)");
 
-    // Users + identities
-    sqlx::query(
-        r#"
+    // Users table
+    exec(pool, r#"
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             public_id TEXT NOT NULL UNIQUE,
@@ -31,8 +39,11 @@ pub async fn run_migrations(pool: &SqlitePool) -> anyhow::Result<()> {
             last_login_at TEXT,
             email_verified BOOLEAN NOT NULL DEFAULT FALSE,
             is_active BOOLEAN NOT NULL DEFAULT TRUE
-        );
+        )
+    "#).await.context("failed to create users table")?;
 
+    // User identities table
+    exec(pool, r#"
         CREATE TABLE IF NOT EXISTS user_identities (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
@@ -44,8 +55,11 @@ pub async fn run_migrations(pool: &SqlitePool) -> anyhow::Result<()> {
             updated_at TEXT NOT NULL,
             UNIQUE(provider, provider_uid),
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        );
+        )
+    "#).await.context("failed to create user_identities table")?;
 
+    // Sessions table (legacy)
+    exec(pool, r#"
         CREATE TABLE IF NOT EXISTS sessions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
@@ -53,8 +67,11 @@ pub async fn run_migrations(pool: &SqlitePool) -> anyhow::Result<()> {
             created_at TEXT NOT NULL,
             expires_at TEXT NOT NULL,
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        );
+        )
+    "#).await.context("failed to create sessions table")?;
 
+    // Auth sessions table
+    exec(pool, r#"
         CREATE TABLE IF NOT EXISTS auth_sessions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             public_id TEXT NOT NULL UNIQUE,
@@ -66,16 +83,11 @@ pub async fn run_migrations(pool: &SqlitePool) -> anyhow::Result<()> {
             last_accessed_at TEXT,
             is_active BOOLEAN NOT NULL DEFAULT TRUE,
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        );
-        "#,
-    )
-    .execute(pool)
-    .await
-    .context("failed to create user/auth tables")?;
+        )
+    "#).await.context("failed to create auth_sessions table")?;
 
-    // Folders
-    sqlx::query(
-        r#"
+    // Folders table
+    exec(pool, r#"
         CREATE TABLE IF NOT EXISTS folders (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             public_id TEXT NOT NULL UNIQUE,
@@ -88,18 +100,14 @@ pub async fn run_migrations(pool: &SqlitePool) -> anyhow::Result<()> {
             updated_at TEXT NOT NULL,
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
             FOREIGN KEY (parent_id) REFERENCES folders(id) ON DELETE CASCADE
-        );
-        CREATE INDEX IF NOT EXISTS idx_folders_user_id ON folders(user_id);
-        CREATE INDEX IF NOT EXISTS idx_folders_parent_id ON folders(parent_id);
-        "#,
-    )
-    .execute(pool)
-    .await
-    .context("failed to create folder tables")?;
+        )
+    "#).await.context("failed to create folders table")?;
 
-    // Chats + membership
-    sqlx::query(
-        r#"
+    exec(pool, "CREATE INDEX IF NOT EXISTS idx_folders_user_id ON folders(user_id)").await?;
+    exec(pool, "CREATE INDEX IF NOT EXISTS idx_folders_parent_id ON folders(parent_id)").await?;
+
+    // Chats table
+    exec(pool, r#"
         CREATE TABLE IF NOT EXISTS chats (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             public_id TEXT NOT NULL UNIQUE,
@@ -112,11 +120,15 @@ pub async fn run_migrations(pool: &SqlitePool) -> anyhow::Result<()> {
             created_by TEXT NOT NULL,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
-        );
-        CREATE INDEX IF NOT EXISTS idx_chats_folder_id ON chats(folder_id);
-        CREATE INDEX IF NOT EXISTS idx_chats_created_by ON chats(created_by);
-        CREATE INDEX IF NOT EXISTS idx_chats_status ON chats(status);
+        )
+    "#).await.context("failed to create chats table")?;
 
+    exec(pool, "CREATE INDEX IF NOT EXISTS idx_chats_folder_id ON chats(folder_id)").await?;
+    exec(pool, "CREATE INDEX IF NOT EXISTS idx_chats_created_by ON chats(created_by)").await?;
+    exec(pool, "CREATE INDEX IF NOT EXISTS idx_chats_status ON chats(status)").await?;
+
+    // Chat members table
+    exec(pool, r#"
         CREATE TABLE IF NOT EXISTS chat_members (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             chat_id INTEGER NOT NULL,
@@ -126,18 +138,14 @@ pub async fn run_migrations(pool: &SqlitePool) -> anyhow::Result<()> {
             UNIQUE(chat_id, user_id),
             FOREIGN KEY (chat_id) REFERENCES chats(id) ON DELETE CASCADE,
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        );
-        CREATE INDEX IF NOT EXISTS idx_chat_members_chat_id ON chat_members(chat_id);
-        CREATE INDEX IF NOT EXISTS idx_chat_members_user_id ON chat_members(user_id);
-        "#,
-    )
-    .execute(pool)
-    .await
-    .context("failed to create chat tables")?;
+        )
+    "#).await.context("failed to create chat_members table")?;
 
-    // Messages + attachments
-    sqlx::query(
-        r#"
+    exec(pool, "CREATE INDEX IF NOT EXISTS idx_chat_members_chat_id ON chat_members(chat_id)").await?;
+    exec(pool, "CREATE INDEX IF NOT EXISTS idx_chat_members_user_id ON chat_members(user_id)").await?;
+
+    // Messages table
+    exec(pool, r#"
         CREATE TABLE IF NOT EXISTS messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             public_id TEXT NOT NULL UNIQUE,
@@ -155,11 +163,15 @@ pub async fn run_migrations(pool: &SqlitePool) -> anyhow::Result<()> {
             deleted_at TEXT,
             FOREIGN KEY (chat_id) REFERENCES chats(id) ON DELETE CASCADE,
             FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE
-        );
-        CREATE INDEX IF NOT EXISTS idx_messages_chat_id ON messages(chat_id);
-        CREATE INDEX IF NOT EXISTS idx_messages_sender_id ON messages(sender_id);
-        CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at);
+        )
+    "#).await.context("failed to create messages table")?;
 
+    exec(pool, "CREATE INDEX IF NOT EXISTS idx_messages_chat_id ON messages(chat_id)").await?;
+    exec(pool, "CREATE INDEX IF NOT EXISTS idx_messages_sender_id ON messages(sender_id)").await?;
+    exec(pool, "CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at)").await?;
+
+    // Message attachments table
+    exec(pool, r#"
         CREATE TABLE IF NOT EXISTS message_attachments (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             public_id TEXT NOT NULL UNIQUE,
@@ -172,18 +184,14 @@ pub async fn run_migrations(pool: &SqlitePool) -> anyhow::Result<()> {
             uploader_id INTEGER NOT NULL,
             FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE,
             FOREIGN KEY (uploader_id) REFERENCES users(id) ON DELETE CASCADE
-        );
-        CREATE INDEX IF NOT EXISTS idx_message_attachments_message_id ON message_attachments(message_id);
-        "#,
-    )
-    .execute(pool)
-    .await
-    .context("failed to create message tables")?;
+        )
+    "#).await.context("failed to create message_attachments table")?;
 
-    // Invites, notifications, permissions, settings
-    sqlx::query(
-        r#"
-        DROP TABLE IF EXISTS chat_invites;
+    exec(pool, "CREATE INDEX IF NOT EXISTS idx_message_attachments_message_id ON message_attachments(message_id)").await?;
+
+    // Chat invites table - drop and recreate to handle schema changes
+    exec(pool, "DROP TABLE IF EXISTS chat_invites").await?;
+    exec(pool, r#"
         CREATE TABLE IF NOT EXISTS chat_invites (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             public_id TEXT NOT NULL UNIQUE,
@@ -197,10 +205,14 @@ pub async fn run_migrations(pool: &SqlitePool) -> anyhow::Result<()> {
             accepted_at TEXT,
             FOREIGN KEY (chat_id) REFERENCES chats(id) ON DELETE CASCADE,
             FOREIGN KEY (inviter_id) REFERENCES users(id) ON DELETE CASCADE
-        );
-        CREATE INDEX IF NOT EXISTS idx_chat_invites_chat_id ON chat_invites(chat_id);
-        CREATE INDEX IF NOT EXISTS idx_chat_invites_status ON chat_invites(status);
+        )
+    "#).await.context("failed to create chat_invites table")?;
 
+    exec(pool, "CREATE INDEX IF NOT EXISTS idx_chat_invites_chat_id ON chat_invites(chat_id)").await?;
+    exec(pool, "CREATE INDEX IF NOT EXISTS idx_chat_invites_status ON chat_invites(status)").await?;
+
+    // Notifications table
+    exec(pool, r#"
         CREATE TABLE IF NOT EXISTS notifications (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
@@ -210,10 +222,14 @@ pub async fn run_migrations(pool: &SqlitePool) -> anyhow::Result<()> {
             read BOOLEAN NOT NULL DEFAULT FALSE,
             created_at TEXT NOT NULL,
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        );
-        CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id);
-        CREATE INDEX IF NOT EXISTS idx_notifications_read ON notifications(read);
+        )
+    "#).await.context("failed to create notifications table")?;
 
+    exec(pool, "CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id)").await?;
+    exec(pool, "CREATE INDEX IF NOT EXISTS idx_notifications_read ON notifications(read)").await?;
+
+    // Permissions table
+    exec(pool, r#"
         CREATE TABLE IF NOT EXISTS permissions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
@@ -223,9 +239,13 @@ pub async fn run_migrations(pool: &SqlitePool) -> anyhow::Result<()> {
             granted_at TEXT NOT NULL,
             UNIQUE(user_id, resource_type, resource_id),
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        );
-        CREATE INDEX IF NOT EXISTS idx_permissions_user_id ON permissions(user_id);
+        )
+    "#).await.context("failed to create permissions table")?;
 
+    exec(pool, "CREATE INDEX IF NOT EXISTS idx_permissions_user_id ON permissions(user_id)").await?;
+
+    // User settings table
+    exec(pool, r#"
         CREATE TABLE IF NOT EXISTS user_settings (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
@@ -233,13 +253,10 @@ pub async fn run_migrations(pool: &SqlitePool) -> anyhow::Result<()> {
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL,
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        );
-        CREATE INDEX IF NOT EXISTS idx_user_settings_user_id ON user_settings(user_id);
-        "#,
-    )
-    .execute(pool)
-    .await
-    .context("failed to create invite/notification/settings tables")?;
+        )
+    "#).await.context("failed to create user_settings table")?;
+
+    exec(pool, "CREATE INDEX IF NOT EXISTS idx_user_settings_user_id ON user_settings(user_id)").await?;
 
     info!("migrations completed");
     Ok(())

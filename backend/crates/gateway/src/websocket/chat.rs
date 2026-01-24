@@ -9,10 +9,9 @@ use axum::{
 };
 use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::{broadcast, RwLock};
-use uuid::Uuid;
 
 use crate::error::GatewayError;
 use crate::state::GatewayState;
@@ -20,9 +19,11 @@ use crate::state::GatewayState;
 /// WebSocket state for managing chat connections and broadcasts
 #[derive(Clone)]
 pub struct ChatWebSocketState {
-    /// Active chat subscriptions
-    pub chat_subscriptions: Arc<RwLock<HashMap<String, (i64, broadcast::Sender<ChatServerEvent>)>>>,
-    /// Active user connections
+    /// Chat broadcasters: chat_id -> broadcaster
+    pub chat_broadcasters: Arc<RwLock<HashMap<String, broadcast::Sender<ChatServerEvent>>>>,
+    /// Track which chats each user is subscribed to: user_id -> set of chat_ids
+    pub user_chat_subscriptions: Arc<RwLock<HashMap<i64, HashSet<String>>>>,
+    /// Active user connections: user_id -> broadcaster for user-specific events
     pub user_connections: Arc<RwLock<HashMap<i64, broadcast::Sender<ChatServerEvent>>>>,
     /// Gateway state with access to services
     pub gateway_state: Arc<GatewayState>,
@@ -31,7 +32,8 @@ pub struct ChatWebSocketState {
 impl ChatWebSocketState {
     pub fn new(gateway_state: Arc<GatewayState>) -> Self {
         Self {
-            chat_subscriptions: Arc::new(RwLock::new(HashMap::new())),
+            chat_broadcasters: Arc::new(RwLock::new(HashMap::new())),
+            user_chat_subscriptions: Arc::new(RwLock::new(HashMap::new())),
             user_connections: Arc::new(RwLock::new(HashMap::new())),
             gateway_state,
         }
@@ -39,12 +41,10 @@ impl ChatWebSocketState {
 
     /// Get or create a broadcaster for a specific chat
     pub async fn get_chat_broadcaster(&self, chat_id: &str) -> broadcast::Sender<ChatServerEvent> {
-        let mut subscriptions = self.chat_subscriptions.write().await;
-        let (sender, _) = tokio::sync::broadcast::channel(100);
-        subscriptions
+        let mut broadcasters = self.chat_broadcasters.write().await;
+        broadcasters
             .entry(chat_id.to_string())
-            .or_insert_with(|| (0, sender))
-            .1
+            .or_insert_with(|| broadcast::channel(100).0)
             .clone()
     }
 
@@ -53,18 +53,20 @@ impl ChatWebSocketState {
         let mut connections = self.user_connections.write().await;
         connections
             .entry(user_id)
-            .or_insert_with(|| tokio::sync::broadcast::channel(100).0)
+            .or_insert_with(|| broadcast::channel(100).0)
             .clone()
     }
 
-    /// Broadcast an event to a specific chat
+    /// Broadcast an event to all users subscribed to a specific chat
     pub async fn broadcast_to_chat(
         &self,
         chat_id: &str,
         event: &ChatServerEvent,
     ) -> Result<(), GatewayError> {
-        let broadcaster = self.get_chat_broadcaster(chat_id).await;
-        let _ = broadcaster.send(event.clone());
+        let broadcasters = self.chat_broadcasters.read().await;
+        if let Some(broadcaster) = broadcasters.get(chat_id) {
+            let _ = broadcaster.send(event.clone());
+        }
         Ok(())
     }
 
@@ -74,30 +76,65 @@ impl ChatWebSocketState {
         user_id: i64,
         event: &ChatServerEvent,
     ) -> Result<(), GatewayError> {
-        let broadcaster = self.get_user_broadcaster(user_id).await;
-        let _ = broadcaster.send(event.clone());
+        let connections = self.user_connections.read().await;
+        if let Some(broadcaster) = connections.get(&user_id) {
+            let _ = broadcaster.send(event.clone());
+        }
         Ok(())
     }
 
-    /// Subscribe a user to a chat
-    pub async fn subscribe_to_chat(&self, chat_id: &str, user_id: i64) -> Result<(), GatewayError> {
+    /// Subscribe a user to a chat and return the receiver for chat events
+    pub async fn subscribe_to_chat(
+        &self,
+        chat_id: &str,
+        user_id: i64,
+    ) -> Result<broadcast::Receiver<ChatServerEvent>, GatewayError> {
+        // Ensure the chat broadcaster exists and get a receiver
         let broadcaster = self.get_chat_broadcaster(chat_id).await;
-        let mut subscriptions = self.chat_subscriptions.write().await;
-        subscriptions.insert(chat_id.to_string(), (user_id, broadcaster));
-        Ok(())
+        let receiver = broadcaster.subscribe();
+
+        // Track which chats this user is subscribed to
+        let mut user_subs = self.user_chat_subscriptions.write().await;
+        user_subs
+            .entry(user_id)
+            .or_insert_with(HashSet::new)
+            .insert(chat_id.to_string());
+
+        Ok(receiver)
     }
 
     /// Unsubscribe a user from a chat
-    pub async fn unsubscribe_from_chat(&self, chat_id: &str) -> Result<(), GatewayError> {
-        let mut subscriptions = self.chat_subscriptions.write().await;
-        subscriptions.remove(chat_id);
+    pub async fn unsubscribe_from_chat(
+        &self,
+        chat_id: &str,
+        user_id: i64,
+    ) -> Result<(), GatewayError> {
+        let mut user_subs = self.user_chat_subscriptions.write().await;
+        if let Some(chats) = user_subs.get_mut(&user_id) {
+            chats.remove(chat_id);
+        }
         Ok(())
     }
 
-    /// Remove user connection
+    /// Remove user connection and clean up all their chat subscriptions
     pub async fn remove_user_connection(&self, user_id: i64) {
-        let mut connections = self.user_connections.write().await;
-        connections.remove(&user_id);
+        // Remove from user connections
+        {
+            let mut connections = self.user_connections.write().await;
+            connections.remove(&user_id);
+        }
+
+        // Clean up chat subscriptions for this user
+        {
+            let mut user_subs = self.user_chat_subscriptions.write().await;
+            user_subs.remove(&user_id);
+        }
+    }
+
+    /// Get all chat IDs a user is subscribed to
+    pub async fn get_user_subscribed_chats(&self, user_id: i64) -> HashSet<String> {
+        let user_subs = self.user_chat_subscriptions.read().await;
+        user_subs.get(&user_id).cloned().unwrap_or_default()
     }
 }
 
@@ -348,9 +385,12 @@ async fn handle_chat_websocket(socket: WebSocket, state: ChatWebSocketState, use
     // Split WebSocket into sender and receiver
     let (mut sender, mut receiver) = socket.split();
 
-    // Get user broadcaster
+    // Get user broadcaster for user-specific events (pong, errors, etc.)
     let user_broadcaster = state.get_user_broadcaster(user_id).await;
     let mut user_broadcast_rx = user_broadcaster.subscribe();
+
+    // Channel to forward events from multiple sources to the WebSocket sender
+    let (outgoing_tx, mut outgoing_rx) = tokio::sync::mpsc::channel::<ChatServerEvent>(100);
 
     // Send welcome message
     let welcome_event = ChatServerEvent::Hello {
@@ -362,15 +402,32 @@ async fn handle_chat_websocket(socket: WebSocket, state: ChatWebSocketState, use
         let _ = sender.send(Message::Text(text)).await;
     }
 
+    // Task to forward user-specific broadcasts to outgoing channel
+    let outgoing_tx_user = outgoing_tx.clone();
+    let user_forward_task = tokio::spawn(async move {
+        while let Ok(event) = user_broadcast_rx.recv().await {
+            if outgoing_tx_user.send(event).await.is_err() {
+                break;
+            }
+        }
+    });
+
     // Spawn task to handle incoming messages
     let state_clone = state.clone();
+    let outgoing_tx_for_receive = outgoing_tx.clone();
     let receive_task = tokio::spawn(async move {
         while let Some(msg) = receiver.next().await {
             if let Ok(msg) = msg {
                 match msg {
                     Message::Text(text) => {
                         if let Ok(client_event) = serde_json::from_str::<ChatClientEvent>(&text) {
-                            handle_chat_client_event(client_event, &state_clone, user_id).await;
+                            handle_chat_client_event(
+                                client_event,
+                                &state_clone,
+                                user_id,
+                                outgoing_tx_for_receive.clone(),
+                            )
+                            .await;
                         }
                     }
                     Message::Close(_) => {
@@ -382,22 +439,25 @@ async fn handle_chat_websocket(socket: WebSocket, state: ChatWebSocketState, use
         }
     });
 
-    // Spawn task to handle outgoing broadcasts
+    // Spawn task to send all outgoing events to WebSocket
     let send_task = tokio::spawn(async move {
-        while let Ok(event) = user_broadcast_rx.recv().await {
+        while let Some(event) = outgoing_rx.recv().await {
             if let Ok(text) = serde_json::to_string(&event) {
-                let _ = sender.send(Message::Text(text)).await;
+                if sender.send(Message::Text(text)).await.is_err() {
+                    break;
+                }
             }
         }
     });
 
-    // Wait for either task to complete
+    // Wait for any task to complete (connection closed)
     tokio::select! {
         _ = receive_task => {},
         _ = send_task => {},
+        _ = user_forward_task => {},
     }
 
-    // Clean up connection
+    // Clean up connection and all subscriptions
     state.remove_user_connection(user_id).await;
 }
 
@@ -406,11 +466,12 @@ async fn handle_chat_client_event(
     event: ChatClientEvent,
     state: &ChatWebSocketState,
     user_id: i64,
+    outgoing_tx: tokio::sync::mpsc::Sender<ChatServerEvent>,
 ) {
     match event {
         ChatClientEvent::Ping => {
             let pong_event = ChatServerEvent::Pong;
-            let _ = state.broadcast_to_user(user_id, &pong_event).await;
+            let _ = outgoing_tx.send(pong_event).await;
         }
         ChatClientEvent::Subscribe { chat_id } => {
             // Check if user is member of chat
@@ -420,22 +481,48 @@ async fn handle_chat_client_event(
                 .check_chat_membership(&chat_id, user_id)
                 .await
             {
-                let _ = state.subscribe_to_chat(&chat_id, user_id).await;
-                let subscribe_event = ChatServerEvent::Subscribed { chat_id };
-                let _ = state.broadcast_to_user(user_id, &subscribe_event).await;
+                // Subscribe to the chat and get a receiver for chat events
+                match state.subscribe_to_chat(&chat_id, user_id).await {
+                    Ok(mut chat_rx) => {
+                        // Spawn a task to forward chat events to the outgoing channel
+                        let outgoing_tx_chat = outgoing_tx.clone();
+                        tokio::spawn(async move {
+                            while let Ok(event) = chat_rx.recv().await {
+                                if outgoing_tx_chat.send(event).await.is_err() {
+                                    break;
+                                }
+                            }
+                        });
+
+                        let subscribe_event = ChatServerEvent::Subscribed {
+                            chat_id: chat_id.clone(),
+                        };
+                        let _ = outgoing_tx.send(subscribe_event).await;
+                    }
+                    Err(e) => {
+                        let error_event = ChatServerEvent::Error {
+                            error: "SUBSCRIPTION_FAILED".to_string(),
+                            message: format!("Failed to subscribe: {}", e),
+                            request_id: None,
+                        };
+                        let _ = outgoing_tx.send(error_event).await;
+                    }
+                }
             } else {
                 let error_event = ChatServerEvent::Error {
                     error: "ACCESS_DENIED".to_string(),
                     message: "You are not a member of this chat".to_string(),
                     request_id: None,
                 };
-                let _ = state.broadcast_to_user(user_id, &error_event).await;
+                let _ = outgoing_tx.send(error_event).await;
             }
         }
         ChatClientEvent::Unsubscribe { chat_id } => {
-            let _ = state.unsubscribe_from_chat(&chat_id).await;
-            let unsubscribe_event = ChatServerEvent::Unsubscribed { chat_id };
-            let _ = state.broadcast_to_user(user_id, &unsubscribe_event).await;
+            let _ = state.unsubscribe_from_chat(&chat_id, user_id).await;
+            let unsubscribe_event = ChatServerEvent::Unsubscribed {
+                chat_id: chat_id.clone(),
+            };
+            let _ = outgoing_tx.send(unsubscribe_event).await;
         }
         ChatClientEvent::Typing { chat_id, is_typing } => {
             // Check if user is member of chat
@@ -486,32 +573,49 @@ async fn handle_chat_client_event(
                     thread_public_id: thread_id,
                 };
 
-                if let Ok(message) = state
+                match state
                     .gateway_state
                     .message_service
                     .create(&create_req, user_id)
                     .await
                 {
-                    let message_response = MessageResponse {
-                        id: message.public_id,
-                        chat_id: message.chat_public_id,
-                        sender_id: message.sender_public_id,
-                        content: message.content,
-                        message_type: message.message_type.to_string(),
-                        reply_to: message.reply_to_public_id,
-                        thread_id: message.thread_public_id,
-                        created_at: message.created_at.clone(),
-                        updated_at: message.updated_at.clone(),
-                        edited: message.updated_at.is_some(),
-                        deleted: message.deleted_at.is_some(),
-                    };
+                    Ok(message) => {
+                        let message_response = MessageResponse {
+                            id: message.public_id,
+                            chat_id: message.chat_public_id,
+                            sender_id: message.sender_public_id,
+                            content: message.content,
+                            message_type: message.message_type.to_string(),
+                            reply_to: message.reply_to_public_id,
+                            thread_id: message.thread_public_id,
+                            created_at: message.created_at.clone(),
+                            updated_at: message.updated_at.clone(),
+                            edited: message.updated_at.is_some(),
+                            deleted: message.deleted_at.is_some(),
+                        };
 
-                    let message_event = ChatServerEvent::Message {
-                        chat_id: chat_id_clone,
-                        message: message_response,
-                    };
-                    let _ = state.broadcast_to_chat(&chat_id, &message_event).await;
+                        let message_event = ChatServerEvent::Message {
+                            chat_id: chat_id_clone,
+                            message: message_response,
+                        };
+                        let _ = state.broadcast_to_chat(&chat_id, &message_event).await;
+                    }
+                    Err(e) => {
+                        let error_event = ChatServerEvent::Error {
+                            error: "MESSAGE_FAILED".to_string(),
+                            message: format!("Failed to send message: {}", e),
+                            request_id: None,
+                        };
+                        let _ = outgoing_tx.send(error_event).await;
+                    }
                 }
+            } else {
+                let error_event = ChatServerEvent::Error {
+                    error: "ACCESS_DENIED".to_string(),
+                    message: "You are not a member of this chat".to_string(),
+                    request_id: None,
+                };
+                let _ = outgoing_tx.send(error_event).await;
             }
         }
         // Add more event handlers as needed...
@@ -522,7 +626,7 @@ async fn handle_chat_client_event(
                 message: "This event type is not yet implemented".to_string(),
                 request_id: None,
             };
-            let _ = state.broadcast_to_user(user_id, &error_event).await;
+            let _ = outgoing_tx.send(error_event).await;
         }
     }
 }

@@ -66,6 +66,13 @@ interface ModelOption {
   };
   supports_reasoning?: boolean;
   supports_images?: boolean;
+  supports_tools?: boolean;
+  supports_agents?: boolean;
+  supports_function_calling?: boolean;
+  supports_vision?: boolean;
+  supports_tool_use?: boolean;
+  supports_structured_outputs?: boolean;
+  supports_streaming?: boolean;
 }
 
 const loadStoredSession = (): SessionData | null => {
@@ -134,6 +141,7 @@ export default function App() {
   const [modelPickerOpen, setModelPickerOpen] = createSignal(false);
   const [testLoading, setTestLoading] = createSignal(false);
   const [modelStatuses, setModelStatuses] = createSignal<Record<string, "idle" | "pending">>({});
+  const [sidebarOpen, setSidebarOpen] = createSignal(false);
 
   // WebSocket integration
   const socket = useSocket(() => session()?.token || null);
@@ -1112,11 +1120,16 @@ export default function App() {
           onLogout={logout}
           onNewChat={newChat}
           onNewGroupChat={newGroupChat}
-          onSelectChat={selectChat}
+          onSelectChat={(chatId) => {
+            selectChat(chatId);
+            setSidebarOpen(false); // Close sidebar on mobile after selecting chat
+          }}
           onRenameChat={renameChat}
           onDeleteChat={deleteChat}
           onDeleteFolder={deleteFolder}
           actions={sidebarActions}
+          isOpen={sidebarOpen}
+          onClose={() => setSidebarOpen(false)}
         />
             <MainArea
             prompt={prompt}
@@ -1156,6 +1169,7 @@ export default function App() {
             })}
             onSend={handleSubmit}
             onLogout={logout}
+            onOpenSidebar={() => setSidebarOpen(true)}
           />
       </div>
     </ThemeProvider>

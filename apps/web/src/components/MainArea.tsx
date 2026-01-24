@@ -18,6 +18,13 @@ interface ModelOption {
   };
   supports_reasoning?: boolean;
   supports_images?: boolean;
+  supports_tools?: boolean;
+  supports_agents?: boolean;
+  supports_function_calling?: boolean;
+  supports_vision?: boolean;
+  supports_tool_use?: boolean;
+  supports_structured_outputs?: boolean;
+  supports_streaming?: boolean;
 }
 
 interface SessionData {
@@ -52,6 +59,7 @@ interface Props {
   session: Accessor<SessionData | null>;
   onSend: (event: Event) => void;
   onLogout: () => void;
+  onOpenSidebar?: () => void;
 }
 
 export default function MainArea(props: Props) {
@@ -59,18 +67,29 @@ export default function MainArea(props: Props) {
   const sessionUserId = createMemo(() => props.session()?.user.id);
 
   const convertedModels = createMemo((): ModelMeta[] => {
-    return props.models().map(model => ({
-      id: model.id,
-      name: model.label,
-      badges: [
-        ...(model.supports_reasoning ? ['reasoning' as const] : []),
-        ...(model.supports_images ? ['vision' as const] : []),
-      ],
-      tier: undefined,
-      disabled: false,
-      group: undefined,
-      pricing: model.pricing,
-    }));
+    return props.models().map(model => {
+      // Extract provider from model ID (e.g., "openai/gpt-4o" → "openai")
+      const provider = model.id.includes('/') ? model.id.split('/')[0] : undefined;
+
+      // Build badges array from all capability flags
+      const badges: ModelMeta['badges'] = [];
+      if (model.supports_vision || model.supports_images) badges.push('vision');
+      if (model.supports_tools || model.supports_tool_use || model.supports_function_calling) badges.push('tools');
+      if (model.supports_agents) badges.push('agent');
+      if (model.supports_reasoning) badges.push('reasoning');
+
+      return {
+        id: model.id,
+        name: model.label,
+        description: model.description ?? undefined,
+        badges,
+        tier: undefined,
+        disabled: false,
+        group: undefined,
+        provider,
+        pricing: model.pricing,
+      };
+    });
   });
 
   const modelSelectorLabel = createMemo(() => {
@@ -121,6 +140,16 @@ export default function MainArea(props: Props) {
 
   return (
     <div class="main">
+      {/* Mobile menu button */}
+      <button
+        class="mobile-menu-btn hide-desktop"
+        onClick={() => props.onOpenSidebar?.()}
+        aria-label="Open sidebar menu"
+      >
+        <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" fill="none" stroke-width="2">
+          <path d="M3 12h18M3 6h18M3 18h18" />
+        </svg>
+      </button>
       <TopRightControls session={props.session} onLogout={props.onLogout} connectionStatus={props.connectionStatus} />
       {props.currentChat?.()?.isGroup && (
         <div style={{

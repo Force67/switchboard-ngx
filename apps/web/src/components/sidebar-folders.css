@@ -1,18 +1,12 @@
 /* ==========================================================================
    SIDEBAR STRUCTURE — Folder Tree & Chat List
    "Neural Nexus" Design System
+   Note: Main .sidebar layout is in app.css
    ========================================================================== */
 
 /* ==========================================================================
-   SIDEBAR LAYOUT
+   SIDEBAR LAYOUT — Internal components only
    ========================================================================== */
-.sidebar {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  background: var(--bg-1);
-}
-
 .sidebar-header {
   padding: 14px 10px 10px 10px;
   border-bottom: 1px solid var(--hair);
@@ -525,4 +519,340 @@
    ========================================================================== */
 .no-drop {
   cursor: not-allowed !important;
+}
+
+/* ==========================================================================
+   RESPONSIVE — Tablet (max-width: 900px)
+   ========================================================================== */
+@media (max-width: 900px) {
+  .sidebar-header {
+    padding: 12px 8px 8px 8px;
+  }
+
+  .row {
+    height: 40px;
+    padding: 0 12px;
+    margin: 0 4px;
+  }
+
+  .row .title {
+    font-size: 14px;
+  }
+
+  .cmenu {
+    min-width: 180px;
+  }
+}
+
+/* ==========================================================================
+   RESPONSIVE — Mobile (max-width: 768px)
+   ========================================================================== */
+@media (max-width: 768px) {
+  .sidebar {
+    width: 100%;
+    max-width: 320px;
+  }
+
+  .sidebar-header {
+    padding: 16px 12px 12px 12px;
+    /* Safe area for notched devices */
+    padding-top: max(16px, env(safe-area-inset-top));
+  }
+
+  .sidebar-actions {
+    gap: 10px;
+  }
+
+  .sidebar-content {
+    padding: 12px 0;
+    /* Smooth momentum scrolling on iOS */
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Larger touch targets */
+  .row {
+    height: 48px;
+    padding: 0 14px;
+    margin: 2px 8px;
+    gap: 12px;
+  }
+
+  .row .title {
+    font-size: 15px;
+  }
+
+  .row .icon {
+    width: 20px;
+    height: 20px;
+  }
+
+  .row .caret {
+    width: 24px;
+  }
+
+  .row .caret svg {
+    width: 12px;
+    height: 12px;
+  }
+
+  /* Always show action buttons on mobile (no hover) */
+  .row .end {
+    opacity: 1;
+  }
+
+  .row .dots {
+    width: 32px;
+    height: 32px;
+  }
+
+  .row .dots svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  /* Action buttons */
+  .newchat,
+  .newfolder {
+    height: 44px;
+    padding: 12px 16px;
+    font-size: 14px;
+  }
+
+  .newchat svg,
+  .newfolder svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  /* Dropdown menu for mobile */
+  .dropdown-menu {
+    margin-top: 6px;
+  }
+
+  .dropdown-menu button {
+    padding: 14px 16px;
+    font-size: 15px;
+  }
+
+  /* Context menu mobile styles */
+  .cmenu {
+    min-width: 220px;
+    padding: 8px;
+    border-radius: var(--radius-lg);
+  }
+
+  .cmenu .mi {
+    height: 44px;
+    padding: 0 14px;
+    font-size: 15px;
+    gap: 12px;
+  }
+
+  .cmenu .mi svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .cmenu .sep {
+    margin: 8px 10px;
+  }
+
+  /* Create inline input */
+  .create-inline {
+    height: 44px;
+    margin: 6px 12px;
+    padding: 0 14px;
+    gap: 10px;
+  }
+
+  .create-inline input {
+    font-size: 15px;
+    padding: 6px 0;
+  }
+
+  /* Error banner */
+  .error-banner {
+    margin: 12px;
+    padding: 12px 16px;
+    font-size: 14px;
+    gap: 12px;
+  }
+
+  /* Children container adjustments */
+  .children {
+    margin-left: 8px;
+  }
+
+  .children::before {
+    left: 16px;
+  }
+
+  /* Folder left border */
+  .row.folder {
+    margin-left: 8px;
+    padding-left: 14px;
+  }
+
+  /* Tree section spacing */
+  .tree-section + .tree-section {
+    margin-top: 16px;
+    padding-top: 12px;
+  }
+}
+
+/* ==========================================================================
+   RESPONSIVE — Small Mobile (max-width: 400px)
+   ========================================================================== */
+@media (max-width: 400px) {
+  .sidebar {
+    max-width: 100%;
+  }
+
+  .sidebar-header {
+    padding: 14px 10px 10px 10px;
+  }
+
+  .row {
+    padding: 0 12px;
+    margin: 2px 6px;
+  }
+
+  .row .title {
+    font-size: 14px;
+  }
+
+  .cmenu {
+    min-width: 200px;
+    left: 10px !important;
+    right: 10px !important;
+    width: auto !important;
+  }
+}
+
+/* ==========================================================================
+   TOUCH DEVICE OPTIMIZATIONS
+   ========================================================================== */
+@media (hover: none) and (pointer: coarse) {
+  /* Ensure minimum tap target sizes */
+  .row {
+    min-height: 44px;
+  }
+
+  .row .dots {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .row .caret {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .newchat,
+  .newfolder {
+    min-height: 44px;
+  }
+
+  .cmenu .mi {
+    min-height: 44px;
+  }
+
+  .dropdown-menu button {
+    min-height: 44px;
+  }
+
+  /* Always show row actions on touch */
+  .row .end {
+    opacity: 1;
+  }
+
+  /* Disable hover transforms on touch */
+  .newchat:hover,
+  .newfolder:hover {
+    transform: none;
+  }
+
+  /* Active state for touch feedback */
+  .row:active {
+    background: var(--glass);
+    transform: scale(0.98);
+  }
+
+  .newchat:active,
+  .newfolder:active {
+    background: var(--bg-3);
+    transform: scale(0.98);
+  }
+
+  .cmenu .mi:active {
+    background: var(--chip);
+  }
+
+  /* Disable hover sweep effect on touch */
+  .newchat::before,
+  .newfolder::before {
+    display: none;
+  }
+}
+
+/* ==========================================================================
+   LANDSCAPE PHONE OPTIMIZATIONS
+   ========================================================================== */
+@media (max-height: 500px) and (orientation: landscape) {
+  .sidebar-header {
+    padding: 8px 10px 6px 10px;
+  }
+
+  .sidebar-actions {
+    margin-bottom: 6px;
+  }
+
+  .row {
+    height: 40px;
+  }
+
+  .newchat,
+  .newfolder {
+    height: 36px;
+    padding: 8px 12px;
+  }
+
+  .tree-section + .tree-section {
+    margin-top: 8px;
+    padding-top: 6px;
+  }
+
+  .cmenu .mi {
+    height: 36px;
+  }
+}
+
+/* ==========================================================================
+   REDUCED MOTION
+   ========================================================================== */
+@media (prefers-reduced-motion: reduce) {
+  .row,
+  .row .caret svg,
+  .row .end,
+  .row .dots,
+  .children,
+  .newchat,
+  .newfolder,
+  .newchat::before,
+  .newfolder::before,
+  .dropdown-menu,
+  .cmenu,
+  .create-inline,
+  .error-banner {
+    transition: none;
+  }
+
+  .loading-spinner {
+    animation: none;
+  }
+
+  .newchat::before,
+  .newfolder::before {
+    display: none;
+  }
 }

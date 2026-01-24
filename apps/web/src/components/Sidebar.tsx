@@ -1,4 +1,4 @@
-import { Accessor } from "solid-js";
+import { Accessor, Show } from "solid-js";
 import SidebarNewChat from "./SidebarNewChat";
 import SidebarNewFolder from "./SidebarNewFolder";
 import SidebarSearch from "./SidebarSearch";
@@ -32,6 +32,8 @@ interface Props {
   onDeleteChat: (chatId: string) => void;
   onDeleteFolder: (folderId: string) => void;
   actions: Actions;
+  isOpen?: Accessor<boolean>;
+  onClose?: () => void;
 }
 
 export default function Sidebar(props: Props) {
@@ -39,34 +41,58 @@ export default function Sidebar(props: Props) {
     props.actions.createFolder();
   };
 
+  const isOpen = () => props.isOpen?.() ?? false;
+
   return (
-    <div class="sidebar">
-      <div class="sidebar-header">
-         <div class="sidebar-actions">
-           <SidebarNewChat onClick={props.onNewChat} onNewGroupChat={props.onNewGroupChat} />
-           <SidebarNewFolder onClick={handleNewFolder} />
-         </div>
-        <SidebarSearch />
-      </div>
-      <div class="sidebar-content">
-        <SidebarTree
-          state={sidebarState()}
-          actions={props.actions}
-          chats={props.chats()}
-          currentChatId={props.currentChatId()}
-          onSelectChat={props.onSelectChat}
-          onNewChat={props.onNewChat}
-          onNewFolder={handleNewFolder}
-          onRenameChat={props.onRenameChat}
-          onDeleteChat={props.onDeleteChat}
-          onDeleteFolder={props.onDeleteFolder}
+    <>
+      {/* Mobile backdrop */}
+      <Show when={isOpen()}>
+        <div
+          class="sidebar-backdrop"
+          onClick={() => props.onClose?.()}
+          aria-hidden="true"
+        />
+      </Show>
+
+      <div class={`sidebar ${isOpen() ? "open" : ""}`}>
+        {/* Mobile close button */}
+        <button
+          class="sidebar-close-btn hide-desktop"
+          onClick={() => props.onClose?.()}
+          aria-label="Close sidebar"
+        >
+          <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" fill="none" stroke-width="2">
+            <path d="M18 6L6 18M6 6l12 12" />
+          </svg>
+        </button>
+
+        <div class="sidebar-header">
+           <div class="sidebar-actions">
+             <SidebarNewChat onClick={props.onNewChat} onNewGroupChat={props.onNewGroupChat} />
+             <SidebarNewFolder onClick={handleNewFolder} />
+           </div>
+          <SidebarSearch />
+        </div>
+        <div class="sidebar-content">
+          <SidebarTree
+            state={sidebarState()}
+            actions={props.actions}
+            chats={props.chats()}
+            currentChatId={props.currentChatId()}
+            onSelectChat={props.onSelectChat}
+            onNewChat={props.onNewChat}
+            onNewFolder={handleNewFolder}
+            onRenameChat={props.onRenameChat}
+            onDeleteChat={props.onDeleteChat}
+            onDeleteFolder={props.onDeleteFolder}
+          />
+        </div>
+        <SidebarFooter
+          session={props.session}
+          onLogin={props.onLogin}
+          onLogout={props.onLogout}
         />
       </div>
-      <SidebarFooter
-        session={props.session}
-        onLogin={props.onLogin}
-        onLogout={props.onLogout}
-      />
-    </div>
+    </>
   );
 }

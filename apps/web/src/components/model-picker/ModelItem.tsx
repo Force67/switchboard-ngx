@@ -1,4 +1,4 @@
-import { Component } from "solid-js";
+import { Component, Show } from "solid-js";
 import { ModelMeta } from "./models";
 import CapabilityBadge from "./CapabilityBadge";
 import ProviderIcon from "./ProviderIcon";
@@ -14,86 +14,89 @@ interface Props {
 }
 
 const ModelItem: Component<Props> = (props) => {
-  const isDisabled = () => props.model.disabled;
-
   const handleClick = () => {
-    if (!isDisabled()) {
-      props.onToggle(props.model.id);
-    }
+    props.onToggle(props.model.id);
   };
 
   return (
-    <button
-      class={`row ${props.selected ? "selected" : ""} ${props.highlighted ? "focused" : ""} ${isDisabled() ? "disabled" : ""}`}
+    <div
+      class={`model-row ${props.selected ? "selected" : ""} ${props.highlighted ? "focused" : ""}`}
       onClick={handleClick}
       role="option"
       aria-selected={props.selected}
-      type="button"
+      tabindex={0}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          handleClick();
+        }
+      }}
     >
-      {props.multiSelect && (
-        <span class="selection-indicator" aria-hidden="true">
-          {props.selected ? (
-            <svg viewBox="0 0 16 16">
-              <path d="M6.5 11.5L3 8l1.4-1.4L6.5 8.7l5.1-5.1L13 5l-6.5 6.5z" />
-            </svg>
-          ) : (
-            <span class="selection-placeholder" />
+      {/* Provider Icon */}
+      <div class="model-row-icon">
+        <ProviderIcon provider={props.model.provider || "openrouter"} class="model-provider-icon" />
+      </div>
+
+      {/* Model Info */}
+      <div class="model-row-content">
+        <div class="model-row-header">
+          <span class="model-row-name">{props.model.name}</span>
+          {props.model.tier === "pro" && (
+            <span class="model-tier-badge" title="Premium model">
+              <svg viewBox="0 0 16 16">
+                <path d="M8 1l2 4.5 5 .7-3.6 3.5.85 5-4.25-2.25L3.75 14.7l.85-5L1 6.2l5-.7L8 1z" />
+              </svg>
+            </span>
           )}
+        </div>
+        <Show when={props.model.description}>
+          <span class="model-row-desc">{props.model.description}</span>
+        </Show>
+      </div>
+
+      {/* Right side controls */}
+      <div class="model-row-actions">
+        {/* Capability badges */}
+        <div class="model-row-badges">
+          {props.model.badges.map((badge) => (
+            <CapabilityBadge type={badge} />
+          ))}
+        </div>
+
+        {/* Info button */}
+        <span
+          class="model-info-btn"
+          onClick={(e) => {
+            e.stopPropagation();
+            // Could open a modal with more info
+          }}
+          title="Model details"
+          role="button"
+          tabindex={0}
+        >
+          <svg viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="10" />
+            <path d="M12 16v-4M12 8h.01" />
+          </svg>
         </span>
-      )}
-      <div class="model-info">
-        <div class="provider-icon">
-          <ProviderIcon provider={props.model.provider || "openrouter"} class="provider-icon-svg" />
-        </div>
-        <div class="name">
-          {props.model.name}
-          {props.model.tier === "pro" && <span class="diamond">🔹</span>}
-        </div>
+
+        {/* Favorite button */}
+        <span
+          class="model-favorite-btn"
+          onClick={(e) => {
+            e.stopPropagation();
+            props.onToggleFavorite(props.model.id);
+          }}
+          title={props.isFavorite ? "Remove from favorites" : "Add to favorites"}
+          role="button"
+          tabindex={0}
+        >
+          <svg viewBox="0 0 24 24" class={props.isFavorite ? "filled" : ""}>
+            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+          </svg>
+        </span>
       </div>
-      <div class="flexfill"></div>
-      <div class="badges">
-        {props.model.badges.map((badge) => (
-          <CapabilityBadge type={badge} disabled={isDisabled()} />
-        ))}
-      </div>
-      {props.model.pricing && (
-        <div class="pricing-container">
-          {props.model.pricing.input !== undefined && (
-            <div class="pricing-item input">
-              <svg class="arrow-icon" viewBox="0 0 12 12">
-                <path d="M6 2L10 6L6 10L6 7L2 7L2 5L6 5Z" fill="currentColor" />
-              </svg>
-              <span class="pricing-text">
-                ${(props.model.pricing.input * 1000000).toFixed(2)}
-              </span>
-            </div>
-          )}
-          {props.model.pricing.output !== undefined && (
-            <div class="pricing-item output">
-              <svg class="arrow-icon" viewBox="0 0 12 12">
-                <path d="M6 10L2 6L6 2L6 5L10 5L10 7L6 7Z" fill="currentColor" />
-              </svg>
-              <span class="pricing-text">
-                ${(props.model.pricing.output * 1000000).toFixed(2)}
-              </span>
-            </div>
-          )}
-          <span class="pricing-unit">/M</span>
-        </div>
-      )}
-      <span
-        class="favorite-btn"
-        onClick={(e) => {
-          e.stopPropagation();
-          props.onToggleFavorite(props.model.id);
-        }}
-        title={props.isFavorite ? "Remove from favorites" : "Add to favorites"}
-      >
-        <svg viewBox="0 0 24 24" class={props.isFavorite ? "filled" : ""}>
-          <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-        </svg>
-      </span>
-    </button>
+    </div>
   );
 };
 

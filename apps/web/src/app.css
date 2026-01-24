@@ -4,58 +4,20 @@
    ========================================================================== */
 
 /* ==========================================================================
-   MAIN LAYOUT GRID
+   MAIN LAYOUT
    ========================================================================== */
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow-x: hidden;
+}
+
 .app {
+  display: flex;
   min-height: 100vh;
-  display: grid;
-  grid-template-columns: var(--sidebar-width) 1fr;
   background: var(--bg-0);
-}
-
-/* ==========================================================================
-   RESPONSIVE BREAKPOINTS
-   ========================================================================== */
-@media (max-width: 1200px) {
-  :root {
-    --sidebar-width: 240px;
-  }
-  .sidebar {
-    padding: 12px 14px;
-  }
-  .content-well {
-    max-width: 900px;
-  }
-  .composer {
-    max-width: 900px;
-  }
-}
-
-@media (max-width: 768px) {
-  :root {
-    --sidebar-width: 0px;
-  }
-  .app {
-    grid-template-columns: 1fr;
-  }
-  .sidebar {
-    display: none;
-  }
-  .content-well {
-    width: calc(100vw - 2 * var(--content-padding));
-    max-width: none;
-    height: calc(100vh - 200px);
-  }
-  .main {
-    padding-bottom: 140px;
-  }
-  .composer {
-    width: calc(100vw - 2 * var(--content-padding));
-    max-width: none;
-  }
-  .top-bar {
-    left: 0;
-  }
 }
 
 /* ==========================================================================
@@ -63,6 +25,11 @@
    ========================================================================== */
 .sidebar {
   width: var(--sidebar-width);
+  min-width: var(--sidebar-width);
+  max-width: var(--sidebar-width);
+  height: 100vh;
+  position: sticky;
+  top: 0;
   background: var(--bg-1);
   padding: 16px 18px;
   display: flex;
@@ -70,12 +37,206 @@
   gap: 16px;
   box-sizing: border-box;
   border-right: 1px solid var(--hair);
-  animation: fadeInUp var(--duration-slow) var(--ease-out-expo) both;
+  flex-shrink: 0;
 }
 
 .sidebar .spacer {
   flex: 1;
 }
+
+/* ==========================================================================
+   MAIN CONTENT AREA
+   ========================================================================== */
+.main {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ==========================================================================
+   TOP BAR
+   ========================================================================== */
+.top-bar {
+  height: 56px;
+  min-height: 56px;
+  background: color-mix(in srgb, var(--bg-1) 85%, transparent);
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  border-bottom: 1px solid var(--hair);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  position: relative;
+  z-index: 10;
+}
+
+.top-left {
+  display: flex;
+  gap: 10px;
+}
+
+.top-center {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+}
+
+.app-title {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 400;
+  font-style: italic;
+  color: var(--text-0);
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.top-right {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+/* ==========================================================================
+   CONTENT WELL — Message Container
+   ========================================================================== */
+.content-well {
+  flex: 1;
+  margin: 24px var(--content-padding);
+  max-width: 960px;
+  width: calc(100% - 2 * var(--content-padding));
+  align-self: center;
+  background: var(--bg-1);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--hair);
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* ==========================================================================
+   COMPOSER — Message Input Area
+   ========================================================================== */
+.composer {
+  margin: 0 var(--content-padding) 24px;
+  max-width: 960px;
+  width: calc(100% - 2 * var(--content-padding));
+  align-self: center;
+  background: var(--bg-2);
+  border: 1px solid var(--hair);
+  border-radius: var(--radius-lg);
+  box-shadow:
+    0 4px 24px rgba(0, 0, 0, 0.15),
+    0 0 0 1px var(--hair);
+  flex-shrink: 0;
+}
+
+.composer:focus-within {
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.2),
+    0 0 0 1px var(--accent),
+    var(--focus);
+}
+
+.composer .ta {
+  padding: 16px 18px 10px 18px;
+  min-height: 48px;
+}
+
+.composer .previews {
+  display: flex;
+  gap: 10px;
+  padding: 0 18px 12px 18px;
+  flex-wrap: wrap;
+}
+
+.composer .preview {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  border: 1px solid var(--hair);
+}
+
+.composer .preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.composer .preview button {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  border: none;
+  font-size: 11px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.composer .preview button:hover {
+  background: var(--err);
+}
+
+.composer textarea {
+  width: 100%;
+  background: transparent;
+  border: none;
+  outline: none;
+  resize: none;
+  color: var(--text-0);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.5;
+  max-height: 140px;
+}
+
+.composer textarea::placeholder {
+  color: var(--text-dim);
+}
+
+.composer .foot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--hair);
+}
+
+/* ==========================================================================
+   RESPONSIVE — Mobile
+   ========================================================================== */
+@media (max-width: 768px) {
+  .sidebar {
+    display: none;
+  }
+
+  .content-well {
+    margin: 16px var(--content-padding);
+  }
+
+  .composer {
+    margin: 0 var(--content-padding) 16px;
+  }
+}
+
+/* ==========================================================================
+   BUTTON STYLES
+   ========================================================================== */
 
 /* New Chat Button */
 .newchat {
@@ -227,115 +388,6 @@
   stroke-width: 1.5;
 }
 
-/* ==========================================================================
-   MAIN CONTENT AREA
-   ========================================================================== */
-.main {
-  position: relative;
-  overflow: hidden;
-  padding-top: 56px;
-  padding-bottom: 120px;
-}
-
-/* Ambient gradient glow */
-.main::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: radial-gradient(
-    600px 400px at calc(100% - 80px) -50px,
-    rgba(232, 168, 50, 0.08) 0%,
-    rgba(232, 168, 50, 0.03) 40%,
-    transparent 70%
-  );
-  z-index: 0;
-}
-
-/* Secondary ambient glow */
-.main::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: radial-gradient(
-    400px 400px at 20% 100%,
-    rgba(93, 186, 125, 0.04) 0%,
-    transparent 60%
-  );
-  z-index: 0;
-}
-
-/* ==========================================================================
-   CONTENT WELL — Message Container
-   ========================================================================== */
-.content-well {
-  position: fixed;
-  top: 80px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 1;
-  width: calc(100vw - var(--sidebar-width) - 2 * var(--content-padding));
-  max-width: 960px;
-  height: calc(100vh - 200px);
-  background: var(--bg-1);
-  border-radius: var(--radius-xl);
-  border: 1px solid var(--hair);
-  overflow-y: auto;
-  animation: fadeInUp var(--duration-slow) var(--ease-out-expo) both;
-  animation-delay: 100ms;
-}
-
-/* ==========================================================================
-   TOP BAR
-   ========================================================================== */
-.top-bar {
-  position: fixed;
-  top: 0;
-  left: var(--sidebar-width);
-  right: 0;
-  height: 56px;
-  background: color-mix(in srgb, var(--bg-1) 85%, transparent);
-  backdrop-filter: blur(16px) saturate(180%);
-  -webkit-backdrop-filter: blur(16px) saturate(180%);
-  border-bottom: 1px solid var(--hair);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 24px;
-  z-index: 10;
-  animation: fadeInUp var(--duration-slow) var(--ease-out-expo) both;
-}
-
-.top-left {
-  display: flex;
-  gap: 10px;
-}
-
-.top-center {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  align-items: center;
-}
-
-.app-title {
-  font-family: var(--font-display);
-  font-size: 22px;
-  font-weight: 400;
-  font-style: italic;
-  color: var(--text-0);
-  margin: 0;
-  letter-spacing: -0.02em;
-}
-
-.top-right {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-}
-
 /* Icon Circle Buttons */
 .icircle {
   width: 32px;
@@ -469,109 +521,8 @@
 }
 
 /* ==========================================================================
-   COMPOSER — Message Input Area
+   MODEL STATUS
    ========================================================================== */
-.composer {
-  position: fixed;
-  left: 50%;
-  transform: translateX(-50%);
-  bottom: 24px;
-  width: calc(100vw - var(--sidebar-width) - 2 * var(--content-padding));
-  max-width: 960px;
-  background: var(--bg-2);
-  border: 1px solid var(--hair);
-  border-radius: var(--radius-lg);
-  box-shadow:
-    0 4px 24px rgba(0, 0, 0, 0.15),
-    0 0 0 1px var(--hair);
-  z-index: 3;
-  animation: fadeInUp var(--duration-slow) var(--ease-out-expo) both;
-  animation-delay: 150ms;
-  transition: box-shadow var(--duration-fast) var(--ease-out-expo);
-}
-
-.composer:focus-within {
-  box-shadow:
-    0 8px 32px rgba(0, 0, 0, 0.2),
-    0 0 0 1px var(--accent),
-    var(--focus);
-}
-
-.composer .ta {
-  padding: 16px 18px 10px 18px;
-  min-height: 48px;
-}
-
-.composer .previews {
-  display: flex;
-  gap: 10px;
-  padding: 0 18px 12px 18px;
-  flex-wrap: wrap;
-}
-
-.composer .preview {
-  position: relative;
-  width: 56px;
-  height: 56px;
-  border-radius: var(--radius-sm);
-  overflow: hidden;
-  border: 1px solid var(--hair);
-}
-
-.composer .preview img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.composer .preview button {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: rgba(0, 0, 0, 0.7);
-  color: white;
-  border: none;
-  font-size: 11px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background var(--duration-fast) ease;
-}
-
-.composer .preview button:hover {
-  background: var(--err);
-}
-
-.composer textarea {
-  width: 100%;
-  background: transparent;
-  border: none;
-  outline: none;
-  resize: none;
-  color: var(--text-0);
-  font-family: var(--font-body);
-  font-size: 15px;
-  line-height: 1.5;
-  max-height: 140px;
-}
-
-.composer textarea::placeholder {
-  color: var(--text-dim);
-}
-
-.composer .foot {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 16px;
-  border-top: 1px solid var(--hair);
-}
-
-/* Model Status Tray */
 .composer .model-status-tray {
   display: flex;
   align-items: center;
@@ -740,6 +691,7 @@
   transition: all var(--duration-fast) var(--ease-out-expo);
   position: relative;
   overflow: hidden;
+  border: none;
 }
 
 .send::before {
@@ -845,7 +797,7 @@
 }
 
 /* ==========================================================================
-   MESSAGE ANIMATIONS — Refined "thinking" state
+   MESSAGE ANIMATIONS
    ========================================================================== */
 @keyframes messageThink {
   0%, 100% {
@@ -891,7 +843,7 @@
   border-radius: inherit;
 }
 
-/* Particle Effects — Refined */
+/* Particle Effects */
 .blowing-particles {
   position: absolute;
   top: 0;

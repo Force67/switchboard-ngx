@@ -622,7 +622,7 @@ mod tests {
     async fn create_test_pool() -> (SqlitePool, TempDir) {
         let temp_dir = TempDir::new().unwrap();
         let db_path = temp_dir.path().join("test_invites.db");
-        let db_url = format!("sqlite:{}", db_path.display());
+        let db_url = format!("sqlite:{}?mode=rwc", db_path.display());
 
         let pool = SqlitePool::connect(&db_url).await.unwrap();
 
@@ -633,11 +633,38 @@ mod tests {
                 public_id TEXT NOT NULL UNIQUE,
                 chat_id INTEGER NOT NULL,
                 inviter_id INTEGER NOT NULL,
-                invitee_email TEXT,
+                invited_email TEXT,
                 invite_code TEXT NOT NULL UNIQUE,
                 status TEXT NOT NULL,
                 expires_at TEXT,
-                created_at TEXT NOT NULL
+                created_at TEXT NOT NULL,
+                accepted_at TEXT
+            )",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        // Create chats table for joins
+        sqlx::query(
+            "CREATE TABLE chats (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                public_id TEXT NOT NULL UNIQUE,
+                title TEXT NOT NULL
+            )",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        // Create users table for joins
+        sqlx::query(
+            "CREATE TABLE users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                public_id TEXT NOT NULL UNIQUE,
+                email TEXT,
+                display_name TEXT,
+                avatar_url TEXT
             )",
         )
         .execute(&pool)

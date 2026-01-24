@@ -530,7 +530,7 @@ mod tests {
     async fn create_test_pool() -> (SqlitePool, TempDir) {
         let temp_dir = TempDir::new().unwrap();
         let db_path = temp_dir.path().join("test_messages.db");
-        let db_url = format!("sqlite:{}", db_path.display());
+        let db_url = format!("sqlite:{}?mode=rwc", db_path.display());
 
         let pool = SqlitePool::connect(&db_url).await.unwrap();
 

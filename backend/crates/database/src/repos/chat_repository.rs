@@ -99,7 +99,7 @@ impl ChatRepository {
             ORDER BY c.updated_at DESC
             "#
         )
-        .bind(user_id)
+        .bind(user_id.to_string())
         .bind(user_id)
         .fetch_all(&self.pool)
         .await
@@ -256,7 +256,7 @@ impl ChatRepository {
         .bind(&request.folder_id)
         .bind(request.chat_type.to_string())
         .bind(ChatStatus::Active.to_string())
-        .bind(user_id)
+        .bind(user_id.to_string())
         .bind(&now)
         .bind(&now)
         .execute(&self.pool)
@@ -437,7 +437,7 @@ impl ChatRepository {
             WHERE (c.created_by = ? OR cm.user_id = ?) AND c.status != 'deleted'
             "#,
         )
-        .bind(user_id)
+        .bind(user_id.to_string())
         .bind(user_id)
         .fetch_optional(&self.pool)
         .await
@@ -460,7 +460,7 @@ mod tests {
     async fn create_test_pool() -> (SqlitePool, TempDir) {
         let temp_dir = TempDir::new().unwrap();
         let db_path = temp_dir.path().join("test_chats.db");
-        let db_url = format!("sqlite:{}", db_path.display());
+        let db_url = format!("sqlite:{}?mode=rwc", db_path.display());
 
         let pool = SqlitePool::connect(&db_url).await.unwrap();
 
@@ -475,9 +475,36 @@ mod tests {
                 folder_id TEXT,
                 chat_type TEXT NOT NULL,
                 status TEXT NOT NULL,
-                created_by INTEGER NOT NULL,
+                created_by TEXT NOT NULL,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
+            )",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        // Create chat_members table for join queries
+        sqlx::query(
+            "CREATE TABLE chat_members (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                chat_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                role TEXT NOT NULL DEFAULT 'member',
+                joined_at TEXT NOT NULL
+            )",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        // Create messages table for count queries
+        sqlx::query(
+            "CREATE TABLE messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                chat_id INTEGER NOT NULL,
+                deleted_at TEXT,
+                created_at TEXT NOT NULL
             )",
         )
         .execute(&pool)

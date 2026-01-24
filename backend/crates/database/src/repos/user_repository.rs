@@ -566,10 +566,10 @@ mod tests {
     use sqlx::SqlitePool;
     use tempfile::TempDir;
 
-    async fn create_test_pool() -> SqlitePool {
+    async fn create_test_pool() -> (SqlitePool, TempDir) {
         let temp_dir = TempDir::new().unwrap();
         let db_path = temp_dir.path().join("test.db");
-        let db_url = format!("sqlite:{}", db_path.display());
+        let db_url = format!("sqlite:{}?mode=rwc", db_path.display());
 
         let pool = SqlitePool::connect(&db_url).await.unwrap();
 
@@ -580,6 +580,7 @@ mod tests {
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 public_id TEXT NOT NULL UNIQUE,
                 email TEXT UNIQUE,
+                username TEXT,
                 display_name TEXT,
                 avatar_url TEXT,
                 bio TEXT,
@@ -598,12 +599,12 @@ mod tests {
         .await
         .unwrap();
 
-        pool
+        (pool, temp_dir)
     }
 
     #[tokio::test]
     async fn test_user_creation_and_retrieval() {
-        let pool = create_test_pool().await;
+        let (pool, _temp_dir) = create_test_pool().await;
         let repo = UserRepository::new(pool);
 
         let request = CreateUserRequest {
@@ -626,7 +627,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_user_search() {
-        let pool = create_test_pool().await;
+        let (pool, _temp_dir) = create_test_pool().await;
         let repo = UserRepository::new(pool);
 
         // Create test users
@@ -659,7 +660,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_email_exists() {
-        let pool = create_test_pool().await;
+        let (pool, _temp_dir) = create_test_pool().await;
         let repo = UserRepository::new(pool);
 
         let request = CreateUserRequest {
@@ -681,21 +682,30 @@ mod tests {
 
     #[tokio::test]
     async fn test_user_stats() {
-        let pool = create_test_pool().await;
+        let (pool, _temp_dir) = create_test_pool().await;
         let repo = UserRepository::new(pool);
 
         // Create some test users
-        let request = CreateUserRequest {
-            email: "test@example.com".to_string(),
-            username: "testuser".to_string(),
-            display_name: "Test User".to_string(),
+        let request1 = CreateUserRequest {
+            email: "test1@example.com".to_string(),
+            username: "testuser1".to_string(),
+            display_name: "Test User 1".to_string(),
             password: "password".to_string(),
             avatar_url: None,
             bio: None,
         };
 
-        repo.create(&request).await.unwrap();
-        repo.create(&request).await.unwrap();
+        let request2 = CreateUserRequest {
+            email: "test2@example.com".to_string(),
+            username: "testuser2".to_string(),
+            display_name: "Test User 2".to_string(),
+            password: "password".to_string(),
+            avatar_url: None,
+            bio: None,
+        };
+
+        repo.create(&request1).await.unwrap();
+        repo.create(&request2).await.unwrap();
 
         let stats = repo.get_user_stats().await.unwrap();
         assert_eq!(stats.total_count, 2);
@@ -704,7 +714,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_update_last_login() {
-        let pool = create_test_pool().await;
+        let (pool, _temp_dir) = create_test_pool().await;
         let repo = UserRepository::new(pool);
 
         let request = CreateUserRequest {

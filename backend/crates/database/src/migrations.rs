@@ -256,7 +256,7 @@ mod tests {
     async fn test_migrations_run() {
         let temp_dir = TempDir::new().unwrap();
         let db_path = temp_dir.path().join("test_migrations.db");
-        let db_url = format!("sqlite:{}", db_path.display());
+        let db_url = format!("sqlite:{}?mode=rwc", db_path.display());
 
         let config = DatabaseConfig {
             url: db_url,

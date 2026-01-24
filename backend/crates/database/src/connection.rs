@@ -119,7 +119,7 @@ mod tests {
     async fn test_database_connection_creation() {
         let temp_dir = TempDir::new().unwrap();
         let db_path = temp_dir.path().join("test.db");
-        let db_url = format!("sqlite:{}", db_path.display());
+        let db_url = format!("sqlite:{}?mode=rwc", db_path.display());
 
         let config = DatabaseConfig {
             url: db_url,

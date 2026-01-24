@@ -7,7 +7,7 @@ use switchboard_auth::Authenticator;
 use switchboard_chats::{
     AttachmentService, ChatService, InviteService, MemberService, MessageService,
 };
-use switchboard_config::AuthConfig;
+use switchboard_config::{AuthConfig, WebSearchConfig};
 use switchboard_database::{
     AttachmentRepository, ChatRepository, InviteRepository, MemberRepository, MessageRepository,
 };
@@ -61,6 +61,8 @@ pub struct GatewayState {
     pub attachment_service: Arc<AttachmentService>,
     /// Optional orchestrator for model listings and provider lookups
     pub orchestrator: Option<Arc<Orchestrator>>,
+    /// Web search configuration
+    web_search_config: Option<WebSearchConfig>,
 }
 
 impl GatewayState {
@@ -70,6 +72,17 @@ impl GatewayState {
         authenticator: Arc<Authenticator>,
         jwt_config: JwtConfig,
         orchestrator: Option<Arc<Orchestrator>>,
+    ) -> Self {
+        Self::with_web_search(pool, authenticator, jwt_config, orchestrator, None)
+    }
+
+    /// Create a new gateway state with web search configuration
+    pub fn with_web_search(
+        pool: SqlitePool,
+        authenticator: Arc<Authenticator>,
+        jwt_config: JwtConfig,
+        orchestrator: Option<Arc<Orchestrator>>,
+        web_search_config: Option<WebSearchConfig>,
     ) -> Self {
         // Initialize user services
         let user_service = Arc::new(UserService::new(pool.clone()));
@@ -98,6 +111,7 @@ impl GatewayState {
             invite_service,
             attachment_service,
             orchestrator,
+            web_search_config,
         }
     }
 
@@ -112,7 +126,13 @@ impl GatewayState {
 
         let authenticator = Arc::new(Authenticator::new(pool.clone(), AuthConfig::default()));
 
-        Ok(Self::new(pool, authenticator, jwt_config, None))
+        Ok(Self::with_web_search(
+            pool,
+            authenticator,
+            jwt_config,
+            None,
+            None,
+        ))
     }
 
     /// Get a user service reference
@@ -168,6 +188,11 @@ impl GatewayState {
     /// Get orchestrator reference if available
     pub fn orchestrator(&self) -> Option<&Orchestrator> {
         self.orchestrator.as_deref()
+    }
+
+    /// Get web search configuration if available
+    pub fn web_search_config(&self) -> Option<&WebSearchConfig> {
+        self.web_search_config.as_ref()
     }
 }
 

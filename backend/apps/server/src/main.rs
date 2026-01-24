@@ -62,11 +62,12 @@ async fn run_server() -> anyhow::Result<()> {
         .context("failed to initialise backend services")?;
 
     let jwt_config = JwtConfig::default();
-    let state = GatewayState::new(
+    let state = GatewayState::with_web_search(
         services.db_pool.clone(),
         Arc::new(services.authenticator.clone()),
         jwt_config,
         Some(services.orchestrator.clone()),
+        Some(config.orchestrator.web_search.clone()),
     );
     let app = build_router(state);
 

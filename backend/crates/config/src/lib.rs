@@ -55,6 +55,68 @@ pub struct OrchestratorConfig {
     pub provider_search_path: Vec<String>,
     #[serde(default)]
     pub openrouter: OpenRouterProviderConfig,
+    #[serde(default)]
+    pub web_search: WebSearchConfig,
+}
+
+/// Configuration for web search grounding.
+///
+/// Supported providers:
+/// - `google`: Google Custom Search API (requires API key and CX)
+/// - `bing`: Bing Web Search API (requires API key)
+/// - `serper`: Serper.dev API (requires API key)
+/// - `searxng`: Self-hosted SearXNG instance (no API key required)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WebSearchConfig {
+    /// Enable web search grounding by default for new chats.
+    #[serde(default)]
+    pub enabled: bool,
+    /// Search provider to use: "google", "bing", "serper", or "searxng".
+    #[serde(default = "WebSearchConfig::default_provider")]
+    pub provider: String,
+    /// API key for the search provider (not required for searxng).
+    #[serde(default)]
+    pub api_key: Option<String>,
+    /// Base URL for the search API (used for searxng or custom endpoints).
+    #[serde(default)]
+    pub base_url: Option<String>,
+    /// Google Custom Search Engine ID (CX) - required for google provider.
+    #[serde(default)]
+    pub google_cx: Option<String>,
+    /// Maximum number of search results to fetch.
+    #[serde(default = "WebSearchConfig::default_max_results")]
+    pub max_results: u32,
+    /// Request timeout in seconds.
+    #[serde(default = "WebSearchConfig::default_timeout")]
+    pub timeout_seconds: u64,
+}
+
+impl WebSearchConfig {
+    fn default_provider() -> String {
+        "google".to_string()
+    }
+
+    const fn default_max_results() -> u32 {
+        5
+    }
+
+    const fn default_timeout() -> u64 {
+        10
+    }
+}
+
+impl Default for WebSearchConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            provider: Self::default_provider(),
+            api_key: None,
+            base_url: None,
+            google_cx: None,
+            max_results: Self::default_max_results(),
+            timeout_seconds: Self::default_timeout(),
+        }
+    }
 }
 
 impl Default for OrchestratorConfig {
@@ -64,6 +126,7 @@ impl Default for OrchestratorConfig {
             default_model: "gpt-4o-mini".to_string(),
             provider_search_path: vec!["providers".to_string()],
             openrouter: OpenRouterProviderConfig::default(),
+            web_search: WebSearchConfig::default(),
         }
     }
 }
@@ -196,6 +259,29 @@ pub fn load() -> anyhow::Result<AppConfig> {
             .set_default("orchestrator.openrouter.title", title)
             .unwrap();
     }
+
+    // Web search defaults
+    builder = builder
+        .set_default(
+            "orchestrator.web_search.enabled",
+            defaults.orchestrator.web_search.enabled,
+        )
+        .unwrap()
+        .set_default(
+            "orchestrator.web_search.provider",
+            defaults.orchestrator.web_search.provider.clone(),
+        )
+        .unwrap()
+        .set_default(
+            "orchestrator.web_search.max_results",
+            i64::from(defaults.orchestrator.web_search.max_results),
+        )
+        .unwrap()
+        .set_default(
+            "orchestrator.web_search.timeout_seconds",
+            i64::try_from(defaults.orchestrator.web_search.timeout_seconds).unwrap_or(i64::MAX),
+        )
+        .unwrap();
 
     builder = builder
         .set_default("database.url", defaults.database.url.clone())

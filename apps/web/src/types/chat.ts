@@ -4,6 +4,12 @@ export interface TokenUsage {
   total_tokens: number;
 }
 
+export interface WebSearchSource {
+  title: string;
+  url: string;
+  snippet: string;
+}
+
 export interface Message {
   id?: string;
   public_id?: string;
@@ -14,6 +20,7 @@ export interface Message {
   model?: string;
   usage?: TokenUsage;
   reasoning?: string[];
+  web_search_sources?: WebSearchSource[];
   message_type?: "text" | "system" | "file";
   thread_id?: string;
   reply_to_id?: string;

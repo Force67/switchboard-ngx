@@ -27,6 +27,7 @@
 pub mod error;
 pub mod middleware;
 pub mod rest;
+pub mod services;
 pub mod state;
 pub mod websocket;
 

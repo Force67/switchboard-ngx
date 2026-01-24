@@ -50,12 +50,11 @@ utoipa-swagger-ui = { workspace = true }
 thiserror = { workspace = true }
 anyhow = { workspace = true }
 
-# HTTP client (if needed for external services)
-reqwest = { workspace = true, optional = true }
+# HTTP client for web search and external services
+reqwest = { workspace = true }
 
 [features]
 default = []
-http-client = ["reqwest"]
 
 [dev-dependencies]
 tokio-test = "0.4"

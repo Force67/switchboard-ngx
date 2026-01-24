@@ -765,6 +765,7 @@ export default function App() {
             timestamp: new Date().toISOString(),
             usage: data.usage,
             reasoning: data.reasoning,
+            web_search_sources: data.web_search_sources,
           };
 
           setChats(prev =>

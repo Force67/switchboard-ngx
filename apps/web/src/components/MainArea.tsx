@@ -281,6 +281,33 @@ export default function MainArea(props: Props) {
                       </ol>
                     </details>
                   )}
+                  {message.web_search_sources && message.web_search_sources.length > 0 && (
+                    <details style="margin-top: 8px;">
+                      <summary style="cursor: pointer; color: var(--text-1);">
+                        <span style="display: inline-flex; align-items: center; gap: 4px;">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="11" cy="11" r="8"/>
+                            <path d="m21 21-4.35-4.35"/>
+                          </svg>
+                          Web Sources ({message.web_search_sources.length})
+                        </span>
+                      </summary>
+                      <ul style="margin-top: 8px; padding-left: 16px; list-style: none;">
+                        <For each={message.web_search_sources}>
+                          {(source) => (
+                            <li style="margin-bottom: 8px; padding: 8px; background: var(--surface-2); border-radius: 6px;">
+                              <a href={source.url} target="_blank" rel="noopener noreferrer" style="color: var(--accent); font-weight: 500; text-decoration: none;">
+                                {source.title}
+                              </a>
+                              <p style="color: var(--text-1); font-size: 0.85em; margin: 4px 0 0 0; line-height: 1.4;">
+                                {source.snippet}
+                              </p>
+                            </li>
+                          )}
+                        </For>
+                      </ul>
+                    </details>
+                  )}
                 </div>
                 <Show when={shouldAnimate()}>
                   <div class="blowing-particles">

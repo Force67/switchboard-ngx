@@ -117,8 +117,8 @@ html, body {
 .content-well {
   flex: 1;
   margin: 24px var(--content-padding);
-  max-width: 960px;
-  width: calc(100% - 2 * var(--content-padding));
+  max-width: min(1400px, calc(100% - 2 * var(--content-padding)));
+  width: 100%;
   align-self: center;
   background: var(--bg-1);
   border-radius: var(--radius-xl);
@@ -132,8 +132,8 @@ html, body {
    ========================================================================== */
 .composer {
   margin: 0 var(--content-padding) 24px;
-  max-width: 960px;
-  width: calc(100% - 2 * var(--content-padding));
+  max-width: min(1400px, calc(100% - 2 * var(--content-padding)));
+  width: 100%;
   align-self: center;
   background: var(--bg-2);
   border: 1px solid var(--hair);

@@ -4,7 +4,7 @@ import TopRightControls from "./TopRightControls";
 import Composer from "./Composer";
 import ModelPickerPanel from "./model-picker/ModelPickerPanel";
 import { ModelMeta } from "./model-picker/models";
-import LatexRenderer from "./LatexRenderer";
+import MarkdownRenderer from "./MarkdownRenderer";
 import GroupChatManager from "./GroupChatManager";
 import type { Chat, Message } from "../types/chat";
 
@@ -266,7 +266,7 @@ export default function MainArea(props: Props) {
                       <span class="pending-label">{modelLabel} is thinking...</span>
                     </div>
                   ) : (
-                    <LatexRenderer content={message.content} />
+                    <MarkdownRenderer content={message.content} />
                   )}
                   {message.usage && (
                     <small style="color: var(--text-1); margin-top: 8px; display: block;">

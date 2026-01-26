@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use tracing::{info, warn};
 
 /// Repository for invite database operations
+#[derive(Clone)]
 pub struct InviteRepository {
     pool: SqlitePool,
 }
@@ -593,6 +594,350 @@ impl InviteRepository {
         Err(ChatError::DatabaseError(
             "Failed to generate unique invite code".to_string(),
         ))
+    }
+
+    /// List invites by chat public ID with optional filtering
+    pub async fn list_by_chat_public(
+        &self,
+        chat_public_id: &str,
+        status_filter: Option<InviteStatus>,
+        limit: Option<i64>,
+        offset: Option<i64>,
+    ) -> ChatResult<Vec<ChatInvite>> {
+        let mut query = String::from(
+            "SELECT i.id, i.public_id, i.chat_id, i.inviter_id, i.invited_email, i.invite_code,
+                    i.status, i.expires_at, i.created_at, i.accepted_at,
+                    c.public_id as chat_public_id, c.title as chat_title,
+                    u.public_id as invited_by_public_id, u.display_name as inviter_display_name, u.avatar_url as inviter_avatar_url
+             FROM chat_invites i
+             LEFT JOIN chats c ON i.chat_id = c.id
+             LEFT JOIN users u ON i.inviter_id = u.id
+             WHERE c.public_id = ?",
+        );
+
+        let mut binds = vec![chat_public_id.to_string()];
+
+        if let Some(ref status) = status_filter {
+            query.push_str(" AND i.status = ?");
+            binds.push(status.to_string());
+        }
+
+        query.push_str(" ORDER BY i.created_at DESC");
+
+        if let Some(limit_val) = limit {
+            query.push_str(" LIMIT ?");
+            binds.push(limit_val.to_string());
+        }
+
+        if let Some(offset_val) = offset {
+            query.push_str(" OFFSET ?");
+            binds.push(offset_val.to_string());
+        }
+
+        let mut sql_query = sqlx::query(&query);
+        for bind in binds {
+            sql_query = sql_query.bind(bind);
+        }
+
+        let rows = sql_query
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|e| ChatError::DatabaseError(e.to_string()))?;
+
+        let invites = rows
+            .into_iter()
+            .map(|row| {
+                let status_str: String = row
+                    .try_get("status")
+                    .map_err(|e| ChatError::DatabaseError(e.to_string()))?;
+
+                Ok(ChatInvite {
+                    id: row
+                        .try_get("id")
+                        .map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                    public_id: row
+                        .try_get("public_id")
+                        .map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                    chat_id: row
+                        .try_get("chat_id")
+                        .map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                    chat_public_id: row
+                        .try_get("chat_public_id")
+                        .unwrap_or("unknown".to_string()),
+                    chat_title: row
+                        .try_get("chat_title")
+                        .unwrap_or("Unknown Chat".to_string()),
+                    inviter_id: row
+                        .try_get("inviter_id")
+                        .map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                    invited_by_public_id: row
+                        .try_get("invited_by_public_id")
+                        .unwrap_or("unknown".to_string()),
+                    inviter_display_name: row.try_get("inviter_display_name").ok(),
+                    inviter_avatar_url: row.try_get("inviter_avatar_url").ok(),
+                    invited_email: row
+                        .try_get("invited_email")
+                        .map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                    invite_code: row
+                        .try_get("invite_code")
+                        .map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                    status: InviteStatus::from(status_str.as_str()),
+                    expires_at: row
+                        .try_get("expires_at")
+                        .map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                    created_at: row
+                        .try_get("created_at")
+                        .map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                    accepted_at: row.try_get("accepted_at").ok(),
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(invites)
+    }
+
+    /// List invites for a user by email with optional filtering
+    pub async fn list_by_user_email(
+        &self,
+        email: &str,
+        status_filter: Option<InviteStatus>,
+        limit: Option<i64>,
+        offset: Option<i64>,
+    ) -> ChatResult<Vec<ChatInvite>> {
+        let mut query = String::from(
+            "SELECT i.id, i.public_id, i.chat_id, i.inviter_id, i.invited_email, i.invite_code,
+                    i.status, i.expires_at, i.created_at, i.accepted_at,
+                    c.public_id as chat_public_id, c.title as chat_title,
+                    u.public_id as invited_by_public_id, u.display_name as inviter_display_name, u.avatar_url as inviter_avatar_url
+             FROM chat_invites i
+             LEFT JOIN chats c ON i.chat_id = c.id
+             LEFT JOIN users u ON i.inviter_id = u.id
+             WHERE i.invited_email = ?",
+        );
+
+        let mut binds = vec![email.to_string()];
+
+        if let Some(ref status) = status_filter {
+            query.push_str(" AND i.status = ?");
+            binds.push(status.to_string());
+        }
+
+        query.push_str(" ORDER BY i.created_at DESC");
+
+        if let Some(limit_val) = limit {
+            query.push_str(" LIMIT ?");
+            binds.push(limit_val.to_string());
+        }
+
+        if let Some(offset_val) = offset {
+            query.push_str(" OFFSET ?");
+            binds.push(offset_val.to_string());
+        }
+
+        let mut sql_query = sqlx::query(&query);
+        for bind in binds {
+            sql_query = sql_query.bind(bind);
+        }
+
+        let rows = sql_query
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|e| ChatError::DatabaseError(e.to_string()))?;
+
+        let invites = rows
+            .into_iter()
+            .map(|row| {
+                let status_str: String = row
+                    .try_get("status")
+                    .map_err(|e| ChatError::DatabaseError(e.to_string()))?;
+
+                Ok(ChatInvite {
+                    id: row
+                        .try_get("id")
+                        .map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                    public_id: row
+                        .try_get("public_id")
+                        .map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                    chat_id: row
+                        .try_get("chat_id")
+                        .map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                    chat_public_id: row
+                        .try_get("chat_public_id")
+                        .unwrap_or("unknown".to_string()),
+                    chat_title: row
+                        .try_get("chat_title")
+                        .unwrap_or("Unknown Chat".to_string()),
+                    inviter_id: row
+                        .try_get("inviter_id")
+                        .map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                    invited_by_public_id: row
+                        .try_get("invited_by_public_id")
+                        .unwrap_or("unknown".to_string()),
+                    inviter_display_name: row.try_get("inviter_display_name").ok(),
+                    inviter_avatar_url: row.try_get("inviter_avatar_url").ok(),
+                    invited_email: row
+                        .try_get("invited_email")
+                        .map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                    invite_code: row
+                        .try_get("invite_code")
+                        .map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                    status: InviteStatus::from(status_str.as_str()),
+                    expires_at: row
+                        .try_get("expires_at")
+                        .map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                    created_at: row
+                        .try_get("created_at")
+                        .map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+                    accepted_at: row.try_get("accepted_at").ok(),
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(invites)
+    }
+
+    /// Delete an invite by ID
+    pub async fn delete_by_id(&self, invite_id: i64) -> ChatResult<()> {
+        let result = sqlx::query("DELETE FROM chat_invites WHERE id = ?")
+            .bind(invite_id)
+            .execute(&self.pool)
+            .await
+            .map_err(|e| ChatError::DatabaseError(e.to_string()))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ChatError::InviteNotFound);
+        }
+
+        info!(invite_id = invite_id, "deleted invite");
+
+        Ok(())
+    }
+
+    /// Accept an invite by ID
+    pub async fn accept_by_id(&self, invite_id: i64, user_id: i64) -> ChatResult<ChatInvite> {
+        // Get invite by ID
+        let row = sqlx::query(
+            "SELECT i.id, i.public_id, i.chat_id, i.inviter_id, i.invited_email, i.invite_code, i.status, i.expires_at, i.created_at, i.accepted_at,
+                    c.public_id as chat_public_id, c.title as chat_title,
+                    u.public_id as invited_by_public_id, u.display_name as inviter_display_name, u.avatar_url as inviter_avatar_url
+             FROM chat_invites i
+             LEFT JOIN chats c ON i.chat_id = c.id
+             LEFT JOIN users u ON i.inviter_id = u.id
+             WHERE i.id = ?"
+        )
+        .bind(invite_id)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| ChatError::DatabaseError(e.to_string()))?
+        .ok_or(ChatError::InviteNotFound)?;
+
+        let status_str: String = row
+            .try_get("status")
+            .map_err(|e| ChatError::DatabaseError(e.to_string()))?;
+
+        let invite = ChatInvite {
+            id: row.try_get("id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+            public_id: row.try_get("public_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+            chat_id: row.try_get("chat_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+            chat_public_id: row.try_get("chat_public_id").unwrap_or("unknown".to_string()),
+            chat_title: row.try_get("chat_title").unwrap_or("Unknown Chat".to_string()),
+            inviter_id: row.try_get("inviter_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+            invited_by_public_id: row.try_get("invited_by_public_id").unwrap_or("unknown".to_string()),
+            inviter_display_name: row.try_get("inviter_display_name").ok(),
+            inviter_avatar_url: row.try_get("inviter_avatar_url").ok(),
+            invited_email: row.try_get("invited_email").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+            invite_code: row.try_get("invite_code").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+            status: InviteStatus::from(status_str.as_str()),
+            expires_at: row.try_get("expires_at").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+            created_at: row.try_get("created_at").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+            accepted_at: row.try_get("accepted_at").ok(),
+        };
+
+        // Check if invite is still pending
+        if invite.status != InviteStatus::Pending {
+            return Err(ChatError::InviteAlreadyUsed);
+        }
+
+        // Check if invite has expired
+        let expiry_time = chrono::DateTime::parse_from_rfc3339(&invite.expires_at)
+            .map_err(|e| ChatError::DatabaseError(e.to_string()))?;
+        if expiry_time < chrono::Utc::now() {
+            return Err(ChatError::InviteExpired);
+        }
+
+        let now = chrono::Utc::now().to_rfc3339();
+
+        sqlx::query("UPDATE chat_invites SET status = 'accepted', accepted_at = ? WHERE id = ?")
+            .bind(&now)
+            .bind(invite_id)
+            .execute(&self.pool)
+            .await
+            .map_err(|e| ChatError::DatabaseError(e.to_string()))?;
+
+        info!(invite_id = invite_id, accepted_by = user_id, "accepted chat invite");
+
+        let mut updated_invite = invite;
+        updated_invite.status = InviteStatus::Accepted;
+        updated_invite.accepted_at = Some(now);
+        Ok(updated_invite)
+    }
+
+    /// Decline an invite by ID
+    pub async fn decline_by_id(&self, invite_id: i64, user_id: i64) -> ChatResult<ChatInvite> {
+        // Get invite by ID
+        let row = sqlx::query(
+            "SELECT i.id, i.public_id, i.chat_id, i.inviter_id, i.invited_email, i.invite_code, i.status, i.expires_at, i.created_at, i.accepted_at,
+                    c.public_id as chat_public_id, c.title as chat_title,
+                    u.public_id as invited_by_public_id, u.display_name as inviter_display_name, u.avatar_url as inviter_avatar_url
+             FROM chat_invites i
+             LEFT JOIN chats c ON i.chat_id = c.id
+             LEFT JOIN users u ON i.inviter_id = u.id
+             WHERE i.id = ?"
+        )
+        .bind(invite_id)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| ChatError::DatabaseError(e.to_string()))?
+        .ok_or(ChatError::InviteNotFound)?;
+
+        let status_str: String = row
+            .try_get("status")
+            .map_err(|e| ChatError::DatabaseError(e.to_string()))?;
+
+        let invite = ChatInvite {
+            id: row.try_get("id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+            public_id: row.try_get("public_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+            chat_id: row.try_get("chat_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+            chat_public_id: row.try_get("chat_public_id").unwrap_or("unknown".to_string()),
+            chat_title: row.try_get("chat_title").unwrap_or("Unknown Chat".to_string()),
+            inviter_id: row.try_get("inviter_id").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+            invited_by_public_id: row.try_get("invited_by_public_id").unwrap_or("unknown".to_string()),
+            inviter_display_name: row.try_get("inviter_display_name").ok(),
+            inviter_avatar_url: row.try_get("inviter_avatar_url").ok(),
+            invited_email: row.try_get("invited_email").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+            invite_code: row.try_get("invite_code").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+            status: InviteStatus::from(status_str.as_str()),
+            expires_at: row.try_get("expires_at").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+            created_at: row.try_get("created_at").map_err(|e| ChatError::DatabaseError(e.to_string()))?,
+            accepted_at: row.try_get("accepted_at").ok(),
+        };
+
+        // Check if invite is still pending
+        if invite.status != InviteStatus::Pending {
+            return Err(ChatError::InviteAlreadyUsed);
+        }
+
+        sqlx::query("UPDATE chat_invites SET status = 'rejected' WHERE id = ?")
+            .bind(invite_id)
+            .execute(&self.pool)
+            .await
+            .map_err(|e| ChatError::DatabaseError(e.to_string()))?;
+
+        info!(invite_id = invite_id, declined_by = user_id, "declined chat invite");
+
+        let mut updated_invite = invite;
+        updated_invite.status = InviteStatus::Rejected;
+        Ok(updated_invite)
     }
 
     /// Count active invites for a chat

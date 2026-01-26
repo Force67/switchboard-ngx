@@ -4,7 +4,7 @@ members = [
   "crates/chats",
   "crates/config",
   "crates/database",
-  "crates/gateway",
+  "crates/backend-api",
   "crates/orchestrator",
   "crates/runtime",
   "crates/users",

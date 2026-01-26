@@ -33,7 +33,12 @@ impl<R> UserService<R>
 where
     R: UserRepo,
 {
-    /// Get a user by ID
+    /// Find a user by ID, returning None if not found
+    pub async fn find_by_id(&self, user_id: i64) -> UserResult<Option<User>> {
+        self.user_repository.find_by_id(user_id).await
+    }
+
+    /// Get a user by ID (returns error if not found)
     pub async fn get_user(&self, user_id: i64) -> UserResult<User> {
         self.user_repository
             .find_by_id(user_id)

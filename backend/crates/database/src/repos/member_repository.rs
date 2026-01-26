@@ -6,6 +6,7 @@ use sqlx::{Row, SqlitePool};
 use tracing::{info, warn};
 
 /// Repository for member database operations
+#[derive(Clone)]
 pub struct MemberRepository {
     pool: SqlitePool,
 }

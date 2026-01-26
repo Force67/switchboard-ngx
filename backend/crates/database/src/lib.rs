@@ -13,11 +13,13 @@ use tracing::{error, info};
 pub mod connection;
 pub mod entities;
 pub mod migrations;
+pub mod permissions;
 pub mod repos;
 pub mod types;
 
 pub use connection::{prepare_database, DatabaseConnection};
 pub use migrations::run_migrations;
+pub use permissions::Permissions;
 
 // Re-export repositories
 pub use repos::{

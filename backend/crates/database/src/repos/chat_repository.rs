@@ -6,6 +6,7 @@ use sqlx::{Row, SqlitePool};
 use tracing::{info, warn};
 
 /// Repository for chat database operations
+#[derive(Clone)]
 pub struct ChatRepository {
     pool: SqlitePool,
 }

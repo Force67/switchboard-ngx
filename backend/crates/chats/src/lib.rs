@@ -1,12 +1,10 @@
 //! # Switchboard Chats Crate
 //!
-//! This crate provides the core business logic for chat functionality in Switchboard.
-//! It contains services, types, and utilities for managing chats, messages, attachments,
-//! and real-time interactions. All entities are now provided by the database crate.
+//! This crate provides types and utilities for chat functionality in Switchboard.
+//! It re-exports database entities and provides event types.
 //!
 //! ## Architecture
 //!
-//! - **Services**: Business logic layer
 //! - **Types**: Request/Response types and events
 //! - **Utils**: Internal utilities
 //! - **Entities**: Imported from database crate
@@ -14,13 +12,9 @@
 //! ## Usage
 //!
 //! ```rust
-//! use switchboard_chats::{ChatService, CreateChatRequest};
-//!
-//! let service = ChatService::new(pool);
-//! let chat = service.create_chat(user_id, request).await?;
+//! use switchboard_chats::{ChatEvent, CreateChatRequest};
 //! ```
 
-pub mod services;
 pub mod types {
     pub mod events;
 }
@@ -38,10 +32,7 @@ pub use switchboard_database::{
 // Re-export sqlx for pool access
 pub use sqlx::SqlitePool;
 
-// Re-export main types for convenience
-pub use services::{
-    AttachmentService, ChatService, CompletionService, InviteService, MemberService, MessageService,
-};
+// Re-export event types
 pub use types::events::ChatEvent;
 
 #[cfg(test)]

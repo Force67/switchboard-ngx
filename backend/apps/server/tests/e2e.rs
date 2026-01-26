@@ -14,8 +14,8 @@ use serde_json::{json, Value};
 use sqlx::SqlitePool;
 use switchboard_backend_runtime::BackendServices;
 use switchboard_config::AppConfig;
-use switchboard_gateway::state::JwtConfig;
-use switchboard_gateway::{build_router, GatewayState};
+use switchboard_backend_api::state::JwtConfig;
+use switchboard_backend_api::{build_router, GatewayState};
 use tempfile::TempDir;
 use tower::ServiceExt;
 

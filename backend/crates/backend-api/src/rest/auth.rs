@@ -17,7 +17,7 @@ use crate::state::GatewayState;
 
 /// Create authentication routes
 pub fn create_auth_routes() -> Router<Arc<GatewayState>> {
-    Router::new()
+    let router = Router::new()
         .route("/auth/github/login", axum::routing::get(github_login))
         .route(
             "/auth/github/callback",
@@ -25,8 +25,13 @@ pub fn create_auth_routes() -> Router<Arc<GatewayState>> {
         )
         .route("/auth/logout", axum::routing::post(logout))
         .route("/auth/me", axum::routing::get(me))
-        // Development endpoint (no auth required)
-        .route("/auth/dev/token", axum::routing::get(dev_token))
+        ;
+
+    // Development endpoint (no auth required).
+    #[cfg(debug_assertions)]
+    let router = router.route("/auth/dev/token", axum::routing::get(dev_token));
+
+    router
 }
 
 #[utoipa::path(

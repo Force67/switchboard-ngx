@@ -37,12 +37,8 @@ pub use state::{create_gateway_state, GatewayState};
 pub use create_router as build_router;
 pub use GatewayState as AppState;
 
-use axum::{
-    http::{header, Method},
-    middleware as axum_middleware, Router,
-};
+use axum::{middleware as axum_middleware, Router};
 use std::sync::Arc;
-use tower_http::cors::{AllowHeaders, AllowOrigin, CorsLayer};
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
@@ -60,29 +56,16 @@ pub fn create_router(state: GatewayState) -> Router {
         .nest("/api/v1", api_routes)
         // WebSocket routes
         .merge(websocket::create_websocket_routes().with_state(arc_state))
-        // CORS middleware
-        .layer(
-            CorsLayer::new()
-                .allow_origin(AllowOrigin::mirror_request())
-                .allow_methods([
-                    Method::GET,
-                    Method::POST,
-                    Method::PUT,
-                    Method::DELETE,
-                    Method::PATCH,
-                ])
-                .allow_headers([
-                    header::ACCEPT,
-                    header::AUTHORIZATION,
-                    header::CONTENT_TYPE,
-                    header::ORIGIN,
-                    header::ACCESS_CONTROL_REQUEST_HEADERS,
-                    header::ACCESS_CONTROL_REQUEST_METHOD,
-                ])
-                .allow_credentials(true),
-        )
         // Logging middleware
         .layer(axum_middleware::from_fn(middleware::logging_middleware));
+
+    // Dev-only CORS: allow all localhost ports to hit the API from a browser.
+    //
+    // Production should generally be same-origin behind the reverse proxy / frontend host.
+    #[cfg(debug_assertions)]
+    {
+        router = router.layer(middleware::create_dev_cors_middleware());
+    }
 
     // Add Swagger UI if in debug mode
     #[cfg(debug_assertions)]

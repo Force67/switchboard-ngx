@@ -59,7 +59,9 @@ pub use attachment::{
     create_attachment, delete_attachment, download_attachment, get_attachment, list_attachments,
     list_message_attachments,
 };
-pub use auth::{dev_token, github_callback, github_login, logout, me};
+pub use auth::{github_callback, github_login, logout, me};
+#[cfg(debug_assertions)]
+pub use auth::dev_token;
 pub use chat::{create_chat, delete_chat, get_chat, list_chats, update_chat};
 pub use invite::{
     create_invite, delete_invite, get_invite, list_invites, list_user_invites, respond_to_invite,

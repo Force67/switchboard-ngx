@@ -7,6 +7,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use std::sync::Arc;
+use tower_http::cors::{AllowHeaders, AllowMethods, AllowOrigin, CorsLayer};
 use tower_http::trace::{DefaultMakeSpan, DefaultOnRequest, DefaultOnResponse, TraceLayer};
 use tracing::Level;
 
@@ -17,10 +18,9 @@ const DEFAULT_ALLOWED_ORIGINS: &[&str] = &["http://localhost:3000", "http://loca
 const ALLOWED_ORIGINS_ENV: &str = "SWITCHBOARD_ALLOWED_ORIGINS";
 const DEV_AUTH_FALLBACK_ENV: &str = "SWITCHBOARD_DEV_AUTH_FALLBACK";
 const PUBLIC_ENDPOINTS: &[&str] = &[
-    "/api/health",
-    "/api/auth/github/login",
-    "/api/auth/github/callback",
-    "/api/auth/dev/token",
+    "/api/v1/health",
+    "/api/v1/auth/github/login",
+    "/api/v1/auth/github/callback",
 ];
 
 /// Authentication middleware that validates JWT tokens
@@ -108,16 +108,34 @@ pub async fn auth_middleware(
 
 /// Check if the endpoint is a development endpoint that doesn't require authentication
 fn is_dev_endpoint(path: &str) -> bool {
-    path.contains("/dev/") || path.starts_with("/swagger-ui") || path == "/api-docs/openapi.json"
+    if !cfg!(debug_assertions) {
+        return false;
+    }
+
+    path.contains("/dev/")
+        || path.starts_with("/swagger-ui")
+        || path == "/api-docs/openapi.json"
+        || path == "/api/v1/auth/dev/token"
 }
 
 fn is_public_endpoint(path: &str) -> bool {
-    PUBLIC_ENDPOINTS.contains(&path)
+    if PUBLIC_ENDPOINTS.contains(&path) {
+        return true;
+    }
+
+    cfg!(debug_assertions) && path == "/api/v1/auth/dev/token"
 }
 
 fn dev_auth_fallback_enabled() -> bool {
     match std::env::var(DEV_AUTH_FALLBACK_ENV) {
-        Ok(val) => val != "false" && val != "0",
+        Ok(val) => {
+            if cfg!(debug_assertions) {
+                val != "false" && val != "0"
+            } else {
+                // In production builds, require an explicit true/1 to avoid accidental enablement.
+                val == "true" || val == "1"
+            }
+        }
         Err(_) => cfg!(debug_assertions),
     }
 }
@@ -204,7 +222,9 @@ pub async fn logging_middleware(
     next: Next,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     let method = request.method().clone();
-    let uri = request.uri().clone();
+    // Avoid logging query strings since we accept auth tokens via query params
+    // (notably for WebSocket authentication).
+    let path = request.uri().path().to_string();
 
     let start = std::time::Instant::now();
     let response = next.run(request).await;
@@ -212,7 +232,7 @@ pub async fn logging_middleware(
 
     tracing::info!(
         method = %method,
-        uri = %uri,
+        path = %path,
         status = %response.status(),
         duration_ms = duration.as_millis(),
         "Request completed"
@@ -288,16 +308,52 @@ pub fn create_cors_middleware() -> tower_http::cors::CorsLayer {
         .allow_credentials(true)
 }
 
+/// Dev-only CORS that allows any `localhost` port to access the API from a browser.
+///
+/// This is intentionally only compiled for debug builds.
+#[cfg(debug_assertions)]
+pub fn create_dev_cors_middleware() -> CorsLayer {
+    CorsLayer::new()
+        .allow_origin(AllowOrigin::predicate(|origin, _parts| {
+            let Ok(origin_str) = origin.to_str() else {
+                return false;
+            };
+
+            // Allow typical localhost variants with any port.
+            is_localhost_origin(origin_str)
+        }))
+        .allow_methods(AllowMethods::any())
+        .allow_headers(AllowHeaders::any())
+        .allow_credentials(true)
+}
+
+#[cfg(debug_assertions)]
+fn is_localhost_origin(origin: &str) -> bool {
+    fn host_matches(origin: &str, host: &str) -> bool {
+        let Some(rest) = origin.strip_prefix("http://") else {
+            return false;
+        };
+        let Some(after_host) = rest.strip_prefix(host) else {
+            return false;
+        };
+        after_host.is_empty() || after_host.starts_with(':')
+    }
+
+    host_matches(origin, "localhost")
+        || host_matches(origin, "127.0.0.1")
+        || host_matches(origin, "[::1]")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn test_is_dev_endpoint() {
-        assert!(is_dev_endpoint("/api/auth/dev/token"));
+        assert!(is_dev_endpoint("/api/v1/auth/dev/token"));
         assert!(is_dev_endpoint("/swagger-ui"));
         assert!(is_dev_endpoint("/api-docs/openapi.json"));
-        assert!(!is_dev_endpoint("/api/auth/me"));
-        assert!(!is_dev_endpoint("/api/chats"));
+        assert!(!is_dev_endpoint("/api/v1/auth/me"));
+        assert!(!is_dev_endpoint("/api/v1/chats"));
     }
 }

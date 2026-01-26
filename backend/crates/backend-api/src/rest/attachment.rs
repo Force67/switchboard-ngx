@@ -3,7 +3,7 @@
 use axum::{
     body::Body,
     extract::{Extension, Path, Query, Request, State},
-    http::{header, StatusCode},
+    http::{header, HeaderValue, StatusCode},
     response::{IntoResponse, Response},
     Json, Router,
 };
@@ -13,6 +13,10 @@ use crate::error::{GatewayError, GatewayResult};
 use crate::middleware::extract_user_id;
 use crate::rest::models::{AttachmentResponse, CreateAttachmentRequest, ListAttachmentsQuery};
 use crate::state::GatewayState;
+
+const MAX_ATTACHMENT_BYTES: i64 = 20 * 1024 * 1024;
+const MAX_ATTACHMENT_B64_LEN: usize = 28 * 1024 * 1024;
+const MAX_ATTACHMENT_NAME_LEN: usize = 255;
 
 /// Create attachment routes
 pub fn create_attachment_routes() -> Router<Arc<GatewayState>> {
@@ -153,6 +157,27 @@ pub async fn create_attachment(
     Extension(user_id): Extension<i64>,
     Json(payload): Json<CreateAttachmentRequest>,
 ) -> GatewayResult<impl IntoResponse> {
+    if payload.file_size <= 0 || payload.file_size > MAX_ATTACHMENT_BYTES {
+        return Err(GatewayError::InvalidRequest(format!(
+            "invalid file_size (max {} bytes)",
+            MAX_ATTACHMENT_BYTES
+        )));
+    }
+
+    if payload.file_name.trim().is_empty() || payload.file_name.len() > MAX_ATTACHMENT_NAME_LEN {
+        return Err(GatewayError::InvalidRequest(format!(
+            "invalid file_name (max {} chars)",
+            MAX_ATTACHMENT_NAME_LEN
+        )));
+    }
+
+    if payload.file_data.trim().is_empty() || payload.file_data.len() > MAX_ATTACHMENT_B64_LEN {
+        return Err(GatewayError::InvalidRequest(format!(
+            "invalid file_data (max {} chars)",
+            MAX_ATTACHMENT_B64_LEN
+        )));
+    }
+
     // Check chat membership
     state
         .permissions()
@@ -309,18 +334,54 @@ pub async fn download_attachment(
     }
 
     // In a real implementation, this would fetch the file from storage
-    // For now, we'll return a redirect to the file URL
+    // For now, we return a redirect to the file URL, but restrict it to http(s) to avoid
+    // open redirects to unsafe schemes.
+    let location = attachment.file_url.trim();
+    if !(location.starts_with("https://") || location.starts_with("http://")) {
+        return Err(GatewayError::ServiceUnavailable);
+    }
+
+    let location = HeaderValue::from_str(location)
+        .map_err(|_| GatewayError::ServiceUnavailable)?;
+
+    let content_disposition = build_content_disposition(&attachment.file_name);
+
     let response = Response::builder()
         .status(StatusCode::FOUND)
-        .header(header::LOCATION, &attachment.file_url)
-        .header(
-            header::CONTENT_DISPOSITION,
-            format!("attachment; filename=\"{}\"", attachment.file_name),
-        )
+        .header(header::LOCATION, location)
+        .header(header::CONTENT_DISPOSITION, content_disposition)
         .body(Body::empty())
         .map_err(|e| GatewayError::InternalError(format!("Failed to build response: {}", e)))?;
 
     Ok(response)
+}
+
+fn build_content_disposition(file_name: &str) -> HeaderValue {
+    let file_name = sanitize_filename(file_name);
+    let value = format!("attachment; filename=\"{}\"", file_name);
+    HeaderValue::from_str(&value).unwrap_or_else(|_| HeaderValue::from_static("attachment"))
+}
+
+fn sanitize_filename(file_name: &str) -> String {
+    let trimmed = file_name.trim();
+    let mut out = String::with_capacity(trimmed.len().min(128));
+
+    for ch in trimmed.chars().take(128) {
+        match ch {
+            // Prevent header injection and quoting issues.
+            '\r' | '\n' | '"' | '\\' => out.push('_'),
+            // Strip other ASCII control chars.
+            ch if ch.is_ascii_control() => out.push('_'),
+            ch => out.push(ch),
+        }
+    }
+
+    let out = out.trim();
+    if out.is_empty() {
+        "attachment".to_string()
+    } else {
+        out.to_string()
+    }
 }
 
 #[utoipa::path(

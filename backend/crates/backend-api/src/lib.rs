@@ -37,7 +37,7 @@ pub use state::{create_gateway_state, GatewayState};
 pub use create_router as build_router;
 pub use GatewayState as AppState;
 
-use axum::{middleware as axum_middleware, Router};
+use axum::{extract::DefaultBodyLimit, middleware as axum_middleware, Router};
 use std::sync::Arc;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
@@ -52,6 +52,8 @@ pub fn create_router(state: GatewayState) -> Router {
         ))
         .with_state(arc_state.clone());
     let mut router = Router::new()
+        // Reduce DoS risk from unbounded request bodies (multipart uploads, large JSON, etc.).
+        .layer(DefaultBodyLimit::max(25 * 1024 * 1024))
         // REST API routes with versioning
         .nest("/api/v1", api_routes)
         // WebSocket routes

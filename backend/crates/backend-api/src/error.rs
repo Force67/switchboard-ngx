@@ -6,7 +6,6 @@ use axum::{
     Json,
 };
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use thiserror::Error;
 use switchboard_orchestrator::OrchestratorError;
 use utoipa::ToSchema;
@@ -72,12 +71,35 @@ impl GatewayError {
 impl IntoResponse for GatewayError {
     fn into_response(self) -> Response {
         let status = self.status_code();
-        let error_response = json!({
-            "error": status.as_str(),
-            "message": self.to_string(),
-        });
+        let message = if cfg!(debug_assertions) {
+            self.to_string()
+        } else {
+            self.public_message()
+        };
+
+        let error_response = ErrorResponse {
+            error: status.as_str().to_string(),
+            message,
+        };
 
         (status, Json(error_response)).into_response()
+    }
+}
+
+impl GatewayError {
+    fn public_message(&self) -> String {
+        match self {
+            GatewayError::AuthenticationFailed(_) => "Authentication failed".to_string(),
+            GatewayError::AuthorizationFailed(_) => "Authorization failed".to_string(),
+            GatewayError::InvalidRequest(message) => message.clone(),
+            GatewayError::NotFound(message) => message.clone(),
+            GatewayError::RateLimitExceeded => "Rate limit exceeded".to_string(),
+            GatewayError::ServiceUnavailable => "Service unavailable".to_string(),
+            GatewayError::InternalError(_)
+            | GatewayError::DatabaseError(_)
+            | GatewayError::ServiceError(_)
+            | GatewayError::WebSocketError(_) => "Internal server error".to_string(),
+        }
     }
 }
 

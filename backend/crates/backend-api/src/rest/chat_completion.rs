@@ -18,6 +18,11 @@ use crate::services::{
 };
 use crate::state::GatewayState;
 
+const MAX_PROMPT_CHARS: usize = 32_000;
+const MAX_SYSTEM_PROMPT_CHARS: usize = 16_000;
+const MAX_IMAGES: usize = 4;
+const MAX_IMAGE_BYTES: usize = 5 * 1024 * 1024;
+
 /// Routes for simple chat completion against the orchestrator.
 pub fn create_chat_completion_routes() -> Router<Arc<GatewayState>> {
     Router::new().route("/chat", post(chat_completion))
@@ -54,6 +59,12 @@ async fn parse_multipart(mut multipart: Multipart) -> GatewayResult<ParsedChatRe
                     .text()
                     .await
                     .map_err(|_| GatewayError::InvalidRequest("invalid prompt".to_string()))?;
+                if text.chars().count() > MAX_PROMPT_CHARS {
+                    return Err(GatewayError::InvalidRequest(format!(
+                        "prompt too large (max {} chars)",
+                        MAX_PROMPT_CHARS
+                    )));
+                }
                 prompt = Some(text);
             }
             "model" => {
@@ -68,6 +79,18 @@ async fn parse_multipart(mut multipart: Multipart) -> GatewayResult<ParsedChatRe
                     .bytes()
                     .await
                     .map_err(|_| GatewayError::InvalidRequest("invalid image".to_string()))?;
+                if images.len() >= MAX_IMAGES {
+                    return Err(GatewayError::InvalidRequest(format!(
+                        "too many images (max {})",
+                        MAX_IMAGES
+                    )));
+                }
+                if data.len() > MAX_IMAGE_BYTES {
+                    return Err(GatewayError::InvalidRequest(format!(
+                        "image too large (max {} bytes)",
+                        MAX_IMAGE_BYTES
+                    )));
+                }
                 images.push(data);
             }
             "web_search" => {
@@ -97,6 +120,12 @@ async fn parse_multipart(mut multipart: Multipart) -> GatewayResult<ParsedChatRe
                     .await
                     .map_err(|_| GatewayError::InvalidRequest("invalid system_prompt".to_string()))?;
                 if !text.trim().is_empty() {
+                    if text.chars().count() > MAX_SYSTEM_PROMPT_CHARS {
+                        return Err(GatewayError::InvalidRequest(format!(
+                            "system_prompt too large (max {} chars)",
+                            MAX_SYSTEM_PROMPT_CHARS
+                        )));
+                    }
                     system_prompt = Some(text);
                 }
             }

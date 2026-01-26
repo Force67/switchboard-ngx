@@ -48,18 +48,25 @@ pub async fn auth_middleware(
             }
         });
 
-    // Check for token in query parameters (for WebSocket connections)
-    let query_token = request.uri().query().and_then(|query| {
-        urlencoding::decode(query).ok().and_then(|decoded| {
-            decoded.split('&').find_map(|pair| {
-                let mut parts = pair.splitn(2, '=');
-                match (parts.next(), parts.next()) {
-                    (Some("token"), Some(value)) => Some(value.to_string()),
-                    _ => None,
-                }
+    // Only accept token via query parameters for WebSocket handshakes.
+    //
+    // Using query tokens on normal HTTP routes increases accidental leakage risk (logs,
+    // referers, analytics), and browsers can set Authorization headers for XHR/fetch.
+    let query_token = if path.starts_with("/ws/") || path == "/ws" {
+        request.uri().query().and_then(|query| {
+            urlencoding::decode(query).ok().and_then(|decoded| {
+                decoded.split('&').find_map(|pair| {
+                    let mut parts = pair.splitn(2, '=');
+                    match (parts.next(), parts.next()) {
+                        (Some("token"), Some(value)) => Some(value.to_string()),
+                        _ => None,
+                    }
+                })
             })
         })
-    });
+    } else {
+        None
+    };
 
     let token = auth_header.or(query_token.as_deref());
 

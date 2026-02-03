@@ -51,7 +51,7 @@ export default function FolderNode(props: Props) {
 
   const toggleCollapsed = (e?: Event) => {
     if (e) e.stopPropagation();
-    props.actions.setCollapsed(props.folder.id, !isCollapsed());
+    props.actions.setCollapsed(props.folder.public_id, !isCollapsed());
   };
 
   const getContextMenuItems = () => {
@@ -60,7 +60,7 @@ export default function FolderNode(props: Props) {
     items.push({
       label: "New chat here",
       action: () => {
-        props.onNewChat(props.folder.id);
+        props.onNewChat(props.folder.public_id);
       },
       icon: "M0 2a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V2zm15 0a1 1 0 0 0-1-1H2a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V2zM8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4z"
     });
@@ -68,7 +68,7 @@ export default function FolderNode(props: Props) {
     items.push({
       label: "New folder here",
       action: () => {
-        props.actions.createFolder(props.folder.id);
+        props.actions.createFolder(props.folder.public_id);
       },
       icon: "M0 2a2 2 0 0 1 2-2h5.5L8 2.5H14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V2zm15 3.5H1v10.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V5.5zM4 1a1 1 0 0 0-1 1v2.5H2V2a2 2 0 0 1 2-2h5.5L10 2.5H14a1 1 0 0 1 1 1v1h-1V4H9.5L8 2.5H4a1 1 0 0 0-1 1zM8 7a.5.5 0 0 1 .5.5v2h2a.5.5 0 0 1 0 1h-2v2a.5.5 0 0 1-1 0v-2h-2a.5.5 0 0 1 0-1h2v-2A.5.5 0 0 1 8 7z"
     });
@@ -121,9 +121,9 @@ export default function FolderNode(props: Props) {
           };
 
           if (isCollapsed()) {
-            expandAll(props.folder.id);
+            expandAll(props.folder.public_id);
           } else {
-            collapseAll(props.folder.id);
+            collapseAll(props.folder.public_id);
           }
         },
         icon: isCollapsed() ? "M3 8a5 5 0 0 1 2.687-4.354L3.5 3.5 4.5 2.5l3 3A5 5 0 1 1 3 13.5L2 12.5A4 4 0 1 0 3 8z" : "M3 8a5 5 0 0 0 2.687 4.354L3.5 12.5 4.5 13.5l3-3A5 5 0 1 0 3 2.5L2 3.5A4 4 0 1 1 3 8z"
@@ -135,7 +135,7 @@ export default function FolderNode(props: Props) {
     items.push({
       label: "Delete…",
       action: () => {
-        const subfolderCount = (props.subfolderOrder[props.folder.id] || []).length;
+        const subfolderCount = (props.subfolderOrder[props.folder.public_id] || []).length;
         const chatCount = props.chats.length;
         const totalItems = subfolderCount + chatCount;
 
@@ -145,7 +145,7 @@ export default function FolderNode(props: Props) {
         }
 
         if (confirm(message)) {
-          props.onDeleteFolder(props.folder.id);
+          props.onDeleteFolder(props.folder.public_id);
         }
       },
       icon: "M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"
@@ -158,7 +158,7 @@ export default function FolderNode(props: Props) {
     if (e.key === "Enter") {
       const newName = editValue().trim();
       if (newName && newName !== props.folder.name) {
-        props.actions.renameFolder(props.folder.id, newName);
+        props.actions.renameFolder(props.folder.public_id, newName);
       }
       setIsEditing(false);
     } else if (e.key === "Escape") {
@@ -178,11 +178,11 @@ export default function FolderNode(props: Props) {
       toggleCollapsed(e);
     } else if (e.key === "ArrowRight") {
       if (isCollapsed()) {
-        props.actions.setCollapsed(props.folder.id, false);
+        props.actions.setCollapsed(props.folder.public_id, false);
       }
     } else if (e.key === "ArrowLeft") {
       if (!isCollapsed()) {
-        props.actions.setCollapsed(props.folder.id, true);
+        props.actions.setCollapsed(props.folder.public_id, true);
       }
     } else if (e.key === "F2") {
       e.preventDefault();
@@ -207,7 +207,7 @@ export default function FolderNode(props: Props) {
         role="treeitem"
         aria-expanded={!isCollapsed()}
         aria-selected={props.isSelected}
-        data-id={props.folder.id}
+        data-id={props.folder.public_id}
         data-folder-id={props.folder.parentId || ""}
       >
         <div class="caret" onClick={toggleCollapsed}>
@@ -251,7 +251,7 @@ export default function FolderNode(props: Props) {
           <div>
             <For each={props.subfolders}>
               {(subfolder) => {
-                const subSubfolders = props.subfolderOrder[subfolder.id] || [];
+                const subSubfolders = props.subfolderOrder[subfolder.public_id] || [];
                 return (
                   <FolderNode
                     folder={subfolder}
@@ -259,7 +259,7 @@ export default function FolderNode(props: Props) {
                     subfolders={subSubfolders
                       .map(id => props.folders[id])
                       .filter(Boolean)}
-                    chats={props.allChats.filter(chat => chat.folderId === subfolder.id)}
+                    chats={props.allChats.filter(chat => chat.folder_id === subfolder.public_id)}
                     isSelected={false} // TODO: Implement proper selection
                     currentChatId={props.currentChatId}
                     onSelect={() => {}}
@@ -282,9 +282,9 @@ export default function FolderNode(props: Props) {
               {(chat) => (
                 <ChatRow
                   chat={chat}
-                  isSelected={props.currentChatId === chat.id}
+                  isSelected={props.currentChatId === chat.public_id}
                   depth={props.depth === 1 ? 2 : 2}
-              onSelect={() => props.onSelectChat(chat.id)}
+              onSelect={() => props.onSelectChat(chat.public_id)}
               actions={props.actions}
               folders={props.folders}
               folderOrder={props.folderOrder}
@@ -314,7 +314,7 @@ export default function FolderNode(props: Props) {
           currentFolderId={props.folder.parentId}
           position={movePopover()!}
           onSelect={(folderId) => {
-            props.actions.moveFolder(props.folder.id, { parentId: folderId });
+            props.actions.moveFolder(props.folder.public_id, { parentId: folderId });
           }}
           onClose={() => setMovePopover(null)}
         />
@@ -325,7 +325,7 @@ export default function FolderNode(props: Props) {
           value={props.folder.color}
           position={colorPicker()!}
           onChange={(color) => {
-            props.actions.setFolderColor(props.folder.id, color);
+            props.actions.setFolderColor(props.folder.public_id, color);
             setColorPicker(null);
           }}
           onClose={() => setColorPicker(null)}

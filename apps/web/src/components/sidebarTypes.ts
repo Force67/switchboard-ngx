@@ -1,45 +1,26 @@
-import type {
-  Chat as BaseChat,
-  Message as BaseMessage,
-  TokenUsage as BaseTokenUsage,
-  Folder as BaseFolder,
-  User,
-  ChatMember,
-  ChatInvite,
-  Reaction,
-  MessageEdit,
-  MessageDeletion,
-  MessageAttachment,
-  Notification,
-  Permission,
-  Session,
-  UserIdentity,
-} from "../types/chat";
-import type { ApiChat } from "../api";
+// Re-export types for sidebar components
+import type { Folder as GeneratedFolder } from "../generated/folders";
+import type { LocalMessage, LocalChat, TokenUsage } from "../types/chat";
 
 export type ID = string;
 
-export type Chat = BaseChat;
-export type Message = BaseMessage;
-export type TokenUsage = BaseTokenUsage;
-export type Folder = Omit<BaseFolder, 'parent_id'> & {
-  parentId?: ID;            // undefined => top-level
-  // derived: depth = parentId ? 2 : 1
-  collapsed?: boolean;      // UI state
-};
+// Chat type for sidebar - uses LocalChat with parsed messages
+export type Chat = LocalChat;
 
-// Export all new types
-export type User = User;
-export type ChatMember = ChatMember;
-export type ChatInvite = ChatInvite;
-export type Reaction = Reaction;
-export type MessageEdit = MessageEdit;
-export type MessageDeletion = MessageDeletion;
-export type MessageAttachment = MessageAttachment;
-export type Notification = Notification;
-export type Permission = Permission;
-export type Session = Session;
-export type UserIdentity = UserIdentity;
+// Message type - use LocalMessage for streaming support
+export type Message = LocalMessage;
+
+// Re-export TokenUsage for streaming
+export type { TokenUsage };
+
+// LocalMessage for chat state with streaming fields
+export type { LocalMessage };
+
+// Folder with UI-specific properties
+export type Folder = GeneratedFolder & {
+  parentId?: ID;         // Alias for parent_id for UI convenience
+  collapsed?: boolean;   // UI state
+};
 
 export type SidebarState = {
   folders: Record<ID, Folder>;
@@ -64,7 +45,7 @@ export type Actions = {
   renameFolder(id: ID, name: string): Promise<void>;
   setFolderColor(id: ID, color: string): Promise<void>;
   deleteFolder(id: ID, mode: "move-up"|"delete-all"): Promise<void>;
-  moveChat(id: ID, target: { folderId?: ID; index?: number }): Promise<ApiChat | void>;
+  moveChat(id: ID, target: { folderId?: ID; index?: number }): Promise<Chat | void>;
   moveFolder(id: ID, target: { parentId?: ID; index?: number }): void;
   setCollapsed(id: ID, v: boolean): Promise<void>;
   startKeyboardDrag(ref: RowRef): void;

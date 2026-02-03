@@ -22,6 +22,7 @@
 //! ```
 
 pub mod error;
+pub mod generated;
 pub mod middleware;
 pub mod rest;
 pub mod services;
@@ -75,54 +76,65 @@ pub fn create_router(state: GatewayState) -> Router {
         #[derive(OpenApi)]
         #[openapi(
             paths(
-                rest::auth::github_login,
-                rest::auth::github_callback,
-                rest::auth::dev_token,
-                rest::auth::logout,
-                rest::auth::me,
-                rest::chat::list_chats,
-                rest::chat::create_chat,
-                rest::chat::get_chat,
-                rest::chat::update_chat,
-                rest::chat::delete_chat,
-                rest::message::list_messages,
-                rest::message::create_message,
-                rest::message::get_message,
-                rest::message::update_message,
-                rest::message::delete_message,
-                rest::invite::list_invites,
-                rest::invite::list_user_invites,
-                rest::invite::create_invite,
-                rest::invite::get_invite,
-                rest::invite::respond_to_invite,
-                rest::invite::delete_invite,
-                rest::member::list_members,
-                rest::member::get_member,
-                rest::member::update_member_role,
-                rest::member::remove_member,
-                rest::member::leave_chat,
-                rest::attachment::list_attachments,
-                rest::attachment::list_message_attachments,
-                rest::attachment::create_attachment,
-                rest::attachment::get_attachment,
-                rest::attachment::download_attachment,
-                rest::attachment::delete_attachment,
-                rest::model::list_models,
-                rest::notifications::get_notifications,
-                rest::notifications::get_unread_count,
-                rest::notifications::mark_notification_read,
-                rest::notifications::mark_all_read,
-                rest::notifications::delete_notification,
-                rest::permissions::get_user_permissions,
-                rest::permissions::get_resource_permissions,
-                rest::permissions::create_permission,
-                rest::permissions::delete_permission,
-                rest::folders::list_folders,
-                rest::folders::create_folder,
-                rest::folders::get_folder,
-                rest::folders::update_folder,
-                rest::folders::delete_folder,
-                rest::health::health_check,
+                // Auth
+                generated::rest::auth::github_login,
+                generated::rest::auth::github_callback,
+                rest::dev::dev_token,
+                generated::rest::auth::logout,
+                generated::rest::auth::me,
+                // Chats
+                generated::rest::chats::list_chats,
+                generated::rest::chats::create_chat,
+                generated::rest::chats::get_chat,
+                generated::rest::chats::update_chat,
+                generated::rest::chats::delete_chat,
+                // Messages
+                generated::rest::messages::list_messages,
+                generated::rest::messages::create_message,
+                generated::rest::messages::get_message,
+                generated::rest::messages::update_message,
+                generated::rest::messages::delete_message,
+                // Invites
+                generated::rest::invites::list_invites,
+                generated::rest::invites::list_user_invites,
+                generated::rest::invites::create_invite,
+                generated::rest::invites::get_invite,
+                generated::rest::invites::respond_to_invite,
+                generated::rest::invites::delete_invite,
+                // Members
+                generated::rest::members::list_members,
+                generated::rest::members::get_member,
+                generated::rest::members::update_member_role,
+                generated::rest::members::remove_member,
+                generated::rest::members::leave_chat,
+                // Attachments
+                generated::rest::attachments::list_attachments,
+                generated::rest::attachments::list_message_attachments,
+                generated::rest::attachments::create_attachment,
+                generated::rest::attachments::get_attachment,
+                generated::rest::attachments::delete_attachment,
+                // Models
+                generated::rest::models::list_models,
+                // Notifications
+                generated::rest::notifications::get_notifications,
+                generated::rest::notifications::get_unread_count,
+                generated::rest::notifications::mark_notification_read,
+                generated::rest::notifications::mark_all_read,
+                generated::rest::notifications::delete_notification,
+                // Permissions
+                generated::rest::permissions::get_user_permissions,
+                generated::rest::permissions::get_resource_permissions,
+                generated::rest::permissions::create_permission,
+                generated::rest::permissions::delete_permission,
+                // Folders
+                generated::rest::folders::list_folders,
+                generated::rest::folders::create_folder,
+                generated::rest::folders::get_folder,
+                generated::rest::folders::update_folder,
+                generated::rest::folders::delete_folder,
+                // Health
+                generated::rest::health::health_check,
+                // Chat completion (non-generated)
                 rest::chat_completion::chat_completion,
             ),
             components(

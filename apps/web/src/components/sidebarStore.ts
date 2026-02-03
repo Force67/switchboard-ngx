@@ -1,6 +1,9 @@
 import { createSignal } from "solid-js";
 import type { SidebarState, Actions, ID, Folder, Chat, Message } from "./sidebarTypes";
-import { apiService, ApiFolder, ApiChat } from "../api";
+import { apiService } from "../api";
+import type { Folder as ApiFolder } from "../generated/folders";
+import type { ChatResponse as ApiChat } from "../generated/chats";
+import { toLocalChat, parseMessages } from "../utils/chatTransforms";
 
 const getInitialState = (): SidebarState => ({
   folders: {},
@@ -8,12 +11,13 @@ const getInitialState = (): SidebarState => ({
   subfolderOrder: {},
   chatOrderRoot: [],
   chatOrderByFolder: {},
-  selection: null,
+  selection: undefined,
   drag: null,
 });
 
 // Convert API folder to frontend folder
 const apiFolderToFolder = (apiFolder: ApiFolder, apiFolders: ApiFolder[] = []): Folder => {
+  // Resolve parent_id (number) to parentId (string public_id) for UI use
   let parentId: string | undefined;
   if (apiFolder.parent_id) {
     const parentFolder = apiFolders.find(f => f.id === apiFolder.parent_id);
@@ -21,42 +25,15 @@ const apiFolderToFolder = (apiFolder: ApiFolder, apiFolders: ApiFolder[] = []): 
   }
 
   return {
-    id: apiFolder.public_id,
-    public_id: apiFolder.public_id,
-    name: apiFolder.name,
-    color: apiFolder.color,
+    ...apiFolder,
     parentId,
-    collapsed: apiFolder.collapsed,
+    // collapsed is already in apiFolder
   };
 };
 
-// Convert API chat to frontend chat
-const apiChatToChat = (apiChat: ApiChat, apiFolders: ApiFolder[]): Chat => {
-  let messages: Message[] = [];
-  try {
-    const rawMessages = apiChat.messages ?? "[]";
-    messages = JSON.parse(rawMessages) as Message[];
-  } catch (e) {
-    console.error("Failed to parse chat messages", e);
-  }
-
-  let folderId: string | undefined;
-  if (typeof apiChat.folder_id === "string") {
-    folderId = apiChat.folder_id;
-  } else if (typeof apiChat.folder_id === "number") {
-    const folder = apiFolders.find(f => f.id === apiChat.folder_id);
-    folderId = folder?.public_id;
-  }
-
-  return {
-    id: apiChat.public_id,
-    public_id: apiChat.public_id,
-    title: apiChat.title,
-    messages,
-    createdAt: new Date(apiChat.created_at),
-    folderId,
-    updatedAt: apiChat.updated_at,
-  };
+// Convert API chat to frontend chat (delegate to shared transform)
+const apiChatToChat = (apiChat: ApiChat, _apiFolders: ApiFolder[]): Chat => {
+  return toLocalChat(apiChat);
 };
 
 type SidebarBootstrapData = { folders: ApiFolder[]; chats: ApiChat[] };
@@ -122,7 +99,7 @@ async function initializeFromAPI(token: string): Promise<SidebarBootstrapData> {
       subfolderOrder,
       chatOrderRoot,
       chatOrderByFolder,
-      selection: null,
+      selection: undefined,
       drag: null,
     });
     return { folders: apiFolders, chats: apiChats };

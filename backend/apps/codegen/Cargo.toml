@@ -1,0 +1,12 @@
+[package]
+name = "switchboard-codegen"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+crudder-parser = { git = "https://github.com/Force67/crudder", rev = "5d4e571e80c59eb915c8337a033c289b9ad33d4c" }
+crudder-lua = { git = "https://github.com/Force67/crudder", rev = "5d4e571e80c59eb915c8337a033c289b9ad33d4c" }
+

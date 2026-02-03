@@ -1,23 +1,11 @@
 import { createSignal, createEffect, For, Show } from "solid-js";
 import { apiService } from "../api";
+import type { MemberResponse } from "../generated/members";
+import type { InviteResponse } from "../generated/invites";
 
-interface ChatMember {
-  id: number;
-  chat_id: number;
-  user_id: number;
-  role: string;
-  joined_at: string;
-}
-
-interface ChatInvite {
-  id: number;
-  chat_id: number;
-  inviter_id: number;
-  invitee_email: string;
-  status: string;
-  created_at: string;
-  updated_at: string;
-}
+// Use generated types from API
+type ChatMember = MemberResponse;
+type ChatInvite = InviteResponse;
 
 interface Props {
   chatId: string;
@@ -68,7 +56,7 @@ export default function GroupChatManager(props: Props) {
     }
   };
 
-  const handleAcceptInvite = async (inviteId: number) => {
+  const handleAcceptInvite = async (inviteId: string) => {
     try {
       setLoading(true);
       await apiService.acceptInvite(props.session.token, inviteId);
@@ -80,7 +68,7 @@ export default function GroupChatManager(props: Props) {
     }
   };
 
-  const handleRejectInvite = async (inviteId: number) => {
+  const handleRejectInvite = async (inviteId: string) => {
     try {
       setLoading(true);
       await apiService.rejectInvite(props.session.token, inviteId);
@@ -92,10 +80,10 @@ export default function GroupChatManager(props: Props) {
     }
   };
 
-  const handleUpdateRole = async (memberUserId: number, newRole: string) => {
+  const handleUpdateRole = async (memberId: string, newRole: string) => {
     try {
       setLoading(true);
-      await apiService.updateMemberRole(props.session.token, props.chatId, memberUserId, { role: newRole });
+      await apiService.updateMemberRole(props.session.token, props.chatId, memberId, { role: newRole });
       await loadData();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update role");
@@ -104,12 +92,12 @@ export default function GroupChatManager(props: Props) {
     }
   };
 
-  const handleRemoveMember = async (memberUserId: number) => {
+  const handleRemoveMember = async (memberId: string) => {
     if (!confirm("Are you sure you want to remove this member?")) return;
 
     try {
       setLoading(true);
-      await apiService.removeMember(props.session.token, props.chatId, memberUserId);
+      await apiService.removeMember(props.session.token, props.chatId, memberId);
       await loadData();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to remove member");
@@ -220,8 +208,8 @@ export default function GroupChatManager(props: Props) {
                 }}>
                   <div>
                     <div style={{ "font-weight": "bold", color: "var(--text-0)" }}>
-                      User {member.user_id}
-                      {member.user_id.toString() === props.session.user.id && " (You)"}
+                      {member.user?.display_name || `User ${member.user_id}`}
+                      {member.user_id === props.session.user.id && " (You)"}
                     </div>
                     <div style={{ "font-size": "12px", color: "var(--text-1)" }}>
                       {member.role} • Joined {new Date(member.joined_at).toLocaleDateString()}
@@ -230,8 +218,8 @@ export default function GroupChatManager(props: Props) {
                   <div style={{ display: "flex", gap: "8px" }}>
                     <select
                       value={member.role}
-                      onChange={(e) => handleUpdateRole(member.user_id, e.currentTarget.value)}
-                      disabled={loading() || member.user_id.toString() === props.session.user.id}
+                      onChange={(e) => handleUpdateRole(member.id, e.currentTarget.value)}
+                      disabled={loading() || member.user_id === props.session.user.id}
                       style={{
                         padding: "4px 8px",
                         "border-radius": "4px",
@@ -244,9 +232,9 @@ export default function GroupChatManager(props: Props) {
                       <option value="admin">Admin</option>
                       <option value="owner">Owner</option>
                     </select>
-                    <Show when={member.role !== 'owner' && member.user_id.toString() !== props.session.user.id}>
+                    <Show when={member.role !== 'owner' && member.user_id !== props.session.user.id}>
                       <button
-                        onClick={() => handleRemoveMember(member.user_id)}
+                        onClick={() => handleRemoveMember(member.id)}
                         disabled={loading()}
                         style={{
                           padding: "4px 8px",
@@ -315,7 +303,7 @@ export default function GroupChatManager(props: Props) {
                 }}>
                   <div>
                     <div style={{ "font-weight": "bold", color: "var(--text-0)" }}>
-                      {invite.invitee_email}
+                      {invite.invited_email}
                     </div>
                     <div style={{ "font-size": "12px", color: "var(--text-1)" }}>
                       {invite.status} • Sent {new Date(invite.created_at).toLocaleDateString()}

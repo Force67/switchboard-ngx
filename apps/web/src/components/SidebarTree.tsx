@@ -40,8 +40,9 @@ export default function SidebarTree(props: Props) {
     },
     onDragEnd: (target) => {
       // Apply the move
-      if (target && sidebarState().drag) {
-        const { kind, id } = sidebarState().drag;
+      const drag = sidebarState().drag;
+      if (target && drag) {
+        const { kind, id } = drag;
         if (kind === 'chat') {
           if (target.type === 'folder') {
             props.actions.moveChat(id, { folderId: target.id });
@@ -144,7 +145,7 @@ export default function SidebarTree(props: Props) {
 
   const getOrderedRootChats = createMemo(() => {
     // Return only chats that don't have a folderId (root level chats)
-    return props.chats.filter(chat => !chat.folderId);
+    return props.chats.filter(chat => !chat.folder_id);
   });
 
   return (
@@ -162,8 +163,8 @@ export default function SidebarTree(props: Props) {
         <div class="tree-section tree-folders">
           <For each={orderedFolders()}>
             {(folder) => {
-              const subfolderIds = props.state.subfolderOrder[folder.id] || [];
-              const folderChats = createMemo(() => props.chats.filter(chat => chat.folderId === folder.id));
+              const subfolderIds = props.state.subfolderOrder[folder.public_id] || [];
+              const folderChats = createMemo(() => props.chats.filter(chat => chat.folder_id === folder.public_id));
               return (
                 <FolderNode
                   folder={folder}
@@ -209,9 +210,9 @@ export default function SidebarTree(props: Props) {
             {(chat) => (
               <ChatRow
                 chat={chat}
-                isSelected={props.currentChatId === chat.id}
+                isSelected={props.currentChatId === chat.public_id}
                 depth={1}
-                onSelect={() => props.onSelectChat(chat.id)}
+                onSelect={() => props.onSelectChat(chat.public_id)}
                 actions={props.actions}
                 folders={props.state.folders}
                 folderOrder={props.state.folderOrder}

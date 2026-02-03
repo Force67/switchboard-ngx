@@ -16,7 +16,7 @@ export default function SidebarThreads(props: Props) {
             style={{
               padding: "8px 12px",
               cursor: "pointer",
-              background: props.currentChatId() === chat.id ? "rgba(255,255,255,0.1)" : "transparent",
+              background: props.currentChatId() === chat.public_id ? "rgba(255,255,255,0.1)" : "transparent",
               "border-radius": "6px",
               margin: "2px 4px",
               color: "var(--text-1)",
@@ -25,7 +25,7 @@ export default function SidebarThreads(props: Props) {
               "text-overflow": "ellipsis",
               "white-space": "nowrap"
             }}
-            onClick={() => props.onSelectChat(chat.id)}
+            onClick={() => props.onSelectChat(chat.public_id)}
           >
             {chat.title}
           </div>

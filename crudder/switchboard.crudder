@@ -1,0 +1,862 @@
+// Switchboard API Contract (Crudder DSL)
+//
+// This schema defines all REST API endpoints and DTOs for the Switchboard application.
+// It is used to generate both Rust backend code and TypeScript frontend code.
+
+// =============================================================================
+// COMMON TYPES
+// =============================================================================
+
+@module("common")
+dto Empty {}
+
+@module("common")
+dto PaginationQuery {
+    limit: int?
+    offset: int?
+}
+
+@module("common")
+@ts_module("common")
+dto ErrorResponse {
+    error: string
+    message: string
+}
+
+// =============================================================================
+// HEALTH
+// =============================================================================
+
+// Note: Field is named "time" to avoid crudder keyword conflict.
+// The impl should use serde(rename = "timestamp") if API compatibility is needed.
+@module("health")
+@ts_module("health")
+dto HealthResponse {
+    status: string
+    time: string
+}
+
+// =============================================================================
+// AUTHENTICATION
+// =============================================================================
+
+@module("auth")
+@ts_module("auth")
+dto UserResponse {
+    id: string
+    email: string?
+    display_name: string?
+    avatar_url: string?
+}
+
+@module("auth")
+@ts_module("auth")
+dto SessionResponse {
+    token: string
+    user: UserResponse
+    expires_at: string
+}
+
+@module("auth")
+@ts_module("auth")
+dto GithubLoginResponse {
+    authorize_url: string
+}
+
+@module("auth")
+@ts_module("auth")
+dto GithubLoginQuery {
+    redirect_uri: string
+}
+
+@module("auth")
+@ts_module("auth")
+dto GithubCallbackRequest {
+    code: string
+    state: string
+    redirect_uri: string
+}
+
+// =============================================================================
+// FOLDERS
+// =============================================================================
+
+@module("folder")
+@ts_module("folders")
+@table("folders")
+dto Folder {
+    @primary @auto
+    id: int
+
+    public_id: cuid2
+    user_id: int
+    name: string
+    color: string?
+    parent_id: int?
+    collapsed: bool
+    created_at: string
+    updated_at: string
+}
+
+@module("folder")
+@ts_module("folders")
+dto FoldersResponse {
+    folders: []Folder
+}
+
+@module("folder")
+@ts_module("folders")
+dto FolderResponse {
+    folder: Folder
+}
+
+@module("folder")
+@ts_module("folders")
+dto CreateFolderRequest {
+    name: string
+    color: string?
+    parent_id: cuid2?
+}
+
+@module("folder")
+@ts_module("folders")
+dto UpdateFolderRequest {
+    name: string?
+    color: string?
+    collapsed: bool?
+    parent_id: cuid2?
+}
+
+// =============================================================================
+// CHATS
+// =============================================================================
+
+@module("chat")
+@ts_module("chats")
+dto ChatMemberResponse {
+    id: string
+    user_id: string
+    role: string
+    joined_at: string
+    display_name: string?
+    avatar_url: string?
+}
+
+@module("chat")
+@ts_module("chats")
+dto ChatResponse {
+    id: int
+    public_id: string
+    user_id: int
+    title: string
+    description: string?
+    avatar_url: string?
+    folder_id: string?
+    is_group: bool
+    messages: string?
+    created_by: string
+    created_at: string
+    updated_at: string
+    member_count: int
+    message_count: int
+    last_message_at: string?
+    members: []ChatMemberResponse
+}
+
+@module("chat")
+@ts_module("chats")
+dto ChatsResponse {
+    chats: []ChatResponse
+}
+
+@module("chat")
+@ts_module("chats")
+dto CreateChatRequest {
+    title: string
+    description: string?
+    avatar_url: string?
+    folder_id: string?
+    is_group: bool
+    initial_message: string?
+}
+
+@module("chat")
+@ts_module("chats")
+dto UpdateChatRequest {
+    title: string?
+    description: string?
+    avatar_url: string?
+    folder_id: string?
+}
+
+@module("chat")
+@ts_module("chats")
+dto ListChatsQuery {
+    folder_id: string?
+    limit: int?
+    offset: int?
+}
+
+// =============================================================================
+// MESSAGES
+// =============================================================================
+
+@module("message")
+@ts_module("messages")
+dto MessageAttachmentResponse {
+    id: string
+    message_id: string
+    file_name: string
+    file_type: string
+    file_size: int
+    file_url: string
+    created_at: string
+}
+
+@module("message")
+@ts_module("messages")
+dto MessageSenderResponse {
+    id: string
+    display_name: string?
+    avatar_url: string?
+}
+
+@module("message")
+@ts_module("messages")
+dto MessageResponse {
+    id: string
+    chat_id: string
+    sender_id: string
+    content: string?
+    message_type: string
+    reply_to: string?
+    thread_id: string?
+    created_at: string
+    updated_at: string?
+    edited: bool
+    deleted: bool
+    sender: MessageSenderResponse
+    attachments: []MessageAttachmentResponse
+}
+
+@module("message")
+@ts_module("messages")
+dto MessagesResponse {
+    messages: []MessageResponse
+}
+
+@module("message")
+@ts_module("messages")
+dto CreateMessageRequest {
+    content: string?
+    message_type: string?
+    reply_to: string?
+    thread_id: string?
+}
+
+@module("message")
+@ts_module("messages")
+dto UpdateMessageRequest {
+    content: string?
+}
+
+@module("message")
+@ts_module("messages")
+dto ListMessagesQuery {
+    limit: int?
+    offset: int?
+    before: string?
+    after: string?
+    thread_id: string?
+}
+
+// =============================================================================
+// MEMBERS
+// =============================================================================
+
+@module("member")
+@ts_module("members")
+dto MemberUserResponse {
+    id: string
+    display_name: string?
+    avatar_url: string?
+    email: string?
+}
+
+@module("member")
+@ts_module("members")
+dto MemberResponse {
+    id: string
+    user_id: string
+    chat_id: string
+    role: string
+    joined_at: string
+    user: MemberUserResponse
+}
+
+@module("member")
+@ts_module("members")
+dto MembersResponse {
+    members: []MemberResponse
+}
+
+@module("member")
+@ts_module("members")
+dto UpdateMemberRoleRequest {
+    role: string
+}
+
+@module("member")
+@ts_module("members")
+dto ListMembersQuery {
+    role: string?
+    limit: int?
+    offset: int?
+}
+
+// =============================================================================
+// ATTACHMENTS
+// =============================================================================
+
+@module("attachment")
+@ts_module("attachments")
+dto AttachmentUploaderResponse {
+    id: string
+    display_name: string?
+    avatar_url: string?
+}
+
+@module("attachment")
+@ts_module("attachments")
+dto AttachmentResponse {
+    id: string
+    message_id: string
+    chat_id: string
+    file_name: string
+    file_type: string
+    file_size: int
+    file_url: string
+    created_at: string
+    uploader: AttachmentUploaderResponse
+}
+
+@module("attachment")
+@ts_module("attachments")
+dto AttachmentsResponse {
+    attachments: []AttachmentResponse
+}
+
+@module("attachment")
+@ts_module("attachments")
+dto CreateAttachmentRequest {
+    file_name: string
+    file_type: string
+    file_size: int
+    file_data: string
+}
+
+@module("attachment")
+@ts_module("attachments")
+dto ListAttachmentsQuery {
+    message_id: string?
+    file_type: string?
+    limit: int?
+    offset: int?
+}
+
+// =============================================================================
+// INVITES
+// =============================================================================
+
+@module("invite")
+@ts_module("invites")
+dto InviteInviterResponse {
+    id: string
+    display_name: string?
+    avatar_url: string?
+}
+
+@module("invite")
+@ts_module("invites")
+dto InviteResponse {
+    id: string
+    chat_id: string
+    chat_title: string
+    invited_by: string
+    invited_email: string
+    status: string
+    created_at: string
+    expires_at: string
+    accepted_at: string?
+    inviter: InviteInviterResponse
+}
+
+@module("invite")
+@ts_module("invites")
+dto InvitesResponse {
+    invites: []InviteResponse
+}
+
+@module("invite")
+@ts_module("invites")
+dto CreateInviteRequest {
+    email: string
+    role: string?
+    expires_in_hours: int?
+}
+
+@module("invite")
+@ts_module("invites")
+dto RespondToInviteRequest {
+    action: string
+}
+
+@module("invite")
+@ts_module("invites")
+dto ListInvitesQuery {
+    status: string?
+    limit: int?
+    offset: int?
+}
+
+// =============================================================================
+// NOTIFICATIONS
+// =============================================================================
+
+@module("notification")
+@ts_module("notifications")
+@table("notifications")
+dto Notification {
+    @primary @auto
+    id: int
+
+    user_id: int
+    type: string
+    title: string
+    body: string
+    read: bool
+    created_at: string
+}
+
+@module("notification")
+@ts_module("notifications")
+dto NotificationResponse {
+    notification: Notification
+}
+
+@module("notification")
+@ts_module("notifications")
+dto NotificationsResponse {
+    notifications: []Notification
+}
+
+@module("notification")
+@ts_module("notifications")
+dto UnreadCountResponse {
+    unread_count: int
+}
+
+@module("notification")
+@ts_module("notifications")
+dto BulkUpdateResponse {
+    updated_count: int
+}
+
+@module("notification")
+@ts_module("notifications")
+dto ListNotificationsQuery {
+    unread_only: bool?
+    limit: int?
+    offset: int?
+}
+
+@module("notification")
+@ts_module("notifications")
+dto MarkNotificationReadRequest {
+    read: bool
+}
+
+// =============================================================================
+// PERMISSIONS
+// =============================================================================
+
+@module("permission")
+@ts_module("permissions")
+@table("permissions")
+dto Permission {
+    @primary @auto
+    id: int
+
+    user_id: int
+    resource_type: string
+    resource_id: int
+    permission_level: string
+    granted_at: string
+}
+
+@module("permission")
+@ts_module("permissions")
+dto PermissionResponse {
+    permission: Permission
+}
+
+@module("permission")
+@ts_module("permissions")
+dto PermissionsResponse {
+    permissions: []Permission
+}
+
+@module("permission")
+@ts_module("permissions")
+dto CreatePermissionRequest {
+    user_id: string
+    resource_type: string
+    resource_id: string
+    permission_level: string
+}
+
+// =============================================================================
+// MODELS (LLM)
+// =============================================================================
+
+@module("model")
+@ts_module("models")
+dto ModelPricing {
+    input: float?
+    output: float?
+}
+
+@module("model")
+@ts_module("models")
+dto ModelSummary {
+    id: string
+    label: string
+    description: string?
+    pricing: ModelPricing?
+    supports_reasoning: bool
+    supports_images: bool
+    supports_tools: bool
+    supports_agents: bool
+    supports_function_calling: bool
+    supports_vision: bool
+    supports_tool_use: bool
+    supports_structured_outputs: bool
+    supports_streaming: bool
+}
+
+@module("model")
+@ts_module("models")
+dto ModelsResponse {
+    models: []ModelSummary
+}
+
+// =============================================================================
+// CHAT COMPLETION
+// =============================================================================
+
+@module("chat_completion")
+@ts_module("chat_completion")
+dto TokenUsage {
+    prompt_tokens: int
+    completion_tokens: int
+    total_tokens: int
+}
+
+@module("chat_completion")
+@ts_module("chat_completion")
+dto WebSearchSource {
+    title: string
+    url: string
+    snippet: string
+}
+
+@module("chat_completion")
+@ts_module("chat_completion")
+dto ChatCompletionResponse {
+    model: string
+    content: string
+    usage: TokenUsage?
+    reasoning: []string?
+    web_search_sources: []WebSearchSource?
+}
+
+// Note: ChatCompletionForm is a multipart/form-data request which is handled
+// manually in the chat_completion.rs endpoint. The crudder schema doesn't
+// generate multipart form handlers, so this service is excluded from generation.
+// Fields: prompt, model?, images?, web_search?, temperature?, max_tokens?, system_prompt?
+
+// =============================================================================
+// SERVICES
+// =============================================================================
+
+// -----------------------------------------------------------------------------
+// Health Service
+// -----------------------------------------------------------------------------
+@module("health")
+@tag("Health")
+@router_fn("create_health_routes")
+service HealthService {
+    @public
+    @rest("GET", "/health")
+    HealthCheck(Empty) -> HealthResponse
+}
+
+// -----------------------------------------------------------------------------
+// Auth Service
+// -----------------------------------------------------------------------------
+@module("auth")
+@tag("Auth")
+@router_fn("create_auth_routes")
+service AuthService {
+    @public
+    @rest("GET", "/auth/github/login")
+    GithubLogin(GithubLoginQuery) -> GithubLoginResponse
+
+    @public
+    @rest("POST", "/auth/github/callback")
+    GithubCallback(GithubCallbackRequest) -> SessionResponse
+
+    @authenticated
+    @rest("POST", "/auth/logout")
+    Logout(Empty) -> Empty
+
+    @authenticated
+    @rest("GET", "/auth/me")
+    Me(Empty) -> UserResponse
+}
+
+// -----------------------------------------------------------------------------
+// Folders Service
+// -----------------------------------------------------------------------------
+@module("folders")
+@tag("Folders")
+@router_fn("create_folder_routes")
+service FoldersService {
+    @authenticated
+    @rest("GET", "/folders")
+    ListFolders(Empty) -> FoldersResponse
+
+    @authenticated
+    @rest("POST", "/folders")
+    CreateFolder(CreateFolderRequest) -> FolderResponse
+
+    @authenticated
+    @rest("GET", "/folders/{folder_id}")
+    GetFolder(Empty) -> FolderResponse
+
+    @authenticated
+    @rest("PUT", "/folders/{folder_id}")
+    UpdateFolder(UpdateFolderRequest) -> FolderResponse
+
+    @authenticated
+    @rest("DELETE", "/folders/{folder_id}")
+    DeleteFolder(Empty) -> Empty
+}
+
+// -----------------------------------------------------------------------------
+// Chats Service
+// -----------------------------------------------------------------------------
+@module("chats")
+@tag("Chats")
+@router_fn("create_chat_routes")
+service ChatsService {
+    @authenticated
+    @rest("GET", "/chats")
+    ListChats(ListChatsQuery) -> ChatsResponse
+
+    @authenticated
+    @rest("POST", "/chats")
+    CreateChat(CreateChatRequest) -> ChatResponse
+
+    @authenticated
+    @rest("GET", "/chats/{chat_id}")
+    GetChat(Empty) -> ChatResponse
+
+    @authenticated
+    @rest("PUT", "/chats/{chat_id}")
+    UpdateChat(UpdateChatRequest) -> ChatResponse
+
+    @authenticated
+    @rest("DELETE", "/chats/{chat_id}")
+    DeleteChat(Empty) -> Empty
+}
+
+// -----------------------------------------------------------------------------
+// Messages Service
+// -----------------------------------------------------------------------------
+@module("messages")
+@tag("Messages")
+@router_fn("create_message_routes")
+service MessagesService {
+    @authenticated
+    @rest("GET", "/chats/{chat_id}/messages")
+    ListMessages(ListMessagesQuery) -> MessagesResponse
+
+    @authenticated
+    @rest("POST", "/chats/{chat_id}/messages")
+    CreateMessage(CreateMessageRequest) -> MessageResponse
+
+    @authenticated
+    @rest("GET", "/chats/{chat_id}/messages/{message_id}")
+    GetMessage(Empty) -> MessageResponse
+
+    @authenticated
+    @rest("PUT", "/chats/{chat_id}/messages/{message_id}")
+    UpdateMessage(UpdateMessageRequest) -> MessageResponse
+
+    @authenticated
+    @rest("DELETE", "/chats/{chat_id}/messages/{message_id}")
+    DeleteMessage(Empty) -> Empty
+}
+
+// -----------------------------------------------------------------------------
+// Members Service
+// -----------------------------------------------------------------------------
+@module("members")
+@tag("Members")
+@router_fn("create_member_routes")
+service MembersService {
+    @authenticated
+    @rest("GET", "/chats/{chat_id}/members")
+    ListMembers(ListMembersQuery) -> MembersResponse
+
+    @authenticated
+    @rest("GET", "/chats/{chat_id}/members/{member_id}")
+    GetMember(Empty) -> MemberResponse
+
+    @authenticated
+    @rest("PUT", "/chats/{chat_id}/members/{member_id}/role")
+    UpdateMemberRole(UpdateMemberRoleRequest) -> MemberResponse
+
+    @authenticated
+    @rest("DELETE", "/chats/{chat_id}/members/{member_id}")
+    RemoveMember(Empty) -> Empty
+
+    @authenticated
+    @rest("POST", "/chats/{chat_id}/leave")
+    LeaveChat(Empty) -> Empty
+}
+
+// -----------------------------------------------------------------------------
+// Attachments Service
+// -----------------------------------------------------------------------------
+@module("attachments")
+@tag("Attachments")
+@router_fn("create_attachment_routes")
+service AttachmentsService {
+    @authenticated
+    @rest("GET", "/chats/{chat_id}/attachments")
+    ListAttachments(ListAttachmentsQuery) -> AttachmentsResponse
+
+    @authenticated
+    @rest("GET", "/chats/{chat_id}/messages/{message_id}/attachments")
+    ListMessageAttachments(Empty) -> AttachmentsResponse
+
+    @authenticated
+    @rest("POST", "/chats/{chat_id}/messages/{message_id}/attachments")
+    CreateAttachment(CreateAttachmentRequest) -> AttachmentResponse
+
+    @authenticated
+    @rest("GET", "/chats/{chat_id}/attachments/{attachment_id}")
+    GetAttachment(Empty) -> AttachmentResponse
+
+    @authenticated
+    @rest("DELETE", "/chats/{chat_id}/attachments/{attachment_id}")
+    DeleteAttachment(Empty) -> Empty
+}
+
+// -----------------------------------------------------------------------------
+// Invites Service
+// -----------------------------------------------------------------------------
+@module("invites")
+@tag("Invites")
+@router_fn("create_invite_routes")
+service InvitesService {
+    @authenticated
+    @rest("GET", "/chats/{chat_id}/invites")
+    ListInvites(ListInvitesQuery) -> InvitesResponse
+
+    @authenticated
+    @rest("POST", "/chats/{chat_id}/invites")
+    CreateInvite(CreateInviteRequest) -> InviteResponse
+
+    @authenticated
+    @rest("GET", "/invites")
+    ListUserInvites(ListInvitesQuery) -> InvitesResponse
+
+    @authenticated
+    @rest("GET", "/invites/{invite_id}")
+    GetInvite(Empty) -> InviteResponse
+
+    @authenticated
+    @rest("POST", "/invites/{invite_id}/respond")
+    RespondToInvite(RespondToInviteRequest) -> InviteResponse
+
+    @authenticated
+    @rest("DELETE", "/invites/{invite_id}")
+    DeleteInvite(Empty) -> Empty
+}
+
+// -----------------------------------------------------------------------------
+// Notifications Service
+// -----------------------------------------------------------------------------
+@module("notifications")
+@tag("Notifications")
+@router_fn("create_notification_routes")
+service NotificationsService {
+    @authenticated
+    @rest("GET", "/notifications")
+    GetNotifications(ListNotificationsQuery) -> NotificationsResponse
+
+    @authenticated
+    @rest("GET", "/notifications/count")
+    GetUnreadCount(Empty) -> UnreadCountResponse
+
+    @authenticated
+    @rest("PUT", "/notifications/{notification_id}")
+    MarkNotificationRead(MarkNotificationReadRequest) -> NotificationResponse
+
+    @authenticated
+    @rest("PUT", "/notifications")
+    MarkAllRead(Empty) -> BulkUpdateResponse
+
+    @authenticated
+    @rest("DELETE", "/notifications/{notification_id}")
+    DeleteNotification(Empty) -> Empty
+}
+
+// -----------------------------------------------------------------------------
+// Permissions Service
+// -----------------------------------------------------------------------------
+@module("permissions")
+@tag("Permissions")
+@router_fn("create_permission_routes")
+service PermissionsService {
+    @authenticated
+    @rest("GET", "/users/{target_user_id}/permissions")
+    GetUserPermissions(Empty) -> PermissionsResponse
+
+    @authenticated
+    @rest("GET", "/resources/{resource_type}/{resource_id}/permissions")
+    GetResourcePermissions(Empty) -> PermissionsResponse
+
+    @authenticated
+    @rest("POST", "/resources/{resource_type}/{resource_id}/permissions")
+    CreatePermission(CreatePermissionRequest) -> PermissionResponse
+
+    @authenticated
+    @rest("DELETE", "/permissions/{permission_id}")
+    DeletePermission(Empty) -> Empty
+}
+
+// -----------------------------------------------------------------------------
+// Models Service (LLM)
+// -----------------------------------------------------------------------------
+@module("models")
+@tag("Models")
+@router_fn("create_models_routes")
+service ModelsService {
+    @public
+    @rest("GET", "/models")
+    ListModels(Empty) -> ModelsResponse
+}

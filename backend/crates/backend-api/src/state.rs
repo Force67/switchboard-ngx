@@ -148,19 +148,9 @@ impl GatewayState {
         &self.authenticator
     }
 
-    /// Get an auth service reference
-    pub fn auth_service(&self) -> &AuthService {
-        &self.auth_service
-    }
-
     /// Get a session service reference
     pub fn session_service(&self) -> &SessionService {
         &self.session_service
-    }
-
-    /// Get a notification service reference
-    pub fn notification_service(&self) -> &NotificationService {
-        &self.notification_service
     }
 
     /// Get orchestrator reference if available
@@ -171,6 +161,65 @@ impl GatewayState {
     /// Get web search configuration if available
     pub fn web_search_config(&self) -> Option<&WebSearchConfig> {
         self.web_search_config.as_ref()
+    }
+
+    // =========================================================================
+    // Service trait accessors (used by generated REST handlers)
+    // =========================================================================
+
+    /// Get health service
+    pub fn health_service(&self) -> crate::rest::services::HealthServiceImpl<'_> {
+        crate::rest::services::HealthServiceImpl::new(self)
+    }
+
+    /// Get auth service (trait impl for generated REST handlers)
+    pub fn auth_service(&self) -> crate::rest::services::AuthServiceImpl<'_> {
+        crate::rest::services::AuthServiceImpl::new(self)
+    }
+
+    /// Get folders service
+    pub fn folders_service(&self) -> crate::rest::services::FoldersServiceImpl<'_> {
+        crate::rest::services::FoldersServiceImpl::new(self)
+    }
+
+    /// Get chats service
+    pub fn chats_service(&self) -> crate::rest::services::ChatsServiceImpl<'_> {
+        crate::rest::services::ChatsServiceImpl::new(self)
+    }
+
+    /// Get messages service
+    pub fn messages_service(&self) -> crate::rest::services::MessagesServiceImpl<'_> {
+        crate::rest::services::MessagesServiceImpl::new(self)
+    }
+
+    /// Get members service
+    pub fn members_service(&self) -> crate::rest::services::MembersServiceImpl<'_> {
+        crate::rest::services::MembersServiceImpl::new(self)
+    }
+
+    /// Get attachments service
+    pub fn attachments_service(&self) -> crate::rest::services::AttachmentsServiceImpl<'_> {
+        crate::rest::services::AttachmentsServiceImpl::new(self)
+    }
+
+    /// Get invites service
+    pub fn invites_service(&self) -> crate::rest::services::InvitesServiceImpl<'_> {
+        crate::rest::services::InvitesServiceImpl::new(self)
+    }
+
+    /// Get notifications service (trait impl for generated REST handlers)
+    pub fn notifications_service(&self) -> crate::rest::services::NotificationsServiceImpl<'_> {
+        crate::rest::services::NotificationsServiceImpl::new(self)
+    }
+
+    /// Get permissions service (trait impl)
+    pub fn permissions_service(&self) -> crate::rest::services::PermissionsServiceImpl<'_> {
+        crate::rest::services::PermissionsServiceImpl::new(self)
+    }
+
+    /// Get models service
+    pub fn models_service(&self) -> crate::rest::services::ModelsServiceImpl<'_> {
+        crate::rest::services::ModelsServiceImpl::new(self)
     }
 }
 

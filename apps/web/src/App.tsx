@@ -7,7 +7,6 @@ import MainArea from "./components/MainArea";
 import TopRightControls from "./components/TopRightControls";
 import type { ChatProperties } from "./components/ChatPropertiesSidebar";
 import { apiService } from "./api";
-import type { ApiChat } from "./api";
 import { API_BASE } from "./config";
 import {
   actions,
@@ -19,7 +18,17 @@ import {
 import type { Actions } from "./components/sidebarTypes";
 import type { SidebarBootstrapData } from "./components/sidebarStore";
 import { useSocket } from "./hooks/useSocket";
-import type { Chat, Message, TokenUsage } from "./types/chat";
+import type { TokenUsage, LocalMessage } from "./types/chat";
+import type { ChatResponse } from "./generated/chats";
+import {
+  type LocalChat,
+  toLocalChat,
+  toLocalChats,
+  parseMessages,
+  createUserMessage,
+  createPendingMessage,
+  createAssistantMessage,
+} from "./utils/chatTransforms";
 
 const DEFAULT_MODEL = import.meta.env.VITE_DEFAULT_MODEL ?? "";
 const GITHUB_REDIRECT_PATH =
@@ -43,11 +52,13 @@ interface SessionData {
   expires_at: string;
 }
 
-interface ChatResponse {
+// Response from streaming chat completion endpoint (different from generated ChatResponse)
+interface StreamingChatResponse {
   model: string;
   content: string;
   usage?: TokenUsage;
   reasoning?: string[];
+  web_search_sources?: { title: string; url: string; snippet: string }[];
 }
 
 interface ErrorResponse {
@@ -136,7 +147,7 @@ export default function App() {
   const [modelsError, setModelsError] = createSignal<string | null>(null);
   const [loading, setLoading] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
-  const [chats, setChats] = createSignal<Chat[]>([]);
+  const [chats, setChats] = createSignal<LocalChat[]>([]);
   const [currentChatId, setCurrentChatId] = createSignal<string | null>(null);
   const [authenticating, setAuthenticating] = createSignal(false);
   const [authError, setAuthError] = createSignal<string | null>(null);
@@ -353,23 +364,12 @@ export default function App() {
     try {
       const apiChat = await apiService.createChat(activeSession.token, {
         title: isGroup ? "New Group Chat" : "New Chat",
-        messages: [],
         folder_id: validFolderId,
         is_group: isGroup,
       });
 
-      const newChatObj: Chat = {
-        id: apiChat.public_id,
-        public_id: apiChat.public_id,
-        title: apiChat.title,
-        messages: [],
-        createdAt: new Date(apiChat.created_at),
-        folderId: validFolderId,
-        updatedAt: apiChat.updated_at,
-        isGroup: apiChat.is_group,
-      };
-
-      setChats(prev => [newChatObj, ...prev.filter(chat => chat.id !== newChatObj.id)]);
+      const newChatObj = toLocalChat(apiChat);
+      setChats(prev => [newChatObj, ...prev.filter(chat => chat.public_id !== newChatObj.public_id)]);
       addChatToSidebar(apiChat.public_id, validFolderId);
       setCurrentChatId(apiChat.public_id);
       setPrompt("");
@@ -391,7 +391,7 @@ export default function App() {
     try {
       await apiService.updateChat(activeSession.token, chatId, { title });
       setChats(prev =>
-        prev.map(chat => (chat.id === chatId ? { ...chat, title } : chat)),
+        prev.map(chat => (chat.public_id === chatId ? { ...chat, title } : chat)),
       );
       setError(null);
     } catch (error) {
@@ -407,11 +407,11 @@ export default function App() {
     try {
       await apiService.deleteChat(activeSession.token, chatId);
       removeChatFromSidebar(chatId);
-      const updatedChats = chats().filter(chat => chat.id !== chatId);
+      const updatedChats = chats().filter(chat => chat.public_id !== chatId);
       setChats(updatedChats);
 
       if (currentChatId() === chatId) {
-        setCurrentChatId(updatedChats[0]?.id ?? null);
+        setCurrentChatId(updatedChats[0]?.public_id ?? null);
         setPrompt("");
       }
 
@@ -450,11 +450,11 @@ export default function App() {
       await actions.deleteFolder(folderId, "delete-all");
 
       if (chatIdsToRemove.size > 0) {
-        const updatedChats = chats().filter(chat => !chatIdsToRemove.has(chat.id));
+        const updatedChats = chats().filter(chat => !chatIdsToRemove.has(chat.public_id));
         setChats(updatedChats);
         const currentId = currentChatId();
         if (currentId && chatIdsToRemove.has(currentId)) {
-          setCurrentChatId(updatedChats[0]?.id ?? null);
+          setCurrentChatId(updatedChats[0]?.public_id ?? null);
           setPrompt("");
         }
       }
@@ -643,32 +643,17 @@ export default function App() {
     setError(null);
 
     // Add user message to current chat immediately for UI responsiveness
-    const updatedChat = chats().find(c => c.id === currentId);
+    const updatedChat = chats().find(c => c.public_id === currentId);
     if (!updatedChat) return;
 
-    const userMessage: Message = {
-      role: "user",
-      content: trimmedPrompt,
-      user_id: 1, // Current user
-      timestamp: new Date().toISOString(),
-    };
-
-    const placeholderMessages: Message[] = targetModels.map((modelId, index) => ({
-      id: `pending-${modelId}-${Date.now()}-${index}`,
-      role: "assistant",
-      content: "",
-      model: modelId,
-      chat_id: currentId,
-      timestamp: new Date().toISOString(),
-      message_type: "text",
-      pending: true,
-    }));
+    const userMessage = createUserMessage(trimmedPrompt);
+    const placeholderMessages = targetModels.map((modelId) => createPendingMessage(modelId, currentId));
 
     const newMessages = [...updatedChat.messages, userMessage, ...placeholderMessages];
     const newTitle = updatedChat.messages.length === 0 ? trimmedPrompt.slice(0, 30) + (trimmedPrompt.length > 30 ? "..." : "") : updatedChat.title;
 
     setChats(prev => prev.map(chat =>
-      chat.id === currentId
+      chat.public_id === currentId
         ? {
             ...chat,
             messages: newMessages,
@@ -719,7 +704,7 @@ export default function App() {
               throw new Error(text || response.statusText);
             }
 
-            return (await response.json()) as ChatResponse;
+            return (await response.json()) as StreamingChatResponse;
           } catch (err) {
             lastError = err;
             // Retry on network errors (TypeError) with the next URL fallback
@@ -756,24 +741,23 @@ export default function App() {
 
           const data = await sendChatRequest(formData);
 
-          const assistantMessage: Message = {
-            id: `assistant-${modelId}-${Date.now()}`,
-            chat_id: pendingChatId,
-            role: "assistant",
-            content: data.content,
-            model: data.model,
-            timestamp: new Date().toISOString(),
-            usage: data.usage,
-            reasoning: data.reasoning,
-            web_search_sources: data.web_search_sources,
-          };
+          const assistantMessage = createAssistantMessage(
+            data.model,
+            pendingChatId,
+            data.content,
+            {
+              usage: data.usage,
+              reasoning: data.reasoning,
+              web_search_sources: data.web_search_sources,
+            }
+          );
 
           setChats(prev =>
             prev.map(chat => {
-              if (chat.id !== pendingChatId) return chat;
+              if (chat.public_id !== pendingChatId) return chat;
               const existing = [...(chat.messages ?? [])];
               const placeholderIndex = existing.findIndex(
-                (msg) => msg.pending && msg.model === modelId,
+                (msg) => msg.pending && msg.model === data.model,
               );
               if (placeholderIndex >= 0) {
                 existing.splice(placeholderIndex, 1);
@@ -808,10 +792,10 @@ export default function App() {
       });
       setChats(prev =>
         prev.map(chat =>
-          chat.id === pendingChatId
+          chat.public_id === pendingChatId
             ? {
                 ...chat,
-                messages: chat.messages?.filter(message => !message.pending) ?? [],
+                messages: chat.messages.filter(message => !message.pending),
               }
             : chat,
         ),
@@ -830,7 +814,7 @@ export default function App() {
 
     const rawUserId = payload.user_id ?? payload.sender_id ?? raw.user_id;
     const sessionUserId = session()?.user.id;
-    const role: Message["role"] =
+    const role: LocalMessage["role"] =
       payload.role ??
       (rawUserId && sessionUserId && String(rawUserId) === String(sessionUserId)
         ? "user"
@@ -841,13 +825,13 @@ export default function App() {
       message: {
         id: payload.id ?? raw.message_id ?? payload.message_id,
         chat_id: chatId,
-        user_id: typeof rawUserId === "string" ? Number(rawUserId) || undefined : rawUserId,
+        sender_id: rawUserId?.toString(),
         role,
         content: payload.content ?? raw.content ?? "",
         model: payload.model ?? raw.model,
-        timestamp: payload.timestamp ?? payload.created_at ?? raw.timestamp ?? new Date().toISOString(),
+        created_at: payload.timestamp ?? payload.created_at ?? raw.timestamp ?? new Date().toISOString(),
         message_type: payload.message_type ?? raw.message_type,
-      } as Message,
+      } as LocalMessage,
     };
   };
 
@@ -896,7 +880,7 @@ export default function App() {
 
       console.log("✅ Message chat ID matches current chat ID - processing message");
       // Check if this message already exists in the chat (user messages are added immediately)
-      const currentChat = chats().find(c => c.id === currentId);
+      const currentChat = chats().find(c => c.public_id === currentId);
       console.log("🔍 Current chat found:", !!currentChat);
       console.log("📊 Current chat messages count:", currentChat?.messages?.length || 0);
 
@@ -927,7 +911,7 @@ export default function App() {
 
       setChats(prev => {
         const updated = prev.map(chat => {
-          if (chat.id !== currentId) {
+          if (chat.public_id !== currentId) {
             return chat;
           }
 
@@ -947,7 +931,7 @@ export default function App() {
           };
         });
         console.log("🔄 Updated chats:", updated);
-        console.log("📊 Chat with new message:", updated.find(c => c.id === currentId)?.messages);
+        console.log("📊 Chat with new message:", updated.find(c => c.public_id === currentId)?.messages);
         return updated;
       });
 
@@ -1049,45 +1033,18 @@ export default function App() {
   const loadChatsAndFolders = async (token: string) => {
     try {
       const sidebarData: SidebarBootstrapData = await initializeFromAPI(token);
-      const { folders: apiFolders, chats: apiChats } = sidebarData;
+      const { chats: apiChats } = sidebarData;
 
-      const folderIdMap = new Map<number, string>();
-      for (const folder of apiFolders) {
-        folderIdMap.set(folder.id, folder.public_id);
-      }
-
-      const frontendChats: Chat[] = apiChats.map((apiChat: ApiChat) => {
-        let messages: Message[] = [];
-        try {
-          const rawMessages = apiChat.messages ?? "[]";
-          messages = JSON.parse(rawMessages) as Message[];
-        } catch (e) {
-          console.error("Failed to parse chat messages", e);
-        }
-
-        const folderPublicId =
-          typeof apiChat.folder_id === "number" ? folderIdMap.get(apiChat.folder_id) : undefined;
-
-        return {
-          id: apiChat.public_id,
-          public_id: apiChat.public_id,
-          title: apiChat.title,
-          messages,
-          createdAt: new Date(apiChat.created_at),
-          folderId: folderPublicId,
-          updatedAt: apiChat.updated_at,
-          isGroup: apiChat.is_group,
-        };
-      });
-
-      setChats(frontendChats);
+      // Transform API chats to local state format
+      const localChats = toLocalChats(apiChats);
+      setChats(localChats);
 
       // Create initial chat if none exist
-      if (frontendChats.length === 0) {
+      if (localChats.length === 0) {
         await newChat();
       } else {
         // Select the most recent chat
-        setCurrentChatId(frontendChats[0].id);
+        setCurrentChatId(localChats[0].public_id);
       }
     } catch (error) {
       console.error("Failed to load chats and folders", error);
@@ -1132,7 +1089,7 @@ export default function App() {
           target.folderId && target.folderId !== "" ? target.folderId : undefined;
         setChats(prev =>
           prev.map(chat =>
-            chat.id === chatId ? { ...chat, folderId: normalizedFolderId } : chat,
+            chat.public_id === chatId ? { ...chat, folder_id: normalizedFolderId } : chat,
           ),
         );
       }
@@ -1197,13 +1154,12 @@ export default function App() {
             session={session}
             currentMessages={createMemo(() => {
               const currentId = currentChatId();
-              const currentChat = chats().find(c => c.id === currentId);
-              const messages = currentChat ? currentChat.messages : [];
-              return messages;
+              const currentChat = chats().find(c => c.public_id === currentId);
+              return currentChat?.messages ?? [];
             })}
             currentChat={createMemo(() => {
               const currentId = currentChatId();
-              return chats().find(c => c.id === currentId) || null;
+              return chats().find(c => c.public_id === currentId) ?? null;
             })}
             onSend={handleSubmit}
             onOpenSidebar={() => setSidebarOpen(true)}

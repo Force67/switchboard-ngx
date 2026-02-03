@@ -1,316 +1,163 @@
 import { API_BASE } from "./config";
-import type { TokenUsage } from "./types/chat";
 
-export interface ApiFolder {
-  id: number;
-  public_id: string;
-  user_id: number;
-  name: string;
-  color?: string;
-  parent_id?: number;
-  collapsed: boolean;
-  created_at: string;
-  updated_at: string;
-}
+// Re-export types from the centralized types module
+export type {
+  Chat,
+  ChatMember,
+  ChatInvite,
+  Folder,
+  CreateChatRequest,
+  UpdateChatRequest,
+  CreateFolderRequest,
+  UpdateFolderRequest,
+  CreateInviteRequest,
+  UpdateMemberRoleRequest,
+  RespondToInviteRequest,
+} from "./types/chat";
 
-export interface ApiChat {
-  id: number;
-  public_id: string;
-  user_id: number;
-  folder_id: string | null;
-  title: string;
-  is_group: boolean;
-  messages: string | null; // JSON string
-  created_at: string;
-  updated_at: string;
-}
+// Import generated clients
+import {
+  listFolders as listFoldersClient,
+  createFolder as createFolderClient,
+  updateFolder as updateFolderClient,
+  deleteFolder as deleteFolderClient,
+} from "./generated/foldersClient";
 
-export interface ChatMessage {
-  role: "user" | "assistant" | "system";
-  content: string;
-  model?: string;
-  usage?: TokenUsage;
-  reasoning?: string[];
-}
+import {
+  listChats as listChatsClient,
+  createChat as createChatClient,
+  getChat as getChatClient,
+  updateChat as updateChatClient,
+  deleteChat as deleteChatClient,
+} from "./generated/chatsClient";
 
-export interface CreateFolderRequest {
-  name: string;
-  color?: string;
-  parent_id?: string;
-}
+import {
+  listMembers as listMembersClient,
+  getMember as getMemberClient,
+  updateMemberRole as updateMemberRoleClient,
+  removeMember as removeMemberClient,
+  leaveChat as leaveChatClient,
+} from "./generated/membersClient";
 
-export interface UpdateFolderRequest {
-  name?: string;
-  color?: string;
-  collapsed?: boolean;
-}
+import {
+  listInvites as listInvitesClient,
+  createInvite as createInviteClient,
+  listUserInvites as listUserInvitesClient,
+  getInvite as getInviteClient,
+  respondToInvite as respondToInviteClient,
+  deleteInvite as deleteInviteClient,
+} from "./generated/invitesClient";
 
-export interface CreateChatRequest {
-  title: string;
-  messages: ChatMessage[];
-  folder_id?: string;
-  is_group?: boolean;
-}
-
-export interface UpdateChatRequest {
-  title?: string;
-  messages?: ChatMessage[];
-  folder_id?: string;
-}
-
-export interface ChatMember {
-  id: number;
-  chat_id: number;
-  user_id: number;
-  role: string;
-  joined_at: string;
-}
-
-export interface ChatInvite {
-  id: number;
-  chat_id: number;
-  inviter_id: number;
-  invitee_email: string;
-  status: string;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface CreateInviteRequest {
-  email: string;
-}
-
-export interface UpdateMemberRoleRequest {
-  role: string;
-}
+// Import types for the class methods
+import type { ChatResponse, CreateChatRequest, UpdateChatRequest } from "./generated/chats";
+import type { Folder, CreateFolderRequest, UpdateFolderRequest } from "./generated/folders";
+import type { MemberResponse, UpdateMemberRoleRequest } from "./generated/members";
+import type { InviteResponse, CreateInviteRequest, RespondToInviteRequest } from "./generated/invites";
 
 class ApiService {
-  private getAuthHeaders(token: string) {
-    return {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    };
-  }
-
+  // =========================================================================
   // Folder API methods
-  async listFolders(token: string): Promise<ApiFolder[]> {
-    const response = await fetch(`${API_BASE}/api/v1/folders`, {
-      headers: this.getAuthHeaders(token),
-    });
+  // =========================================================================
 
-    if (!response.ok) {
-      throw new Error(`Failed to fetch folders: ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    return data.folders;
+  async listFolders(token: string): Promise<Folder[]> {
+    return listFoldersClient(API_BASE, token);
   }
 
-  async createFolder(token: string, req: CreateFolderRequest): Promise<ApiFolder> {
-    const response = await fetch(`${API_BASE}/api/v1/folders`, {
-      method: "POST",
-      headers: this.getAuthHeaders(token),
-      body: JSON.stringify(req),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to create folder: ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    return data.folder;
+  async createFolder(token: string, req: CreateFolderRequest): Promise<Folder> {
+    return createFolderClient(API_BASE, token, req);
   }
 
-  async updateFolder(token: string, folderId: string, req: UpdateFolderRequest): Promise<ApiFolder> {
-    const response = await fetch(`${API_BASE}/api/v1/folders/${folderId}`, {
-      method: "PUT",
-      headers: this.getAuthHeaders(token),
-      body: JSON.stringify(req),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to update folder: ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    return data.folder;
+  async updateFolder(token: string, folderId: string, req: UpdateFolderRequest): Promise<Folder> {
+    return updateFolderClient(API_BASE, token, folderId, req);
   }
 
   async deleteFolder(token: string, folderId: string): Promise<void> {
-    const response = await fetch(`${API_BASE}/api/v1/folders/${folderId}`, {
-      method: "DELETE",
-      headers: this.getAuthHeaders(token),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to delete folder: ${response.statusText}`);
-    }
+    return deleteFolderClient(API_BASE, token, folderId);
   }
 
+  // =========================================================================
   // Chat API methods
-  async listChats(token: string): Promise<ApiChat[]> {
-    const response = await fetch(`${API_BASE}/api/v1/chats`, {
-      headers: this.getAuthHeaders(token),
-    });
+  // =========================================================================
 
-    if (!response.ok) {
-      throw new Error(`Failed to fetch chats: ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    // Backend returns a bare array of chats; support both array and { chats } for safety.
-    return Array.isArray(data) ? data : data.chats ?? [];
+  async listChats(token: string): Promise<ChatResponse[]> {
+    return listChatsClient(API_BASE, token);
   }
 
-  async createChat(token: string, req: CreateChatRequest): Promise<ApiChat> {
-    console.log('Original request:', req);
-
-    // Remove folder_id if it's null/undefined to avoid serialization issues
-    const cleanReq = { ...req };
-    if (!cleanReq.folder_id) {
-      delete cleanReq.folder_id;
-    }
-
-    const requestBody = JSON.stringify(cleanReq);
-    console.log('Cleaned request:', cleanReq);
-    console.log('Request body being sent:', requestBody);
-    console.log('Using token:', token.substring(0, 20) + '...');
-
-    const response = await fetch(`${API_BASE}/api/v1/chats`, {
-      method: "POST",
-      headers: this.getAuthHeaders(token),
-      body: requestBody,
-    });
-
-    console.log('Response status:', response.status, response.statusText);
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Error response body:', errorText);
-      throw new Error(`Failed to create chat: ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    // Backend returns the created chat directly (not wrapped).
-    return data.chat ?? data;
+  async createChat(token: string, req: CreateChatRequest): Promise<ChatResponse> {
+    return createChatClient(API_BASE, token, req);
   }
 
-  async updateChat(token: string, chatId: string, req: UpdateChatRequest): Promise<ApiChat> {
-    const response = await fetch(`${API_BASE}/api/v1/chats/${chatId}`, {
-      method: "PUT",
-      headers: this.getAuthHeaders(token),
-      body: JSON.stringify(req),
-    });
+  async getChat(token: string, chatId: string): Promise<ChatResponse> {
+    return getChatClient(API_BASE, token, chatId);
+  }
 
-    if (!response.ok) {
-      throw new Error(`Failed to update chat: ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    // Backend returns the chat directly.
-    return data.chat ?? data;
+  async updateChat(token: string, chatId: string, req: UpdateChatRequest): Promise<ChatResponse> {
+    return updateChatClient(API_BASE, token, chatId, req);
   }
 
   async deleteChat(token: string, chatId: string): Promise<void> {
-    const response = await fetch(`${API_BASE}/api/v1/chats/${chatId}`, {
-      method: "DELETE",
-      headers: this.getAuthHeaders(token),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to delete chat: ${response.statusText}`);
-    }
+    return deleteChatClient(API_BASE, token, chatId);
   }
 
+  // =========================================================================
   // Member API methods
-  async listMembers(token: string, chatId: string): Promise<ChatMember[]> {
-    const response = await fetch(`${API_BASE}/api/v1/chats/${chatId}/members`, {
-      headers: this.getAuthHeaders(token),
-    });
+  // =========================================================================
 
-    if (!response.ok) {
-      throw new Error(`Failed to fetch members: ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    return Array.isArray(data) ? data : data.members ?? [];
+  async listMembers(token: string, chatId: string): Promise<MemberResponse[]> {
+    return listMembersClient(API_BASE, token, chatId);
   }
 
-  async updateMemberRole(token: string, chatId: string, memberUserId: number, req: UpdateMemberRoleRequest): Promise<ChatMember> {
-    const response = await fetch(`${API_BASE}/api/v1/chats/${chatId}/members/${memberUserId}`, {
-      method: "PUT",
-      headers: this.getAuthHeaders(token),
-      body: JSON.stringify(req),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to update member role: ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    return data.member ?? data;
+  async getMember(token: string, chatId: string, memberId: string): Promise<MemberResponse> {
+    return getMemberClient(API_BASE, token, chatId, memberId);
   }
 
-  async removeMember(token: string, chatId: string, memberUserId: number): Promise<void> {
-    const response = await fetch(`${API_BASE}/api/v1/chats/${chatId}/members/${memberUserId}`, {
-      method: "DELETE",
-      headers: this.getAuthHeaders(token),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to remove member: ${response.statusText}`);
-    }
+  async updateMemberRole(token: string, chatId: string, memberId: string, req: UpdateMemberRoleRequest): Promise<MemberResponse> {
+    return updateMemberRoleClient(API_BASE, token, chatId, memberId, req);
   }
 
+  async removeMember(token: string, chatId: string, memberId: string): Promise<void> {
+    return removeMemberClient(API_BASE, token, chatId, memberId);
+  }
+
+  async leaveChat(token: string, chatId: string): Promise<void> {
+    return leaveChatClient(API_BASE, token, chatId);
+  }
+
+  // =========================================================================
   // Invite API methods
-  async listInvites(token: string, chatId: string): Promise<ChatInvite[]> {
-    const response = await fetch(`${API_BASE}/api/v1/chats/${chatId}/invites`, {
-      headers: this.getAuthHeaders(token),
-    });
+  // =========================================================================
 
-    if (!response.ok) {
-      throw new Error(`Failed to fetch invites: ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    return Array.isArray(data) ? data : data.invites ?? [];
+  async listInvites(token: string, chatId: string): Promise<InviteResponse[]> {
+    return listInvitesClient(API_BASE, token, chatId);
   }
 
-  async createInvite(token: string, chatId: string, req: CreateInviteRequest): Promise<ChatInvite> {
-    const response = await fetch(`${API_BASE}/api/v1/chats/${chatId}/invites`, {
-      method: "POST",
-      headers: this.getAuthHeaders(token),
-      body: JSON.stringify(req),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to create invite: ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    return data.invite ?? data;
+  async createInvite(token: string, chatId: string, req: CreateInviteRequest): Promise<InviteResponse> {
+    return createInviteClient(API_BASE, token, chatId, req);
   }
 
-  async acceptInvite(token: string, inviteId: number): Promise<void> {
-    const response = await fetch(`${API_BASE}/api/v1/invites/${inviteId}/accept`, {
-      method: "POST",
-      headers: this.getAuthHeaders(token),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to accept invite: ${response.statusText}`);
-    }
+  async listUserInvites(token: string): Promise<InviteResponse[]> {
+    return listUserInvitesClient(API_BASE, token);
   }
 
-  async rejectInvite(token: string, inviteId: number): Promise<void> {
-    const response = await fetch(`${API_BASE}/api/v1/invites/${inviteId}/reject`, {
-      method: "POST",
-      headers: this.getAuthHeaders(token),
-    });
+  async getInvite(token: string, inviteId: string): Promise<InviteResponse> {
+    return getInviteClient(API_BASE, token, inviteId);
+  }
 
-    if (!response.ok) {
-      throw new Error(`Failed to reject invite: ${response.statusText}`);
-    }
+  async respondToInvite(token: string, inviteId: string, req: RespondToInviteRequest): Promise<InviteResponse> {
+    return respondToInviteClient(API_BASE, token, inviteId, req);
+  }
+
+  async deleteInvite(token: string, inviteId: string): Promise<void> {
+    return deleteInviteClient(API_BASE, token, inviteId);
+  }
+
+  // Convenience methods for accept/reject
+  async acceptInvite(token: string, inviteId: string): Promise<InviteResponse> {
+    return this.respondToInvite(token, inviteId, { action: "accept" });
+  }
+
+  async rejectInvite(token: string, inviteId: string): Promise<InviteResponse> {
+    return this.respondToInvite(token, inviteId, { action: "reject" });
   }
 }
 

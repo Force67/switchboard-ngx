@@ -6,7 +6,7 @@ import { ModelMeta } from "./model-picker/models";
 import MarkdownRenderer from "./MarkdownRenderer";
 import GroupChatManager from "./GroupChatManager";
 import ChatPropertiesSidebar, { ChatProperties } from "./ChatPropertiesSidebar";
-import type { Chat, Message } from "../types/chat";
+import type { LocalChat, LocalMessage } from "../types/chat";
 import "./chat-properties.css";
 
 interface ModelOption {
@@ -54,8 +54,8 @@ interface Props {
   authError?: Accessor<string | null>;
   modelPickerOpen: Accessor<boolean>;
   setModelPickerOpen: Setter<boolean>;
-  currentMessages: Accessor<Message[]>;
-  currentChat?: Accessor<Chat | null>;
+  currentMessages: Accessor<LocalMessage[]>;
+  currentChat?: Accessor<LocalChat | null>;
   session: Accessor<SessionData | null>;
   onSend: (event: Event) => void;
   onOpenSidebar?: () => void;
@@ -163,7 +163,7 @@ export default function MainArea(props: Props) {
 
   return (
     <div class="main">
-      {props.currentChat?.()?.isGroup && (
+      {props.currentChat?.()?.is_group && (
         <div style={{
           padding: "8px 20px",
           background: "var(--bg-2)",
@@ -220,13 +220,13 @@ export default function MainArea(props: Props) {
           {(message, i) => {
             const isCurrentUser = () => {
               const sessionId = sessionUserId();
-              if (!sessionId || message.user_id == null) return false;
-              return String(message.user_id) === String(sessionId);
+              if (!sessionId || message.sender_id == null) return false;
+              return String(message.sender_id) === String(sessionId);
             };
             const modelInfo = () => props.models().find(m => m.id === message.model);
             const modelLabel = modelInfo()?.label || message.model || "Assistant";
             const displayName = message.role === 'user'
-              ? (isCurrentUser() ? 'You' : `User ${message.user_id ?? "?"}`)
+              ? (isCurrentUser() ? 'You' : `User ${message.sender_id ?? "?"}`)
               : `Assistant (${modelLabel})`;
             const isPendingMessage = message.pending === true;
 
@@ -252,9 +252,9 @@ export default function MainArea(props: Props) {
                     <div style="font-weight: bold;">
                       {displayName}
                     </div>
-                    {message.timestamp && (
+                    {message.created_at && (
                       <small style="color: var(--text-1);">
-                        {new Date(message.timestamp).toLocaleTimeString()}
+                        {new Date(message.created_at).toLocaleTimeString()}
                       </small>
                     )}
                   </div>
@@ -373,7 +373,7 @@ export default function MainArea(props: Props) {
 
         {showGroupManager() && props.currentChat?.() && props.session() && (
           <GroupChatManager
-            chatId={props.currentChat()!.id}
+            chatId={props.currentChat()!.public_id}
             session={props.session()!}
             onClose={() => setShowGroupManager(false)}
           />

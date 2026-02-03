@@ -8,6 +8,7 @@ members = [
   "crates/orchestrator",
   "crates/runtime",
   "crates/users",
+  "apps/codegen",
   "apps/server",
   "apps/test-app"
 ]

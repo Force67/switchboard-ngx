@@ -5,7 +5,7 @@ import SidebarSearch from "./SidebarSearch";
 import SidebarTree from "./SidebarTree";
 import SidebarFooter from "./SidebarFooter";
 import { sidebarState } from "./sidebarStore";
-import type { Chat } from "../types/chat";
+import type { Chat } from "./sidebarTypes";
 import type { Actions } from "./sidebarTypes";
 import "./sidebar-folders.css";
 

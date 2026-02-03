@@ -50,7 +50,7 @@ export default function ChatRow(props: Props) {
       label: "Open in new tab",
       action: () => {
         // TODO: Implement open in new tab
-        console.log("Open in new tab", props.chat.id);
+        console.log("Open in new tab", props.chat.public_id);
       },
       icon: "M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0zM2.04 4.326c.325 1.329 2.532 2.54 3.717 3.19.48.263.793.434.743.484-.08.08-.162.158-.242.234-.416.396-.787.749-.758 1.266.035.634.618.824 1.214 1.017.577.188 1.168.38 1.286.983.082.417-.075.988-.22 1.52-.215.782-.406 1.48.22 1.48.51 0 .759-.354.964-.713.3-.54.517-1.2.54-1.2.647.24 1.957.712 1.957.712.847 0 1.267-.634 1.267-.634.622-.363.596-.982.343-1.428-.25-.446-.491-.663-.491-.663s.265-.976.265-.976c.76-.339 1.508-.735 1.508-.735.472-.283.57-.506.57-.506s.377-.372.566-.506c.19-.135.43-.31.43-.31s.493-.176.693-.31c.2-.135.373-.306.373-.306s.378-.188.451-.377c.074-.188.074-.431 0-.431-.074-.188-.268-.334-.268-.334s-.198-.188-.397-.334c-.2-.147-.397-.334-.397-.334s-.531-.2-.73-.334c-.2-.135-.397-.334-.397-.334s-.397-.2-.531-.334c-.135-.135-.265-.2-.265-.2s-.265-.135-.397-.2c-.135-.066-.265-.135-.265-.135s-.265-.066-.397-.135c-.135-.066-.265-.135-.265-.135z"
     },
@@ -77,7 +77,7 @@ export default function ChatRow(props: Props) {
       label: "Duplicate",
       action: () => {
         // TODO: Implement duplicate
-        console.log("Duplicate", props.chat.id);
+        console.log("Duplicate", props.chat.public_id);
       },
       icon: "M4 6a2 2 0 1 1 4 0 2 2 0 0 1-4 0zm8 0a2 2 0 1 1 4 0 2 2 0 0 1-4 0zM2 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm8 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm4-6a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM6 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"
     },
@@ -86,7 +86,7 @@ export default function ChatRow(props: Props) {
       action: () => {
         const confirmed = confirm(`Delete chat "${props.chat.title}"?`);
         if (confirmed) {
-          props.onDelete(props.chat.id);
+          props.onDelete(props.chat.public_id);
         }
       },
       icon: "M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"
@@ -96,7 +96,7 @@ export default function ChatRow(props: Props) {
   const commitRename = () => {
     const newTitle = editValue().trim();
     if (newTitle && newTitle !== props.chat.title) {
-      props.onRename(props.chat.id, newTitle);
+      props.onRename(props.chat.public_id, newTitle);
       setEditValue(newTitle);
     } else {
       setEditValue(props.chat.title);
@@ -143,11 +143,11 @@ export default function ChatRow(props: Props) {
         tabIndex={0}
         role="treeitem"
         aria-selected={props.isSelected}
-        data-id={props.chat.id}
-        data-folder-id={props.chat.folderId || ""}
+        data-id={props.chat.public_id}
+        data-folder-id={props.chat.folder_id || ""}
       >
         <div class="icon">
-          {props.chat.isGroup ? (
+          {props.chat.is_group ? (
             <svg viewBox="0 0 16 16">
               <path d="M7 14s-1 0-1-1 1-4 5-4 5 3 5 4-1 1-1 1H7Zm4-6a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm-5.784 6A2.238 2.238 0 0 1 5 13c0-1.355.68-2.75 1.936-3.72A6.325 6.325 0 0 0 5 9c-4 0-5 3-5 4s1 1 1 1h4.216ZM4.5 8a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z"/>
             </svg>
@@ -195,10 +195,10 @@ export default function ChatRow(props: Props) {
           folders={props.folders}
           folderOrder={props.folderOrder}
           subfolderOrder={props.subfolderOrder}
-          currentFolderId={props.chat.folderId}
+          currentFolderId={props.chat.folder_id}
           position={movePopover()!}
           onSelect={(folderId) => {
-            props.actions.moveChat(props.chat.id, { folderId });
+            props.actions.moveChat(props.chat.public_id, { folderId });
           }}
           onClose={() => setMovePopover(null)}
         />
